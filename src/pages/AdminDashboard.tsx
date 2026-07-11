@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { Link } from "react-router-dom";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
 
 type Listing = {
   id: string;
@@ -82,8 +85,8 @@ export default function AdminDashboard() {
         const ok = await checkAdmin();
         setAllowed(ok);
         if (ok) await loadData();
-      } catch (e: any) {
-        setError(e?.message ?? "Something went wrong.");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
       } finally {
         setLoading(false);
       }
@@ -126,65 +129,73 @@ export default function AdminDashboard() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading admin…</div>;
+    return (
+      <div className="gpe-page">
+        <Header />
+        <main className="gpe-page-main text-sm font-bold uppercase text-black/70">Loading admin…</main>
+        <Footer />
+      </div>
+    );
   }
 
   if (!allowed) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Admin</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          You don’t have access to this page.
-        </p>
+      <div className="gpe-page">
+        <Header />
+        <main className="gpe-page-main">
+          <div className="gpe-card p-8">
+            <h1 className="gpe-heading text-3xl">Admin</h1>
+            <p className="mt-3 text-sm font-bold text-black/70">
+              You don’t have access to this page.
+            </p>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-4">
-     <div className="flex items-end justify-between gap-4">
+    <div className="gpe-page">
+      <Header />
+      <main className="gpe-page-main space-y-6">
+     <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
   <div>
-    <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-    <p className="text-sm text-muted-foreground">
+    <h1 className="gpe-heading text-5xl">Admin Hub</h1>
+    <p className="text-sm font-bold text-black/70">
       Moderate listings (flag / remove / restore).
     </p>
   </div>
 
   <div className="flex gap-2">
-    <Link to="/" className="px-3 py-2 rounded-xl border text-sm hover:bg-muted">
-      Back to Home
-    </Link>
-
-    <button
-      className="px-3 py-2 rounded-xl border text-sm hover:bg-muted"
-      onClick={loadData}
-    >
+    <Link to="/"><Button variant="outline">Back to Home</Button></Link>
+    <Button variant="outline" onClick={loadData}>
       Refresh
-    </button>
+    </Button>
   </div>
 </div>
 
 
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+        <div className="rounded-[1.5rem] border-[3px] border-red-500 bg-red-100 p-3 text-sm font-bold text-red-700">
           {error}
         </div>
       )}
 
-      <div className="rounded-2xl border overflow-hidden">
-        <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-medium text-muted-foreground bg-muted/30">
+      <div className="overflow-hidden rounded-[2rem] border-[3px] border-black bg-white shadow-[8px_8px_0_0_#000]">
+        <div className="grid grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white">
           <div className="col-span-4">Post</div>
           <div className="col-span-3">Flags</div>
           <div className="col-span-2">Status</div>
           <div className="col-span-3 text-right">Actions</div>
         </div>
 
-        <div className="divide-y">
+        <div className="divide-y-[3px] divide-black">
           {listings.map((l) => {
             const listingFlags = flagsByListing.get(l.id) ?? [];
             const openFlags = listingFlags.filter((f) => !f.resolved);
             return (
-              <div key={l.id} className="grid grid-cols-12 gap-3 px-4 py-3 items-start">
+              <div key={l.id} className="grid grid-cols-12 items-start gap-3 px-4 py-4">
                 <div className="col-span-4">
                   <div className="font-medium">{l.title ?? "Untitled"}</div>
                   {l.description && (
@@ -223,36 +234,28 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="col-span-3 flex justify-end gap-2">
-                  <button
-                    className="px-3 py-1.5 rounded-xl border text-sm hover:bg-muted"
-                    onClick={() => flagListing(l.id)}
-                  >
-                    Flag
-                  </button>
+                    <Button variant="outline" size="sm" onClick={() => flagListing(l.id)}>
+                      Flag
+                    </Button>
 
-                  <button
-                    className="px-3 py-1.5 rounded-xl border text-sm hover:bg-muted"
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={openFlags.length === 0}
                     onClick={() => resolveFlags(l.id)}
                     title={openFlags.length === 0 ? "No open flags" : "Resolve open flags"}
                   >
                     Resolve
-                  </button>
+                  </Button>
 
                   {!l.is_removed ? (
-                    <button
-                      className="px-3 py-1.5 rounded-xl border text-sm hover:bg-muted"
-                      onClick={() => removeListing(l.id)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => removeListing(l.id)}>
                       Remove
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      className="px-3 py-1.5 rounded-xl border text-sm hover:bg-muted"
-                      onClick={() => restoreListing(l.id)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => restoreListing(l.id)}>
                       Restore
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -264,6 +267,8 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+      </main>
+      <Footer />
     </div>
   );
 }

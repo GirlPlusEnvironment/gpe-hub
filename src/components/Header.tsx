@@ -1,22 +1,27 @@
-import { useEffect, useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useContext, useEffect, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { User, LogOut, Menu, X, Heart, MessageSquare, Shield, Zap } from "lucide-react";
-import headerLogo from "@/assets/header_logo.png";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+  Compass,
+  Heart,
+  Home,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Shield,
+  Trophy,
+  User,
+  Users,
+  X,
+  PlusCircle,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
-import { useContext } from "react";
 import { MessagesContext } from "@/contexts/MessagesContext";
 import { PointsBadge } from "@/components/PointsBadge";
+import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -24,27 +29,28 @@ const Header = () => {
   const messagesContext = useContext(MessagesContext);
   const unreadCount = messagesContext?.unreadCount ?? 0;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
   const [role, setRole] = useState<"user" | "admin">("user");
 
-useEffect(() => {
-  if (!user) {
-    setRole("user");
-    return;
-  }
+  useEffect(() => {
+    if (!user) {
+      setRole("user");
+      return;
+    }
 
-  (async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    void (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
 
-    if (!error && data?.role === "admin") setRole("admin");
-    else setRole("user");
-  })();
-}, [user?.id]);
-
+      if (!error && data?.role === "admin") {
+        setRole("admin");
+      } else {
+        setRole("user");
+      }
+    })();
+  }, [user, user?.id]);
 
   const displayName =
     profile?.full_name ??
@@ -52,336 +58,178 @@ useEffect(() => {
     user?.email ??
     "Community Member";
 
-  const displayEmail = user?.email ?? "";
-
   const avatarUrl =
     profile?.avatar_url ??
     ((user?.user_metadata?.avatar_url as string | undefined) ?? "");
+
+  const navItems = [
+    { to: "/", label: "Dashboard", icon: Home },
+    { to: "/explore", label: "Explore", icon: Compass },
+    { to: "/community", label: "Community", icon: Users },
+    { to: "/messages", label: "Messages", icon: MessageSquare, badge: unreadCount },
+    { to: "/favorites", label: "Favorites", icon: Heart },
+    { to: "/submit", label: "Submit New", icon: PlusCircle },
+    { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  ];
 
   const handleLogout = async () => {
     await signOut();
     navigate("/login");
   };
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
+  const renderNavLink = (
+    item: (typeof navItems)[number] | { to: string; label: string; icon: typeof User; badge?: number },
+    mobile = false,
+  ) => {
+    const Icon = item.icon;
+
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        onClick={() => setIsMobileMenuOpen(false)}
+        className={({ isActive }) =>
+          cn(
+            "gpe-pill flex items-center justify-between gap-3 text-left transition-all",
+            mobile ? "w-full px-4 py-3 text-sm" : "w-full px-5 py-4 text-sm",
+            isActive ? "bg-black text-white" : "bg-white hover:bg-pink-100",
+          )
+        }
+      >
+        <span className="flex items-center gap-3">
+          <Icon className="h-5 w-5" />
+          <span>{item.label}</span>
+        </span>
+        {item.badge && item.badge > 0 ? (
+          <Badge className="min-w-7 justify-center bg-[#d53f8c] text-white">
+            {item.badge > 99 ? "99+" : item.badge}
+          </Badge>
+        ) : null}
+      </NavLink>
+    );
   };
 
-  const closeMobileMenu = () => {
-    setIsMobileMenuOpen(false);
-  };
+  const userInitial = displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="w-full bg-background border-b border-border">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link
-            to="/"
-            className="relative flex h-20 items-center overflow-visible rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:h-24 lg:h-28"
-            onClick={closeMobileMenu}
+    <>
+      <div className="sticky top-0 z-40 border-b-[3px] border-black bg-white md:hidden">
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="gpe-heading text-xl"
           >
-            <img
-              src={headerLogo}
-              alt="Girl + Environment Community Hub"
-              className="h-full w-auto origin-left transform scale-[1.4] sm:scale-[1.8] md:scale-[2] lg:scale-[2.4]"
-            />
-          </Link>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-8">
-            <Link 
-              to="/explore" 
-              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide"
+            GPE HUB™
+          </button>
+          <div className="flex items-center gap-2">
+            {user && <PointsBadge />}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setIsMobileMenuOpen((previous) => !previous)}
             >
-              Explore
-            </Link>
-            <Link 
-              to="/community" 
-              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide"
-            >
-              My Community
-            </Link>
-            <Link 
-              to="/submit" 
-              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide"
-            >
-              Make a Submission
-            </Link>
-          </nav>
-
-          {/* Desktop User Profile / Mobile Menu Button */}
-          <div className="flex items-center gap-4">
-            {/* User Points Badge - Desktop */}
-            {user && (
-              <div className="hidden md:block">
-                <PointsBadge />
-              </div>
-            )}
-            {/* Messages Icon Button - Desktop */}
-            {user && (
-              <Link
-                to="/messages"
-                className="hidden md:flex relative h-10 w-10 items-center justify-center rounded-full hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                aria-label="Messages"
-              >
-                <MessageSquare className="h-7 w-7 text-primary" />
-                {unreadCount > 0 && (
-                  <Badge 
-                    variant="destructive" 
-                    className="absolute -top-1 -right-1 h-5 min-w-5 px-1.5 text-xs flex items-center justify-center"
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Badge>
-                )}
-              </Link>
-            )}
-            {/* Desktop User Profile */}
-            <div className="hidden md:block">
-              {loading ? (
-                <div
-                  className="h-10 w-10 rounded-full bg-muted animate-pulse"
-                  aria-hidden="true"
-                />
-              ) : user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="focus:outline-none">
-                    <Avatar className="h-10 w-10 cursor-pointer border-2 border-primary/20 hover:border-primary transition-colors">
-                      <AvatarImage key={avatarUrl} src={avatarUrl} alt={displayName} />
-                      <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                        {displayName.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-card border-border z-50">
-                    <div className="px-3 py-2">
-                      <p className="text-sm font-medium text-foreground">{displayName}</p>
-                      {displayEmail && (
-                        <p className="text-xs text-muted-foreground">{displayEmail}</p>
-                      )}
-                    </div>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link 
-                        to="/favorites" 
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <Heart className="h-4 w-4" />
-                        <span>Favorites</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link 
-                        to="/messages" 
-                        className="flex items-center gap-2 cursor-pointer relative"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        <span>Messages</span>
-                        {unreadCount > 0 && (
-                          <Badge variant="destructive" className="h-4 min-w-4 px-1 text-xs ml-auto">
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem asChild>
-                      <Link 
-                        to="/leaderboard" 
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <Zap className="h-4 w-4" />
-                        <span>Leaderboard</span>
-                      </Link>
-                    </DropdownMenuItem>
-
-                    {role === "admin" && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
-                            <Shield className="h-4 w-4" />
-                            <span>Admin Dashboard</span>
-                          </Link>
-                        </DropdownMenuItem>
-                      </>
-                    )}
-
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link 
-                        to="/profile" 
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <User className="h-4 w-4" />
-                        <span>Edit Profile</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={handleLogout}
-                      className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span>Logout</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Link to="/login">
-                  <Button variant="outline" className="uppercase tracking-wide">
-                    Log in
-                  </Button>
-                </Link>
-              )}
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={toggleMobileMenu}
-              className="md:hidden p-2 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              aria-label="Toggle mobile menu"
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-primary" />
-              ) : (
-                <Menu className="h-6 w-6 text-primary" />
-              )}
-            </button>
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
-
-        {/* Mobile Navigation Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 border-t border-border">
-            <nav className="flex flex-col space-y-4 pt-4">
-              <Link
-                to="/explore"
-                className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide py-2"
-                onClick={closeMobileMenu}
-              >
-                Explore
-              </Link>
-              <Link
-                to="/community"
-                className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide py-2"
-                onClick={closeMobileMenu}
-              >
-                My Community
-              </Link>
-              <Link
-                to="/submit"
-                className="text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide py-2"
-                onClick={closeMobileMenu}
-              >
-                Make a Submission
-              </Link>
-              {user && (
-                <Link
-                  to="/messages"
-                  className="relative text-sm font-medium text-primary hover:text-primary/80 transition-colors uppercase tracking-wide py-2 flex items-center gap-2"
-                  onClick={closeMobileMenu}
-                >
-                  Messages
-                  {unreadCount > 0 && (
-                    <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </Badge>
-                  )}
-                </Link>
-              )}
-              
-              {/* Mobile User Section */}
-              {loading ? (
-                <div className="pt-4 border-t border-border">
-                  <div className="h-8 w-8 rounded-full bg-muted animate-pulse" aria-hidden="true" />
-                </div>
-              ) : user ? (
-                <div className="pt-4 border-t border-border space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={avatarUrl} alt={displayName} />
-                        <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                          {displayName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
-                        {displayEmail && (
-                          <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                      <PointsBadge />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Link
-                      to="/favorites"
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-                      onClick={closeMobileMenu}
-                    >
-                      <Heart className="h-4 w-4" />
-                      <span>Favorites</span>
-                    </Link>
-                    <Link
-                      to="/messages"
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2 relative"
-                      onClick={closeMobileMenu}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      <span>Messages</span>
-                      {unreadCount > 0 && (
-                        <Badge variant="destructive" className="h-4 min-w-4 px-1 text-xs ml-auto">
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </Badge>
-                      )}
-                    </Link>
-                    <Link
-                      to="/leaderboard"
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-                      onClick={closeMobileMenu}
-                    >
-                      <Zap className="h-4 w-4" />
-                      <span>Leaderboard</span>
-                    </Link>
-                    <Link
-                      to="/profile"
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-                      onClick={closeMobileMenu}
-                    >
-                      <User className="h-4 w-4" />
-                      <span>Edit Profile</span>
-                    </Link>
-                    <button
-                      onClick={() => {
-                        handleLogout();
-                        closeMobileMenu();
-                      }}
-                      className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition-colors py-2 w-full text-left"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span>Logout</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="pt-4 border-t border-border">
-                  <Link to="/login" onClick={closeMobileMenu}>
-                    <Button variant="outline" className="w-full uppercase tracking-wide">
-                      Log in
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </nav>
-          </div>
-        )}
       </div>
-    </header>
+
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
+          <div className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[320px] flex-col overflow-y-auto border-r-[3px] border-black bg-white p-4">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="gpe-heading text-2xl">GPE HUB™</div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Close menu"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <nav className="flex flex-1 flex-col gap-3">
+              {navItems.map((item) => renderNavLink(item, true))}
+              {role === "admin" &&
+                renderNavLink({ to: "/admin", label: "Admin", icon: Shield }, true)}
+            </nav>
+
+            <div className="mt-6 space-y-3 border-t-[3px] border-black pt-4">
+              <NavLink
+                to="/profile"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="gpe-card-sm flex items-center gap-3 p-3"
+              >
+                <Avatar className="h-12 w-12 border-[3px] border-black">
+                  <AvatarImage src={avatarUrl} alt={displayName} />
+                  <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <div className="truncate font-bold">{displayName}</div>
+                  <div className="text-xs uppercase text-black/60">Profile</div>
+                </div>
+              </NavLink>
+
+              <Button type="button" variant="ghost" className="justify-start px-0" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Log Out
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r-[3px] border-black bg-white p-6 md:flex">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="gpe-heading mb-10 text-3xl text-left"
+        >
+          GPE HUB™
+        </button>
+
+        <nav className="flex flex-1 flex-col gap-4">
+          {navItems.map((item) => renderNavLink(item))}
+          {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
+        </nav>
+
+        <div className="mt-6 space-y-4 border-t-[3px] border-black pt-4">
+          {user && (
+            <div className="flex items-center justify-between gap-3">
+              <PointsBadge />
+              {unreadCount > 0 ? (
+                <Badge className="bg-[#d53f8c] text-white">{unreadCount > 99 ? "99+" : unreadCount}</Badge>
+              ) : null}
+            </div>
+          )}
+
+          <NavLink to="/profile" className="gpe-card-sm flex items-center gap-3 p-3">
+            <Avatar className="h-12 w-12 border-[3px] border-black">
+              <AvatarImage src={avatarUrl} alt={displayName} />
+              <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
+                {loading ? "…" : userInitial}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="truncate font-bold">{displayName}</div>
+              <div className="text-xs uppercase text-black/60">View Profile</div>
+            </div>
+          </NavLink>
+
+          <Button type="button" variant="ghost" className="justify-start px-0 text-red-500 hover:text-red-600" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Log Out
+          </Button>
+        </div>
+      </aside>
+    </>
   );
 };
 

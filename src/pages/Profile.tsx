@@ -267,7 +267,7 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="gpe-page flex items-center justify-center">
         <div className="text-center">
           <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin mx-auto" />
           <p className="mt-4 text-muted-foreground">Loading your profile...</p>
@@ -278,7 +278,7 @@ const Profile = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="gpe-page flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">You need to sign in to view this page.</p>
           <Link to="/login">
@@ -290,12 +290,12 @@ const Profile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="gpe-page">
       <Header />
-      <main className="container mx-auto px-4 py-8">
+      <main className="gpe-page-main">
         <div className="max-w-4xl mx-auto">
           {/* Back Link */}
-          <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary mb-6 transition-colors">
+          <Link to="/" className="mb-6 inline-flex items-center gap-2 text-sm font-bold uppercase text-black/70 underline transition-colors hover:text-black">
             <ArrowLeft className="h-4 w-4" />
             Back to Home
           </Link>
@@ -303,7 +303,7 @@ const Profile = () => {
           <div className="grid md:grid-cols-3 gap-6">
             {/* Left Column - Profile Preview */}
             <div className="md:col-span-1">
-              <Card className="border-2 sticky top-24">
+              <Card className="sticky top-24">
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center text-center">
                     {/* Avatar with Upload */}
@@ -329,7 +329,7 @@ const Profile = () => {
                         disabled={isUploading}
                         className="absolute bottom-0 right-0 p-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                       >
-                        <Camera className="h-4 w-4" />
+                          <Camera className="h-4 w-4" />
                       </button>
                       <input
                         ref={fileInputRef}
@@ -342,7 +342,7 @@ const Profile = () => {
                     </div>
 
                     {/* Name Preview */}
-                    <h2 className="text-xl font-bold">
+                    <h2 className="font-header text-3xl uppercase">
                       {formState.full_name || "Your Name"}
                     </h2>
                     {formState.username && (
@@ -383,9 +383,9 @@ const Profile = () => {
 
             {/* Right Column - Edit Form */}
             <div className="md:col-span-2">
-              <Card className="border-2">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-2xl">Edit Profile</CardTitle>
+                  <CardTitle className="text-3xl">Edit Profile</CardTitle>
                   <CardDescription>
                     Update your information to help others in the community know you better.
                   </CardDescription>
@@ -475,4 +475,3 @@ const Profile = () => {
 };
 
 export default Profile;
-

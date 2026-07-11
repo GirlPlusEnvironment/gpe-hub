@@ -84,7 +84,7 @@ export const PostCard = React.memo(function PostCard({ post, onLike, onUpdate, o
 
   return (
     <TooltipProvider>
-      <Card className="w-full mb-4 hover:shadow-lg transition-all duration-200 cursor-pointer group" onClick={() => navigate(`/community/post/${post.id}`)}>
+      <Card className="group mb-4 w-full cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_0_#000]" onClick={() => navigate(`/community/post/${post.id}`)}>
         <CardHeader className="flex flex-row items-center gap-4 pb-2 relative">
           <div 
             onClick={(e) => {
@@ -138,8 +138,8 @@ export const PostCard = React.memo(function PostCard({ post, onLike, onUpdate, o
           )}
         </CardHeader>
         <CardContent className="pb-2">
-        <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{post.title}</h3>
-        <p className="text-muted-foreground line-clamp-3">{post.description}</p>
+        <h3 className="mb-2 font-header text-3xl uppercase transition-colors group-hover:text-[#d53f8c]">{post.title}</h3>
+        <p className="line-clamp-3 text-sm font-bold text-black/75">{post.description}</p>
         {post.type === 'poll' && (
           <div onClick={(e) => e.stopPropagation()}>
             <PollView post={post} onVote={() => onUpdate?.()} />

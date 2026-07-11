@@ -72,13 +72,13 @@ const Community = () => {
   }, [toast]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="gpe-page">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <div className="flex justify-between items-center mb-8">
+      <main className="gpe-page-main max-w-6xl">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-primary">Community Feed</h1>
-            <p className="text-muted-foreground">Join the conversation</p>
+            <h1 className="gpe-heading text-5xl md:text-7xl">GPE Community</h1>
+            <p className="mt-3 text-lg font-bold text-black/70">Join the real conversation.</p>
           </div>
           <CreatePostDialog onPostCreated={loadPosts} />
         </div>
@@ -86,15 +86,15 @@ const Community = () => {
         {isLoading ? (
           <PostCardSkeletonList count={3} />
         ) : posts.length === 0 ? (
-          <div className="text-center py-16 px-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-              <MessageSquareText className="h-8 w-8 text-primary" />
+          <div className="gpe-card px-4 py-16 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full border-[3px] border-black bg-white">
+              <MessageSquareText className="h-8 w-8 text-black" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">No posts yet</h3>
-            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+            <h3 className="gpe-heading text-3xl">No posts yet</h3>
+            <p className="mx-auto mb-6 mt-3 max-w-sm font-bold text-black/70">
               Be the first to share something with the community! Start a discussion, ask a question, or create a poll.
             </p>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 text-sm font-bold uppercase text-black/60">
               <Sparkles className="h-4 w-4" />
               <span>Earn 10 points for each post you create</span>
             </div>

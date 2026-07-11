@@ -80,18 +80,18 @@ const Leaderboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="gpe-page">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-12">
+      <main className="gpe-page-main">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
               <Zap className="h-8 w-8 text-primary" />
-              <h1 className="text-4xl md:text-5xl font-bold text-primary">Community Leaderboard</h1>
+              <h1 className="gpe-heading text-4xl md:text-6xl">Community Leaderboard</h1>
               <Zap className="h-8 w-8 text-primary" />
             </div>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="mx-auto max-w-2xl text-lg font-bold text-black/70">
               Celebrate our most engaged community members. Earn points by participating, contributing, and connecting!
             </p>
           </div>
@@ -111,7 +111,7 @@ const Leaderboard = () => {
           </div>
 
           {/* Leaderboard Table */}
-          <Card className="border-2">
+          <Card>
             <CardHeader>
               <CardTitle className="text-xl">Top Contributors</CardTitle>
               <CardDescription>
@@ -139,7 +139,7 @@ const Leaderboard = () => {
                   {leaderboard.map((user) => (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-input hover:bg-muted/50 transition-colors cursor-pointer"
+                      className="flex cursor-pointer items-center justify-between rounded-[1.5rem] border-[3px] border-black bg-white p-4 transition-colors hover:bg-pink-100"
                       onClick={() => handleUserClick(user.id)}
                     >
                       {/* Rank and User Info */}
@@ -195,14 +195,14 @@ const Leaderboard = () => {
           </Card>
 
           {/* Level Info Card */}
-          <Card className="mt-8 border-2">
+          <Card className="mt-8">
             <CardHeader>
               <CardTitle className="text-lg">Level Tiers</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 {LEVELS.map((lvl) => (
-                  <div key={lvl.level} className="text-center p-4 rounded-lg border border-input">
+                  <div key={lvl.level} className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 text-center">
                     <div className={`w-12 h-12 rounded-full ${lvl.color} mx-auto mb-3 flex items-center justify-center font-bold text-lg`}>
                       {lvl.level}
                     </div>
@@ -217,7 +217,7 @@ const Leaderboard = () => {
           </Card>
 
           {/* How to Earn Points */}
-          <Card className="mt-8 border-2">
+          <Card className="mt-8">
             <CardHeader>
               <CardTitle className="text-lg">How to Earn Points</CardTitle>
             </CardHeader>

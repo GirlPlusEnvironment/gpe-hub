@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, Megaphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,7 @@ const Login = () => {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -32,12 +33,19 @@ const Login = () => {
     setMode(location.pathname === "/sign-up" ? "signup" : "login");
     setErrorMessage(null);
     setSuccessMessage(null);
+    setConfirmPassword("");
   }, [location.pathname]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    if (mode === "signup" && confirmPassword !== password) {
+      setErrorMessage("Passwords must match.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -54,120 +62,149 @@ const Login = () => {
           setErrorMessage(error);
           return;
         }
-        // Supabase sends a confirmation email before the account is active.
-        setSuccessMessage("Check your inbox to confirm your account. Once verified you can sign in.");
+        setSuccessMessage("Check your inbox to confirm your account, then return here to sign in.");
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const toggleMode = () => {
-    navigate(mode === "login" ? "/sign-up" : "/login");
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f9f5ff] via-white to-[#e0f7f8]">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-4 py-8 md:flex-row md:items-center md:gap-12">
-        <section className="mx-auto mb-12 max-w-xl text-center md:mx-0 md:mb-0 md:max-w-lg">
-          <h1 className="text-4xl font-bold leading-tight text-primary md:text-5xl">
-            Join the Girl + Environment Community Hub
-          </h1>
-          <p className="mt-4 text-lg text-muted-foreground md:text-xl">
-            Sign in to explore resources, connect with peers, and share opportunities in climate justice.
-          </p>
+    <div className="min-h-screen bg-[#fbd3d3]">
+      <div className="grid min-h-screen md:grid-cols-2">
+        <section className="relative hidden overflow-hidden bg-black p-12 text-white md:flex md:flex-col md:items-center md:justify-center">
+          <div className="gpe-pattern absolute inset-0 opacity-30" />
+          <div className="relative z-10 max-w-xl text-center">
+            <Sparkles className="mx-auto mb-10 h-28 w-28 text-white" />
+            <h1 className="font-header text-6xl uppercase leading-none md:text-7xl">
+              Hey, GPE Community!
+            </h1>
+            <p className="mt-6 text-2xl font-bold">
+              Welcome to your environmental justice hub. Log in to connect, post,
+              message, and move work forward together.
+            </p>
+          </div>
+          <Megaphone className="absolute bottom-10 left-10 h-28 w-28 text-white/20" />
         </section>
 
-        <section className="w-full max-w-md">
-          <Card className="border-2 border-primary/20 shadow-lg backdrop-blur">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl text-primary">
-                {mode === "login" ? "Welcome back" : "Create an account"}
-              </CardTitle>
-              <CardDescription className="text-base">
+        <section className="flex items-center justify-center p-6 md:p-12">
+          <div className="w-full max-w-md">
+            <div className="mb-8 flex gap-4">
+              <Button
+                type="button"
+                variant={mode === "login" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => navigate("/login")}
+              >
+                Log In
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "signup" ? "secondary" : "outline"}
+                className="flex-1"
+                onClick={() => navigate("/sign-up")}
+              >
+                Sign Up
+              </Button>
+            </div>
+
+            <div className="gpe-card p-8 md:p-10">
+              <h2 className="gpe-heading text-4xl">
+                {mode === "login" ? "Welcome Back!" : "Join the Movement"}
+              </h2>
+              <p className="mt-3 text-sm font-bold text-black/70">
                 {mode === "login"
-                  ? "Enter your details to access the community hub."
-                  : "We'll send you a confirmation email so you can activate your account."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+                  ? "Enter your real account details to access the hub."
+                  : "We’ll send a confirmation email before your account becomes active."}
+              </p>
+
+              <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email" className="text-xs font-bold uppercase">
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
                     autoComplete="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
+                    placeholder="you@gpe.org"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-xs font-bold uppercase">
+                    Password
+                  </Label>
                   <Input
                     id="password"
                     type="password"
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="********"
+                    placeholder="Enter your password"
                     required
                     minLength={6}
                   />
                 </div>
 
-                {errorMessage && (
-                  <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive" role="alert">
-                    {errorMessage}
-                  </p>
-                )}
-                {successMessage && (
-                  <p className="rounded-md border border-emerald-400/50 bg-emerald-50 p-2 text-sm text-emerald-700" role="status">
-                    {successMessage}
-                  </p>
+                {mode === "signup" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-xs font-bold uppercase">
+                      Confirm Password
+                    </Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="Confirm your password"
+                      required
+                      minLength={6}
+                    />
+                  </div>
                 )}
 
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+                {errorMessage && (
+                  <div className="rounded-[1.25rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">
+                    {errorMessage}
+                  </div>
+                )}
+                {successMessage && (
+                  <div className="rounded-[1.25rem] border-[3px] border-green-600 bg-green-100 p-4 text-sm font-bold text-green-700">
+                    {successMessage}
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                   {isSubmitting
                     ? mode === "login"
-                      ? "Signing in..."
-                      : "Creating account..."
+                      ? "Signing In..."
+                      : "Creating Account..."
                     : mode === "login"
-                    ? "Sign in"
-                    : "Sign up"}
+                    ? "Log In"
+                    : "Sign Up"}
                 </Button>
               </form>
 
-              <div className="mt-6 text-center text-sm text-muted-foreground">
-                {mode === "login" ? (
-                  <>
-                    <span>New here? </span>
-                    <button
-                      type="button"
-                      onClick={toggleMode}
-                      className="font-semibold text-primary hover:text-primary/80"
-                    >
-                      Create an account
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span>Already registered? </span>
-                    <button
-                      type="button"
-                      onClick={toggleMode}
-                      className="font-semibold text-primary hover:text-primary/80"
-                    >
-                      Sign in instead
-                    </button>
-                  </>
-                )}
+              <div className="mt-6 flex items-center justify-between gap-3 text-sm font-bold">
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => navigate(mode === "login" ? "/sign-up" : "/login")}
+                >
+                  {mode === "login" ? "Need an account?" : "Already registered?"}
+                </button>
+                <span className="inline-flex items-center gap-2 text-black/60">
+                  <ArrowLeft className="h-4 w-4" />
+                  Password reset coming soon
+                </span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </section>
       </div>
     </div>

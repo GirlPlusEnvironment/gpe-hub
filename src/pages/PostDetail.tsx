@@ -121,9 +121,9 @@ const PostDetail = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="gpe-page">
         <Header />
-        <main className="flex-1 flex justify-center items-center">
+        <main className="gpe-page-main flex min-h-[70vh] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </main>
         <Footer />
@@ -134,10 +134,10 @@ const PostDetail = () => {
   if (!post) return null;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="gpe-page">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <Button variant="ghost" className="mb-4 gap-2" onClick={() => navigate("/community")}>
+      <main className="gpe-page-main max-w-5xl">
+        <Button variant="outline" className="mb-6 gap-2" onClick={() => navigate("/community")}>
           <ArrowLeft className="h-4 w-4" /> Back to Community
         </Button>
 
@@ -149,9 +149,9 @@ const PostDetail = () => {
         />
 
         <div className="mt-8">
-          <h3 className="text-xl font-bold mb-4">Comments ({post.comments_count})</h3>
+          <h3 className="gpe-heading mb-4 text-3xl">Comments ({post.comments_count})</h3>
           
-          <div className="bg-card border rounded-lg p-4 mb-6">
+          <div className="gpe-card p-4 mb-6">
             <Textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}

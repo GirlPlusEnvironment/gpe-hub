@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { Listing, JobListing, EventListing, FundraiserListing, ResourceListing } from "@/types/listings";
 import { ShareDialog } from "@/components/ShareDialog";
+import { gpeCategoryConfig } from "@/lib/gpe";
 
 interface ListingDetailProps {
   listing: Listing;
@@ -77,13 +78,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
   };
 
   const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'jobs': return 'bg-blue-100 text-blue-800';
-      case 'events': return 'bg-green-100 text-green-800';
-      case 'fundraisers': return 'bg-purple-100 text-purple-800';
-      case 'resources': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    return gpeCategoryConfig[category as Listing["category"]]?.badge ?? "bg-white text-black";
   };
 
   const renderJobDetails = (job: JobListing) => (
@@ -389,11 +384,11 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div>
+      <div className="mx-auto max-w-6xl">
         {/* Back Button */}
         <Button
-          variant="ghost"
+          variant="outline"
           onClick={onBack}
           className="mb-6"
         >
@@ -401,7 +396,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
           Back to Explore
         </Button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Header */}
@@ -414,14 +409,14 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                       {listing.category.charAt(0).toUpperCase() + listing.category.slice(1)}
                     </Badge>
                   </div>
-                  <h1 className="text-3xl font-bold text-primary mb-2">
+                  <h1 className="font-header text-4xl uppercase leading-tight md:text-6xl">
                     {listing.title}
                   </h1>
                 </div>
                 <button
                   onClick={() => onToggleFavorite(listing.id)}
                   disabled={isPending}
-                  className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="rounded-full p-2 hover:bg-pink-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
                 >
                   <Heart
@@ -437,7 +432,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                 <img
                   src={listing.image}
                   alt={listing.title}
-                  className="w-full h-64 object-cover rounded-lg"
+                  className="h-64 w-full rounded-[1.5rem] border-[3px] border-black object-cover"
                 />
               </div>
             </div>
@@ -566,7 +561,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                       {/* Category-specific contact info */}
                       {(() => {
                         switch (listing.category) {
-                          case "jobs":
+                          case "jobs": {
                             const job = listing as JobListing;
                             return (
                               <>
@@ -596,7 +591,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                                 )}
                               </>
                             );
-                          case "events":
+                          }
+                          case "events": {
                             const event = listing as EventListing;
                             return (
                               <>
@@ -626,7 +622,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                                 )}
                               </>
                             );
-                          case "fundraisers":
+                          }
+                          case "fundraisers": {
                             const fundraiser = listing as FundraiserListing;
                             return (
                               <>
@@ -656,7 +653,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                                 )}
                               </>
                             );
-                          case "resources":
+                          }
+                          case "resources": {
                             const resource = listing as ResourceListing;
                             return (
                               <>
@@ -675,6 +673,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                                 )}
                               </>
                             );
+                          }
                           default:
                             return null;
                         }

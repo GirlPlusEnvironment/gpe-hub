@@ -182,13 +182,13 @@ const Messages = () => {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="gpe-page h-screen overflow-hidden">
       <Header />
-      <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 py-4 overflow-hidden">
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+      <main className="gpe-page-main flex h-full max-w-7xl flex-col overflow-hidden">
+        <div className="mb-4 flex flex-shrink-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-primary mb-2">Messages</h1>
-            <p className="text-muted-foreground">Connect with community members</p>
+            <h1 className="gpe-heading text-5xl md:text-6xl">Messages</h1>
+            <p className="mt-2 font-bold text-black/70">Direct messages and group chats.</p>
           </div>
           <Button
             onClick={() => setShowUserSearch(true)}
@@ -208,10 +208,15 @@ const Messages = () => {
           </div>
         )}
 
-        <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
+        <div className="gpe-card flex min-h-0 flex-1 gap-0 overflow-hidden p-0">
           {/* Conversation List */}
-          <div className="w-full md:w-1/3 lg:w-1/4 border-r border-border pr-6 flex flex-col min-h-0 overflow-hidden">
-            <div className="relative mb-4 flex-shrink-0">
+          <div className="flex w-full min-h-0 flex-col overflow-hidden border-b-[3px] border-black md:w-1/3 md:border-b-0 md:border-r-[3px] lg:w-[320px]">
+            <div className="border-b-[3px] border-black p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="gpe-heading text-2xl">Conversations</h2>
+                <Badge className="bg-[#d53f8c] text-white">{unreadCount}</Badge>
+              </div>
+              <div className="relative flex-shrink-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search conversations..."
@@ -219,6 +224,7 @@ const Messages = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
+            </div>
             </div>
 
             {isLoadingConversations ? (
@@ -242,7 +248,7 @@ const Messages = () => {
                 )}
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+              <div className="gpe-scrollbar flex-1 space-y-2 overflow-y-auto p-3 min-h-0">
                 {filteredConversations.map((conversation) => {
                   // Check if conversation has unread messages
                   const currentUserParticipant = conversation.participants.find(
@@ -262,12 +268,12 @@ const Messages = () => {
                     <button
                       key={conversation.id}
                       onClick={() => handleConversationClick(conversation.id)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors border ${
+                      className={`w-full rounded-[1.5rem] border-[3px] p-3 text-left transition-colors ${
                         isActive
-                          ? "bg-muted border-border"
+                          ? "bg-cyan-100"
                           : isUnread
-                          ? "bg-primary/10 border-primary/20 hover:bg-primary/15"
-                          : "border-transparent hover:bg-muted hover:border-border"
+                          ? "bg-pink-100"
+                          : "bg-white hover:bg-gray-50"
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -309,7 +315,7 @@ const Messages = () => {
           </div>
 
           {/* Conversation View or Empty State */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden bg-[#fdf2f8]">
             {currentConversation ? (
               <ConversationView
                 conversation={currentConversation}

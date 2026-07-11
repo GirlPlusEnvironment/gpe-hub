@@ -265,6 +265,9 @@ const Profile = () => {
     user?.email?.charAt(0)?.toUpperCase() ??
     "Y";
 
+  const profileDisplayName = formState.full_name || "Your Name";
+  const profileSecondaryLine = formState.username ? `@${formState.username}` : user.email ?? "";
+
   if (loading) {
     return (
       <div className="gpe-page flex items-center justify-center">
@@ -305,7 +308,7 @@ const Profile = () => {
             <div className="md:col-span-1">
               <Card className="sticky top-24">
                 <CardContent className="pt-6">
-                  <div className="flex flex-col items-center text-center">
+                  <div className="flex min-w-0 flex-col items-center text-center">
                     {/* Avatar with Upload */}
                     <div className="relative group mb-4">
                       <Avatar key={avatarKey} className="h-28 w-28 ring-4 ring-primary/20">
@@ -342,12 +345,16 @@ const Profile = () => {
                     </div>
 
                     {/* Name Preview */}
-                    <h2 className="font-header text-3xl uppercase">
-                      {formState.full_name || "Your Name"}
-                    </h2>
-                    {formState.username && (
-                      <p className="text-sm text-muted-foreground">@{formState.username}</p>
-                    )}
+                    <div className="min-w-0 max-w-full">
+                      <h2 className="font-header text-3xl uppercase leading-tight break-words [overflow-wrap:anywhere]">
+                        {profileDisplayName}
+                      </h2>
+                      {profileSecondaryLine && (
+                        <p className="mt-2 max-w-full truncate text-sm text-muted-foreground">
+                          {profileSecondaryLine}
+                        </p>
+                      )}
+                    </div>
 
                     {/* Level Badge */}
                     <Badge className={`mt-3 ${calculateLevel(profile?.points || 0).color}`}>
@@ -356,14 +363,14 @@ const Profile = () => {
                     </Badge>
 
                     {/* Stats */}
-                    <div className="w-full mt-6 pt-6 border-t space-y-3">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Points</span>
-                        <span className="font-semibold text-primary">{profile?.points || 0}</span>
+                    <div className="mt-6 w-full space-y-3 border-t pt-6">
+                      <div className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-muted-foreground">Points</span>
+                        <span className="text-right font-semibold text-primary">{profile?.points || 0}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Member since</span>
-                        <span className="font-medium">
+                      <div className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-muted-foreground">Member since</span>
+                        <span className="text-right font-medium">
                           {profile?.created_at 
                             ? format(new Date(profile.created_at), "MMM yyyy")
                             : "—"
@@ -421,7 +428,13 @@ const Profile = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" value={user.email ?? ""} disabled className="bg-muted" />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={user.email ?? ""}
+                        disabled
+                        className="overflow-hidden text-ellipsis bg-muted"
+                      />
                       <p className="text-xs text-muted-foreground">
                         Your email is linked to your account and cannot be changed here.
                       </p>

@@ -120,7 +120,7 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
               <DialogTitle>User Profile</DialogTitle>
             </DialogHeader>
             
-            <div className="flex flex-col items-center text-center pt-4">
+            <div className="flex min-w-0 flex-col items-center pt-4 text-center">
               {/* Avatar */}
               <Avatar className="h-24 w-24 mb-4 ring-4 ring-primary/20">
                 <AvatarImage src={profile.avatar_url || ""} />
@@ -130,12 +130,16 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
               </Avatar>
 
               {/* Name and Username */}
-              <h2 className="text-xl font-bold text-foreground">
-                {profile.full_name || profile.username || "Unknown User"}
-              </h2>
-              {profile.username && profile.username !== profile.full_name && (
-                <p className="text-sm text-muted-foreground">@{profile.username}</p>
-              )}
+              <div className="min-w-0 max-w-full">
+                <h2 className="break-words font-header text-2xl uppercase leading-tight [overflow-wrap:anywhere]">
+                  {profile.full_name || profile.username || "Unknown User"}
+                </h2>
+                {profile.username && profile.username !== profile.full_name && (
+                  <p className="mt-1 max-w-full truncate text-sm text-muted-foreground">
+                    @{profile.username}
+                  </p>
+                )}
+              </div>
 
               {/* Level Badge */}
               <Badge className={`mt-3 ${levelInfo.color}`}>
@@ -145,7 +149,7 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
 
               {/* Bio */}
               {profile.bio && (
-                <p className="mt-4 text-sm text-muted-foreground max-w-xs">
+                <p className="mt-4 max-w-xs break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
                   {profile.bio}
                 </p>
               )}

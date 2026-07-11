@@ -62,6 +62,9 @@ const Header = () => {
     profile?.avatar_url ??
     ((user?.user_metadata?.avatar_url as string | undefined) ?? "");
 
+  const secondaryIdentity =
+    profile?.username ? `@${profile.username}` : user?.email ?? "";
+
   const navItems = [
     { to: "/", label: "Dashboard", icon: Home },
     { to: "/explore", label: "Explore", icon: Compass },
@@ -163,17 +166,21 @@ const Header = () => {
               <NavLink
                 to="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="gpe-card-sm flex items-center gap-3 p-3"
+                className="gpe-card-sm flex items-start gap-3 p-3"
               >
-                <Avatar className="h-12 w-12 border-[3px] border-black">
+                <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
                   <AvatarImage src={avatarUrl} alt={displayName} />
                   <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                     {userInitial}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
-                  <div className="truncate font-bold">{displayName}</div>
-                  <div className="text-xs uppercase text-black/60">Profile</div>
+                <div className="flex-1 min-w-0">
+                  <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
+                    {displayName}
+                  </div>
+                  <div className="truncate text-[11px] uppercase leading-tight text-black/60">
+                    {secondaryIdentity || "Profile"}
+                  </div>
                 </div>
               </NavLink>
 
@@ -210,16 +217,20 @@ const Header = () => {
             </div>
           )}
 
-          <NavLink to="/profile" className="gpe-card-sm flex items-center gap-3 p-3">
-            <Avatar className="h-12 w-12 border-[3px] border-black">
+          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 p-3">
+            <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
               <AvatarImage src={avatarUrl} alt={displayName} />
               <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                 {loading ? "…" : userInitial}
               </AvatarFallback>
             </Avatar>
-            <div className="min-w-0">
-              <div className="truncate font-bold">{displayName}</div>
-              <div className="text-xs uppercase text-black/60">View Profile</div>
+            <div className="flex-1 min-w-0">
+              <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
+                {displayName}
+              </div>
+              <div className="truncate text-[11px] uppercase leading-tight text-black/60">
+                {secondaryIdentity || "View Profile"}
+              </div>
             </div>
           </NavLink>
 

@@ -50,7 +50,7 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
 
   return (
     <Card 
-      className="w-64 cursor-pointer hover:shadow-md transition-shadow overflow-hidden bg-background text-foreground"
+      className="w-64 max-w-full cursor-pointer overflow-hidden bg-background text-foreground transition-shadow hover:shadow-md"
       onClick={() => navigate(`/community/post/${post.id}`)}
     >
       {post.image_url && (
@@ -63,21 +63,21 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
         </div>
       )}
       <CardHeader className="p-3 pb-0">
-        <div className="flex items-center gap-2 mb-1">
-          <Avatar className="h-5 w-5">
+        <div className="mb-1 flex min-w-0 items-center gap-2">
+          <Avatar className="h-5 w-5 shrink-0">
             <AvatarImage src={post.user?.avatar_url || ""} />
             <AvatarFallback className="text-[10px]">
               {post.user?.full_name?.charAt(0) || "U"}
             </AvatarFallback>
           </Avatar>
-          <span className="text-xs text-muted-foreground truncate">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {post.user?.full_name || "Unknown"}
           </span>
         </div>
-        <h4 className="font-semibold text-sm line-clamp-1">{post.title}</h4>
+        <h4 className="line-clamp-2 break-words text-sm font-semibold leading-tight">{post.title}</h4>
       </CardHeader>
       <CardContent className="p-3 pt-1">
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+        <p className="mb-2 line-clamp-3 break-words text-xs text-muted-foreground">
           {post.description}
         </p>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">

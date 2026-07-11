@@ -41,4 +41,2363 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
+
+  
+<html vid="0"><head vid="1">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet" vid="3">
+    <script src="https://unpkg.com/@phosphor-icons/web" vid="4"></script>
+    <style vid="5">
+        body {
+            font-family: 'Space Mono', monospace;
+            background-color: #fbd3d3;
+            color: #000;
+            overflow-x: hidden;
+        }
+        .header-font {
+            font-family: 'Archivo Black', sans-serif;
+            text-transform: uppercase;
+            -webkit-text-stroke: 1.5px black;
+        }
+        .brutalist-border {
+            border: 3px solid black;
+        }
+        .brutalist-shadow {
+            box-shadow: 8px 8px 0px 0px #000;
+        }
+        .brutalist-shadow-sm {
+            box-shadow: 4px 4px 0px 0px #000;
+        }
+        .brutalist-shadow-hover:hover {
+            box-shadow: 12px 12px 0px 0px #000;
+            transform: translate(-4px, -4px);
+        }
+        .active-view { display: block !important; }
+        .view-section { display: none; }
+        
+        input, textarea, select {
+            border: 3px solid black !important;
+            border-radius: 16px !important;
+            padding: 12px 16px !important;
+            background: white;
+            width: 100%;
+            font-weight: bold;
+        }
+        input:focus { outline: none; background: #fdf2f8; }
+        
+        .nav-pill {
+            transition: all 0.2s ease;
+        }
+        .nav-pill.active {
+            background-color: #000 !important;
+            color: #fff !important;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 12px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #000; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d53f8c; border: 3px solid black; border-radius: 10px; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .float-icon { animation: float 3s ease-in-out infinite; }
+
+        .auth-split-left { background-color: #000; position: relative; overflow: hidden; }
+        .auth-pattern {
+            background-image: radial-gradient(#d53f8c 2px, transparent 2px);
+            background-size: 30px 30px;
+            opacity: 0.3;
+        }
+    </style>
+
+  <style type="text/css">
+*, ::before, ::after {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+::backdrop {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}/*
+! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com
+*//*
+1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
+*/
+
+*,
+::before,
+::after {
+  box-sizing: border-box; /* 1 */
+  border-width: 0; /* 2 */
+  border-style: solid; /* 2 */
+  border-color: #e5e7eb; /* 2 */
+}
+
+::before,
+::after {
+  --tw-content: '';
+}
+
+/*
+1. Use a consistent sensible line-height in all browsers.
+2. Prevent adjustments of font size after orientation changes in iOS.
+3. Use a more readable tab size.
+4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
+7. Disable tap highlights on iOS
+*/
+
+html,
+:host {
+  line-height: 1.5; /* 1 */
+  -webkit-text-size-adjust: 100%; /* 2 */
+  -moz-tab-size: 4; /* 3 */
+  tab-size: 4; /* 3 */
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; /* 4 */
+  font-feature-settings: normal; /* 5 */
+  font-variation-settings: normal; /* 6 */
+  -webkit-tap-highlight-color: transparent; /* 7 */
+}
+
+/*
+1. Remove the margin in all browsers.
+2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.
+*/
+
+body {
+  margin: 0; /* 1 */
+  line-height: inherit; /* 2 */
+}
+
+/*
+1. Add the correct height in Firefox.
+2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+3. Ensure horizontal rules are visible by default.
+*/
+
+hr {
+  height: 0; /* 1 */
+  color: inherit; /* 2 */
+  border-top-width: 1px; /* 3 */
+}
+
+/*
+Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+abbr:where([title]) {
+  text-decoration: underline dotted;
+}
+
+/*
+Remove the default font size and weight for headings.
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/*
+Add the correct font weight in Edge and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/*
+1. Use the user's configured `mono` font-family by default.
+2. Use the user's configured `mono` font-feature-settings by default.
+3. Use the user's configured `mono` font-variation-settings by default.
+4. Correct the odd `em` font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; /* 1 */
+  font-feature-settings: normal; /* 2 */
+  font-variation-settings: normal; /* 3 */
+  font-size: 1em; /* 4 */
+}
+
+/*
+Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/*
+Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+3. Remove gaps between table borders by default.
+*/
+
+table {
+  text-indent: 0; /* 1 */
+  border-color: inherit; /* 2 */
+  border-collapse: collapse; /* 3 */
+}
+
+/*
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+3. Remove default padding in all browsers.
+*/
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit; /* 1 */
+  font-feature-settings: inherit; /* 1 */
+  font-variation-settings: inherit; /* 1 */
+  font-size: 100%; /* 1 */
+  font-weight: inherit; /* 1 */
+  line-height: inherit; /* 1 */
+  letter-spacing: inherit; /* 1 */
+  color: inherit; /* 1 */
+  margin: 0; /* 2 */
+  padding: 0; /* 3 */
+}
+
+/*
+Remove the inheritance of text transform in Edge and Firefox.
+*/
+
+button,
+select {
+  text-transform: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Remove default button styles.
+*/
+
+button,
+input:where([type='button']),
+input:where([type='reset']),
+input:where([type='submit']) {
+  -webkit-appearance: button; /* 1 */
+  background-color: transparent; /* 2 */
+  background-image: none; /* 2 */
+}
+
+/*
+Use the modern Firefox focus style for all focusable elements.
+*/
+
+:-moz-focusring {
+  outline: auto;
+}
+
+/*
+Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+:-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/*
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[type='search'] {
+  -webkit-appearance: textfield; /* 1 */
+  outline-offset: -2px; /* 2 */
+}
+
+/*
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to `inherit` in Safari.
+*/
+
+::-webkit-file-upload-button {
+  -webkit-appearance: button; /* 1 */
+  font: inherit; /* 2 */
+}
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
+/*
+Removes the default spacing and border for appropriate elements.
+*/
+
+blockquote,
+dl,
+dd,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+hr,
+figure,
+p,
+pre {
+  margin: 0;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+ol,
+ul,
+menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+Reset default styling for dialogs.
+*/
+dialog {
+  padding: 0;
+}
+
+/*
+Prevent resizing textareas horizontally by default.
+*/
+
+textarea {
+  resize: vertical;
+}
+
+/*
+1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+2. Set the default placeholder color to the user's configured gray 400 color.
+*/
+
+input::placeholder,
+textarea::placeholder {
+  opacity: 1; /* 1 */
+  color: #9ca3af; /* 2 */
+}
+
+/*
+Set the default cursor for buttons.
+*/
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/*
+Make sure disabled buttons don't get the pointer cursor.
+*/
+:disabled {
+  cursor: default;
+}
+
+/*
+1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+   This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block; /* 1 */
+  vertical-align: middle; /* 2 */
+}
+
+/*
+Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make elements with the HTML hidden attribute stay hidden by default */
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+.fixed {
+  position: fixed;
+}
+.absolute {
+  position: absolute;
+}
+.relative {
+  position: relative;
+}
+.sticky {
+  position: sticky;
+}
+.inset-0 {
+  inset: 0px;
+}
+.-bottom-16 {
+  bottom: -4rem;
+}
+.bottom-10 {
+  bottom: 2.5rem;
+}
+.bottom-4 {
+  bottom: 1rem;
+}
+.left-0 {
+  left: 0px;
+}
+.left-10 {
+  left: 2.5rem;
+}
+.left-12 {
+  left: 3rem;
+}
+.right-4 {
+  right: 1rem;
+}
+.top-0 {
+  top: 0px;
+}
+.top-1\/2 {
+  top: 50%;
+}
+.top-4 {
+  top: 1rem;
+}
+.z-10 {
+  z-index: 10;
+}
+.z-40 {
+  z-index: 40;
+}
+.z-50 {
+  z-index: 50;
+}
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+.mb-10 {
+  margin-bottom: 2.5rem;
+}
+.mb-12 {
+  margin-bottom: 3rem;
+}
+.mb-16 {
+  margin-bottom: 4rem;
+}
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+.mb-8 {
+  margin-bottom: 2rem;
+}
+.ml-\[280px\] {
+  margin-left: 280px;
+}
+.ml-auto {
+  margin-left: auto;
+}
+.mt-12 {
+  margin-top: 3rem;
+}
+.mt-20 {
+  margin-top: 5rem;
+}
+.mt-4 {
+  margin-top: 1rem;
+}
+.mt-6 {
+  margin-top: 1.5rem;
+}
+.mt-8 {
+  margin-top: 2rem;
+}
+.mt-auto {
+  margin-top: auto;
+}
+.block {
+  display: block;
+}
+.inline-block {
+  display: inline-block;
+}
+.flex {
+  display: flex;
+}
+.grid {
+  display: grid;
+}
+.hidden {
+  display: none;
+}
+.h-1 {
+  height: 0.25rem;
+}
+.h-10 {
+  height: 2.5rem;
+}
+.h-12 {
+  height: 3rem;
+}
+.h-14 {
+  height: 3.5rem;
+}
+.h-16 {
+  height: 4rem;
+}
+.h-20 {
+  height: 5rem;
+}
+.h-24 {
+  height: 6rem;
+}
+.h-32 {
+  height: 8rem;
+}
+.h-40 {
+  height: 10rem;
+}
+.h-48 {
+  height: 12rem;
+}
+.h-full {
+  height: 100%;
+}
+.h-screen {
+  height: 100vh;
+}
+.min-h-screen {
+  min-height: 100vh;
+}
+.\!w-40 {
+  width: 10rem !important;
+}
+.w-10 {
+  width: 2.5rem;
+}
+.w-12 {
+  width: 3rem;
+}
+.w-14 {
+  width: 3.5rem;
+}
+.w-16 {
+  width: 4rem;
+}
+.w-20 {
+  width: 5rem;
+}
+.w-32 {
+  width: 8rem;
+}
+.w-80 {
+  width: 20rem;
+}
+.w-\[15\%\] {
+  width: 15%;
+}
+.w-\[20\%\] {
+  width: 20%;
+}
+.w-\[280px\] {
+  width: 280px;
+}
+.w-\[65\%\] {
+  width: 65%;
+}
+.w-full {
+  width: 100%;
+}
+.max-w-2xl {
+  max-width: 42rem;
+}
+.max-w-4xl {
+  max-width: 56rem;
+}
+.max-w-md {
+  max-width: 28rem;
+}
+.flex-1 {
+  flex: 1 1 0%;
+}
+.flex-\[2\] {
+  flex: 2;
+}
+.flex-shrink-0 {
+  flex-shrink: 0;
+}
+.flex-grow {
+  flex-grow: 1;
+}
+.grow {
+  flex-grow: 1;
+}
+.-translate-y-1\/2 {
+  --tw-translate-y: -50%;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.transform {
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.cursor-pointer {
+  cursor: pointer;
+}
+.list-inside {
+  list-style-position: inside;
+}
+.list-disc {
+  list-style-type: disc;
+}
+.grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.flex-col {
+  flex-direction: column;
+}
+.flex-wrap {
+  flex-wrap: wrap;
+}
+.items-start {
+  align-items: flex-start;
+}
+.items-end {
+  align-items: flex-end;
+}
+.items-center {
+  align-items: center;
+}
+.justify-end {
+  justify-content: flex-end;
+}
+.justify-center {
+  justify-content: center;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.gap-12 {
+  gap: 3rem;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+.gap-3 {
+  gap: 0.75rem;
+}
+.gap-4 {
+  gap: 1rem;
+}
+.gap-6 {
+  gap: 1.5rem;
+}
+.gap-8 {
+  gap: 2rem;
+}
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+}
+.space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));
+}
+.space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(2rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(2rem * var(--tw-space-y-reverse));
+}
+.overflow-hidden {
+  overflow: hidden;
+}
+.overflow-y-auto {
+  overflow-y: auto;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.\!rounded-full {
+  border-radius: 9999px !important;
+}
+.rounded-2xl {
+  border-radius: 1rem;
+}
+.rounded-3xl {
+  border-radius: 1.5rem;
+}
+.rounded-\[32px\] {
+  border-radius: 32px;
+}
+.rounded-\[40px\] {
+  border-radius: 40px;
+}
+.rounded-\[48px\] {
+  border-radius: 48px;
+}
+.rounded-full {
+  border-radius: 9999px;
+}
+.rounded-bl-none {
+  border-bottom-left-radius: 0px;
+}
+.rounded-br-none {
+  border-bottom-right-radius: 0px;
+}
+.border {
+  border-width: 1px;
+}
+.border-2 {
+  border-width: 2px;
+}
+.border-4 {
+  border-width: 4px;
+}
+.border-b-2 {
+  border-bottom-width: 2px;
+}
+.border-b-4 {
+  border-bottom-width: 4px;
+}
+.border-r-4 {
+  border-right-width: 4px;
+}
+.border-t-2 {
+  border-top-width: 2px;
+}
+.border-t-4 {
+  border-top-width: 4px;
+}
+.border-dashed {
+  border-style: dashed;
+}
+.border-black {
+  --tw-border-opacity: 1;
+  border-color: rgb(0 0 0 / var(--tw-border-opacity, 1));
+}
+.border-black\/20 {
+  border-color: rgb(0 0 0 / 0.2);
+}
+.border-green-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(34 197 94 / var(--tw-border-opacity, 1));
+}
+.border-white {
+  --tw-border-opacity: 1;
+  border-color: rgb(255 255 255 / var(--tw-border-opacity, 1));
+}
+.bg-\[\#d53f8c\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(213 63 140 / var(--tw-bg-opacity, 1));
+}
+.bg-\[\#fbd3d3\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(251 211 211 / var(--tw-bg-opacity, 1));
+}
+.bg-\[\#fdf2f8\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(253 242 248 / var(--tw-bg-opacity, 1));
+}
+.bg-black {
+  --tw-bg-opacity: 1;
+  background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1));
+}
+.bg-black\/20 {
+  background-color: rgb(0 0 0 / 0.2);
+}
+.bg-black\/40 {
+  background-color: rgb(0 0 0 / 0.4);
+}
+.bg-blue-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(147 197 253 / var(--tw-bg-opacity, 1));
+}
+.bg-blue-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(96 165 250 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(207 250 254 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-200 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(165 243 252 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(103 232 249 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(34 211 238 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(236 254 255 / var(--tw-bg-opacity, 1));
+}
+.bg-green-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(220 252 231 / var(--tw-bg-opacity, 1));
+}
+.bg-green-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(134 239 172 / var(--tw-bg-opacity, 1));
+}
+.bg-green-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(74 222 128 / var(--tw-bg-opacity, 1));
+}
+.bg-orange-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(253 186 116 / var(--tw-bg-opacity, 1));
+}
+.bg-pink-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(252 231 243 / var(--tw-bg-opacity, 1));
+}
+.bg-pink-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(244 114 182 / var(--tw-bg-opacity, 1));
+}
+.bg-pink-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(253 242 248 / var(--tw-bg-opacity, 1));
+}
+.bg-purple-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(243 232 255 / var(--tw-bg-opacity, 1));
+}
+.bg-purple-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(216 180 254 / var(--tw-bg-opacity, 1));
+}
+.bg-purple-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(192 132 252 / var(--tw-bg-opacity, 1));
+}
+.bg-white {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+}
+.bg-white\/80 {
+  background-color: rgb(255 255 255 / 0.8);
+}
+.bg-yellow-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 249 195 / var(--tw-bg-opacity, 1));
+}
+.bg-yellow-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(253 224 71 / var(--tw-bg-opacity, 1));
+}
+.bg-yellow-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(250 204 21 / var(--tw-bg-opacity, 1));
+}
+.bg-yellow-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 252 232 / var(--tw-bg-opacity, 1));
+}
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+.to-cyan-400 {
+  --tw-gradient-to: #22d3ee var(--tw-gradient-to-position);
+}
+.p-10 {
+  padding: 2.5rem;
+}
+.p-12 {
+  padding: 3rem;
+}
+.p-2 {
+  padding: 0.5rem;
+}
+.p-20 {
+  padding: 5rem;
+}
+.p-4 {
+  padding: 1rem;
+}
+.p-6 {
+  padding: 1.5rem;
+}
+.p-8 {
+  padding: 2rem;
+}
+.\!py-2 {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+.\!py-3 {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+.px-12 {
+  padding-left: 3rem;
+  padding-right: 3rem;
+}
+.px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+.px-8 {
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+.py-0\.5 {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+.py-40 {
+  padding-top: 10rem;
+  padding-bottom: 10rem;
+}
+.py-6 {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+.pr-12 {
+  padding-right: 3rem;
+}
+.pr-20 {
+  padding-right: 5rem;
+}
+.pt-20 {
+  padding-top: 5rem;
+}
+.pt-6 {
+  padding-top: 1.5rem;
+}
+.text-left {
+  text-align: left;
+}
+.text-center {
+  text-align: center;
+}
+.\!text-sm {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+.text-3xl {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+.text-4xl {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+}
+.text-5xl {
+  font-size: 3rem;
+  line-height: 1;
+}
+.text-6xl {
+  font-size: 3.75rem;
+  line-height: 1;
+}
+.text-7xl {
+  font-size: 4.5rem;
+  line-height: 1;
+}
+.text-9xl {
+  font-size: 8rem;
+  line-height: 1;
+}
+.text-\[10px\] {
+  font-size: 10px;
+}
+.text-\[6rem\] {
+  font-size: 6rem;
+}
+.text-\[8rem\] {
+  font-size: 8rem;
+}
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.font-black {
+  font-weight: 900;
+}
+.font-bold {
+  font-weight: 700;
+}
+.uppercase {
+  text-transform: uppercase;
+}
+.leading-none {
+  line-height: 1;
+}
+.leading-relaxed {
+  line-height: 1.625;
+}
+.leading-tight {
+  line-height: 1.25;
+}
+.tracking-tighter {
+  letter-spacing: -0.05em;
+}
+.text-black {
+  --tw-text-opacity: 1;
+  color: rgb(0 0 0 / var(--tw-text-opacity, 1));
+}
+.text-cyan-600 {
+  --tw-text-opacity: 1;
+  color: rgb(8 145 178 / var(--tw-text-opacity, 1));
+}
+.text-green-600 {
+  --tw-text-opacity: 1;
+  color: rgb(22 163 74 / var(--tw-text-opacity, 1));
+}
+.text-green-700 {
+  --tw-text-opacity: 1;
+  color: rgb(21 128 61 / var(--tw-text-opacity, 1));
+}
+.text-purple-600 {
+  --tw-text-opacity: 1;
+  color: rgb(147 51 234 / var(--tw-text-opacity, 1));
+}
+.text-red-500 {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity, 1));
+}
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+.text-white\/20 {
+  color: rgb(255 255 255 / 0.2);
+}
+.text-yellow-400 {
+  --tw-text-opacity: 1;
+  color: rgb(250 204 21 / var(--tw-text-opacity, 1));
+}
+.text-yellow-600 {
+  --tw-text-opacity: 1;
+  color: rgb(202 138 4 / var(--tw-text-opacity, 1));
+}
+.underline {
+  text-decoration-line: underline;
+}
+.antialiased {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.opacity-20 {
+  opacity: 0.2;
+}
+.opacity-30 {
+  opacity: 0.3;
+}
+.opacity-40 {
+  opacity: 0.4;
+}
+.opacity-60 {
+  opacity: 0.6;
+}
+.opacity-70 {
+  opacity: 0.7;
+}
+.opacity-80 {
+  opacity: 0.8;
+}
+.outline {
+  outline-style: solid;
+}
+.backdrop-blur {
+  --tw-backdrop-blur: blur(8px);
+  -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
+  backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
+}
+.transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+.transition-transform {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+.ease-in-out {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hover\:translate-x-\[-5px\]:hover {
+  --tw-translate-x: -5px;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.hover\:translate-y-\[-2px\]:hover {
+  --tw-translate-y: -2px;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.hover\:scale-\[1\.01\]:hover {
+  --tw-scale-x: 1.01;
+  --tw-scale-y: 1.01;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.hover\:scale-\[1\.02\]:hover {
+  --tw-scale-x: 1.02;
+  --tw-scale-y: 1.02;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.hover\:bg-blue-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(219 234 254 / var(--tw-bg-opacity, 1));
+}
+.hover\:bg-gray-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
+}
+.hover\:bg-gray-50:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
+}
+.hover\:bg-pink-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(252 231 243 / var(--tw-bg-opacity, 1));
+}
+.hover\:bg-red-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 226 226 / var(--tw-bg-opacity, 1));
+}
+.hover\:text-blue-500:hover {
+  --tw-text-opacity: 1;
+  color: rgb(59 130 246 / var(--tw-text-opacity, 1));
+}
+.hover\:text-red-500:hover {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity, 1));
+}
+.hover\:underline:hover {
+  text-decoration-line: underline;
+}
+.group:hover .group-hover\:flex {
+  display: flex;
+}
+.group:hover .group-hover\:rotate-12 {
+  --tw-rotate: 12deg;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+@media (min-width: 768px) {
+
+  .md\:col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+
+  .md\:flex {
+    display: flex;
+  }
+
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .md\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .md\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .md\:p-12 {
+    padding: 3rem;
+  }
+
+  .md\:text-8xl {
+    font-size: 6rem;
+    line-height: 1;
+  }
+}* {
+      -ms-overflow-style: none !important;
+      scrollbar-width: none !important;
+    }
+
+    *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+  </style></head>
+<body class="antialiased" vid="6">
+
+    
+    <aside id="main-sidebar" class="fixed left-0 top-0 h-full w-[280px] bg-white border-r-4 border-black z-50 hidden flex-col p-6" vid="7">
+        <div class="header-font text-2xl mb-12 tracking-tighter" vid="8">GPE HUBâ„¢</div>
+        
+        <nav class="flex flex-col gap-4 flex-grow" vid="9">
+            <button onclick="showView('dashboard')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-dashboard" vid="10">
+                <i class="ph ph-house text-xl" vid="11"></i> DASHBOARD
+            </button>
+            <button onclick="showView('explore')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-explore" vid="12">
+                <i class="ph ph-compass text-xl" vid="13"></i> EXPLORE
+            </button>
+            <button onclick="showView('community')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-community" vid="14">
+                <i class="ph ph-users-three text-xl" vid="15"></i> COMMUNITY
+            </button>
+            <button onclick="showView('messages')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-messages" vid="16">
+                <i class="ph ph-chat-circle-dots text-xl" vid="17"></i> MESSAGES
+            </button>
+            <button onclick="showView('favorites')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-favorites" vid="18">
+                <i class="ph ph-heart text-xl" vid="19"></i> FAVORITES
+            </button>
+            <button onclick="showView('submit')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold hover:bg-pink-100" id="btn-submit" vid="20">
+                <i class="ph ph-plus-circle text-xl" vid="21"></i> SUBMIT NEW
+            </button>
+        </nav>
+
+        <div class="mt-auto flex flex-col gap-4" vid="22">
+            <button onclick="showView('admin')" class="nav-pill flex items-center gap-4 brutalist-border rounded-full px-6 py-3 font-bold bg-yellow-400" id="btn-admin" vid="23">
+                <i class="ph ph-shield-check text-xl" vid="24"></i> ADMIN
+            </button>
+            <button onclick="showView('profile')" class="flex items-center gap-4 p-2 hover:bg-gray-100 rounded-2xl transition-all" vid="25">
+                <div class="w-12 h-12 rounded-full bg-cyan-400 brutalist-border flex items-center justify-center font-bold text-xl" vid="26">M</div>
+                <div class="text-left" vid="27">
+                    <div class="font-bold text-sm" vid="28">Maya J.</div>
+                    <div class="text-xs opacity-60" vid="29">View Profile</div>
+                </div>
+            </button>
+            <button onclick="logout()" class="text-left font-bold text-sm text-red-500 hover:underline px-2" vid="30">LOG OUT</button>
+        </div>
+    </aside>
+
+    <main id="content-area" class="min-h-screen transition-all" vid="31">
+
+        
+        <section id="view-auth" class="view-section active-view h-screen grid md:grid-cols-2" vid="32">
+            <div class="auth-split-left hidden md:flex flex-col items-center justify-center p-12 text-center" vid="33">
+                <div class="auth-pattern absolute inset-0" vid="34"></div>
+                <div class="relative z-10" vid="35">
+                    <div class="float-icon mb-12" vid="36">
+                        <i class="ph ph-sparkle text-white text-[8rem]" vid="37"></i>
+                    </div>
+                    <h1 class="header-font text-white text-7xl md:text-8xl leading-none mb-6" vid="38">HEY, GPE COMMUNITY!</h1>
+                    <p class="text-white text-2xl font-bold max-w-md mx-auto opacity-80" vid="39">Welcome to your environmental justice hub. Ready to change the world, bestie?</p>
+                </div>
+                <div class="absolute bottom-10 left-10 text-white/20 text-9xl" vid="40"><i class="ph ph-megaphone" vid="41"></i></div>
+            </div>
+
+            <div class="bg-[#fbd3d3] flex items-center justify-center p-6 md:p-12" vid="42">
+                <div class="w-full max-w-md" vid="43">
+                    
+                    <div class="flex gap-4 mb-8" vid="44">
+                        <button onclick="switchAuthTab('login')" id="tab-login" class="flex-1 brutalist-border rounded-full py-3 font-bold bg-white brutalist-shadow-sm active" vid="45">LOG IN</button>
+                        <button onclick="switchAuthTab('signup')" id="tab-signup" class="flex-1 brutalist-border rounded-full py-3 font-bold bg-white" vid="46">SIGN UP</button>
+                    </div>
+
+                    
+                    <div id="form-login" class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow" vid="47">
+                        <h2 class="header-font text-3xl mb-8" vid="48">WELCOME BACK!</h2>
+                        <form onsubmit="event.preventDefault(); login();" class="space-y-6" vid="49">
+                            <div vid="50">
+                                <label class="font-bold text-xs block mb-2" vid="51">EMAIL ADDRESS</label>
+                                <input type="email" placeholder="you@gpe.org" required="" vid="52">
+                            </div>
+                            <div vid="53">
+                                <label class="font-bold text-xs block mb-2" vid="54">PASSWORD</label>
+                                <input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required="" vid="55">
+                            </div>
+                            <button type="submit" class="w-full bg-black text-white py-4 rounded-full header-font text-xl brutalist-shadow-sm hover:scale-[1.02] transition-transform" vid="56">LOG IN</button>
+                        </form>
+                        <button onclick="switchAuthTab('reset')" class="block mx-auto mt-6 text-sm font-bold hover:underline" vid="57">Forgot your password?</button>
+                    </div>
+
+                    
+                    <div id="form-signup" class="hidden bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow" vid="58">
+                        <h2 class="header-font text-3xl mb-8" vid="59">JOIN THE MOVEMENT</h2>
+                        <form onsubmit="event.preventDefault(); login();" class="space-y-4" vid="60">
+                            <div class="grid grid-cols-2 gap-4" vid="61">
+                                <div vid="62">
+                                    <label class="font-bold text-xs block mb-2" vid="63">FIRST NAME</label>
+                                    <input type="text" placeholder="Maya" required="" vid="64">
+                                </div>
+                                <div vid="65">
+                                    <label class="font-bold text-xs block mb-2" vid="66">LAST NAME</label>
+                                    <input type="text" placeholder="J." required="" vid="67">
+                                </div>
+                            </div>
+                            <div vid="68">
+                                <label class="font-bold text-xs block mb-2" vid="69">EMAIL</label>
+                                <input type="email" placeholder="you@gpe.org" required="" vid="70">
+                            </div>
+                            <div vid="71">
+                                <label class="font-bold text-xs block mb-2" vid="72">PASSWORD</label>
+                                <input type="password" placeholder="Min 8 characters" required="" vid="73">
+                            </div>
+                            <div vid="74">
+                                <label class="font-bold text-xs block mb-2" vid="75">CONFIRM PASSWORD</label>
+                                <input type="password" placeholder="Confirm it, bestie" required="" vid="76">
+                            </div>
+                            <button type="submit" class="w-full bg-[#d53f8c] text-white py-4 rounded-full header-font text-xl brutalist-shadow-sm hover:scale-[1.02] transition-transform mt-4" vid="77">SIGN UP</button>
+                        </form>
+                    </div>
+
+                    
+                    <div id="form-reset" class="hidden bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow" vid="78">
+                        <button onclick="switchAuthTab('login')" class="mb-4 text-xs font-bold flex items-center gap-2 hover:underline" vid="79"><i class="ph ph-arrow-left" vid="80"></i> BACK TO LOGIN</button>
+                        <h2 class="header-font text-3xl mb-4" vid="81">RESET PASSWORD</h2>
+                        <p class="text-sm font-bold mb-8" vid="82">We'll send a magic link to your inbox.</p>
+                        <form onsubmit="event.preventDefault(); showSuccess('Reset link sent! Check your email.'); switchAuthTab('login');" class="space-y-6" vid="83">
+                            <div vid="84">
+                                <label class="font-bold text-xs block mb-2" vid="85">EMAIL ADDRESS</label>
+                                <input type="email" placeholder="you@gpe.org" required="" vid="86">
+                            </div>
+                            <button type="submit" class="w-full bg-cyan-400 text-black py-4 rounded-full header-font text-xl brutalist-shadow-sm hover:scale-[1.02] transition-transform" vid="87">SEND LINK</button>
+                        </form>
+                    </div>
+
+                    
+                    <div id="auth-feedback" class="mt-8 hidden" vid="88">
+                        <div class="bg-green-100 border-2 border-green-500 p-4 rounded-2xl flex items-center gap-3 text-green-700 font-bold" vid="89">
+                            <i class="ph ph-check-circle text-2xl" vid="90"></i>
+                            <span id="feedback-text" vid="91">Success message here!</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-dashboard" class="view-section ml-[280px] p-12 hidden" vid="92">
+            <header class="flex justify-between items-center mb-16" vid="93">
+                <div vid="94">
+                    <h1 class="header-font text-6xl leading-none" vid="95">WELCOME BACK,<br vid="96">MAYA! ðŸ‘‹</h1>
+                    <p class="text-2xl font-bold mt-4" vid="97">Let's see what's happening in the hub today.</p>
+                </div>
+                <div class="flex items-center gap-6" vid="98">
+                    <div class="relative" vid="99">
+                        <input type="text" placeholder="Search the hub..." class="w-80 !py-3 pr-12 rounded-full" vid="100">
+                        <i class="ph ph-magnifying-glass absolute right-4 top-1/2 -translate-y-1/2 text-2xl" vid="101"></i>
+                    </div>
+                    <button class="w-14 h-14 brutalist-border rounded-full bg-white flex items-center justify-center text-2xl brutalist-shadow-sm" vid="102">
+                        <i class="ph ph-bell" vid="103"></i>
+                    </button>
+                </div>
+            </header>
+
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16" vid="104">
+                <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-hover transition-all" vid="105">
+                    <span class="bg-cyan-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold mb-4 inline-block" vid="106">JOBS</span>
+                    <h3 class="header-font text-2xl mb-4" vid="107">Community Organizer</h3>
+                    <p class="text-sm font-bold mb-6" vid="108">Climate Action Network â€¢ Atlanta, GA</p>
+                    <a href="#" onclick="showView('explore')" class="text-cyan-600 font-bold flex items-center gap-2 hover:underline" vid="109">VIEW ALL <i class="ph ph-arrow-right" vid="110"></i></a>
+                </div>
+                <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-hover transition-all" vid="111">
+                    <span class="bg-yellow-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold mb-4 inline-block" vid="112">EVENTS</span>
+                    <h3 class="header-font text-2xl mb-4" vid="113">Eco-Policy Webinar</h3>
+                    <p class="text-sm font-bold mb-6" vid="114">Tomorrow, 6:00 PM â€¢ Online</p>
+                    <a href="#" onclick="showView('explore')" class="text-yellow-600 font-bold flex items-center gap-2 hover:underline" vid="115">VIEW ALL <i class="ph ph-arrow-right" vid="116"></i></a>
+                </div>
+                <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-hover transition-all" vid="117">
+                    <span class="bg-green-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold mb-4 inline-block" vid="118">FUNDS</span>
+                    <h3 class="header-font text-2xl mb-4" vid="119">Grassroots Grant</h3>
+                    <p class="text-sm font-bold mb-6" vid="120">Up to $5,000 â€¢ Deadline: Oct 15</p>
+                    <a href="#" onclick="showView('explore')" class="text-green-600 font-bold flex items-center gap-2 hover:underline" vid="121">VIEW ALL <i class="ph ph-arrow-right" vid="122"></i></a>
+                </div>
+                <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-hover transition-all" vid="123">
+                    <span class="bg-purple-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold mb-4 inline-block" vid="124">RESOURCES</span>
+                    <h3 class="header-font text-2xl mb-4" vid="125">Advocacy Toolkit</h3>
+                    <p class="text-sm font-bold mb-6" vid="126">Digital Guide â€¢ 1.2k Downloads</p>
+                    <a href="#" onclick="showView('explore')" class="text-purple-600 font-bold flex items-center gap-2 hover:underline" vid="127">VIEW ALL <i class="ph ph-arrow-right" vid="128"></i></a>
+                </div>
+            </div>
+
+            
+            <div class="mb-16" vid="129">
+                <h2 class="header-font text-3xl mb-8" vid="130">QUICK LINKS</h2>
+                <div class="flex flex-wrap gap-4" vid="131">
+                    <button onclick="showView('profile')" class="bg-white brutalist-border px-8 py-4 rounded-full font-bold brutalist-shadow-sm hover:translate-y-[-2px] flex items-center gap-3" vid="132">
+                        <i class="ph ph-user" vid="133"></i> MY PROFILE
+                    </button>
+                    <button onclick="showView('favorites')" class="bg-white brutalist-border px-8 py-4 rounded-full font-bold brutalist-shadow-sm hover:translate-y-[-2px] flex items-center gap-3" vid="134">
+                        <i class="ph ph-heart" vid="135"></i> MY FAVORITES
+                    </button>
+                    <button onclick="showView('submit')" class="bg-black text-white px-8 py-4 rounded-full font-bold brutalist-shadow-sm hover:translate-y-[-2px] flex items-center gap-3" vid="136">
+                        <i class="ph ph-plus" vid="137"></i> SUBMIT NEW
+                    </button>
+                    <button onclick="showView('messages')" class="bg-white brutalist-border px-8 py-4 rounded-full font-bold brutalist-shadow-sm hover:translate-y-[-2px] flex items-center gap-3" vid="138">
+                        <i class="ph ph-chat-circle" vid="139"></i> MESSAGES
+                    </button>
+                    <button onclick="showView('community')" class="bg-white brutalist-border px-8 py-4 rounded-full font-bold brutalist-shadow-sm hover:translate-y-[-2px] flex items-center gap-3" vid="140">
+                        <i class="ph ph-users" vid="141"></i> COMMUNITY
+                    </button>
+                </div>
+            </div>
+
+            
+            <div vid="142">
+                <div class="flex justify-between items-end mb-8" vid="143">
+                    <h2 class="header-font text-3xl" vid="144">COMMUNITY BUZZ</h2>
+                    <button onclick="showView('community')" class="font-bold underline" vid="145">GO TO FORUM</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8" vid="146">
+                    <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-sm" vid="147">
+                        <div class="flex gap-4 mb-4" vid="148">
+                            <div class="w-12 h-12 rounded-full bg-orange-300 brutalist-border flex items-center justify-center font-bold" vid="149">K</div>
+                            <div vid="150">
+                                <div class="font-bold" vid="151">Keisha T.</div>
+                                <div class="text-xs opacity-60" vid="152">2 hours ago</div>
+                            </div>
+                        </div>
+                        <p class="font-bold mb-4" vid="153">Who's attending the Gulf South climate summit next month? I'm looking for a carpool from New Orleans! ðŸš—âœ¨</p>
+                        <div class="flex gap-6 text-sm font-bold" vid="154">
+                            <span class="flex items-center gap-2" vid="155"><i class="ph ph-heart" vid="156"></i> 24</span>
+                            <span class="flex items-center gap-2" vid="157"><i class="ph ph-chat-circle" vid="158"></i> 12</span>
+                        </div>
+                    </div>
+                    <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow-sm" vid="159">
+                        <div class="flex gap-4 mb-4" vid="160">
+                            <div class="w-12 h-12 rounded-full bg-purple-300 brutalist-border flex items-center justify-center font-bold" vid="161">S</div>
+                            <div vid="162">
+                                <div class="font-bold" vid="163">Sarah L.</div>
+                                <div class="text-xs opacity-60" vid="164">5 hours ago</div>
+                            </div>
+                        </div>
+                        <p class="font-bold mb-4" vid="165">Just shared a new toolkit for organizing local cleanups. Check it out in the resources section! ðŸŒðŸ“¦</p>
+                        <div class="flex gap-6 text-sm font-bold" vid="166">
+                            <span class="flex items-center gap-2" vid="167"><i class="ph ph-heart" vid="168"></i> 18</span>
+                            <span class="flex items-center gap-2" vid="169"><i class="ph ph-chat-circle" vid="170"></i> 5</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-explore" class="view-section ml-[280px] p-12 hidden" vid="171">
+            <h1 class="header-font text-6xl mb-12" vid="172">EXPLORE HUB</h1>
+            
+            
+            <div class="sticky top-4 bg-white/80 backdrop-blur brutalist-border p-6 rounded-[32px] brutalist-shadow-sm mb-12 flex flex-wrap items-center gap-6 z-40" vid="173">
+                <div class="flex gap-2" vid="174">
+                    <button class="bg-cyan-400 brutalist-border px-6 py-2 rounded-full font-bold brutalist-shadow-sm text-sm" vid="175">ALL</button>
+                    <button class="bg-white brutalist-border px-6 py-2 rounded-full font-bold text-sm" vid="176">JOBS</button>
+                    <button class="bg-white brutalist-border px-6 py-2 rounded-full font-bold text-sm" vid="177">EVENTS</button>
+                    <button class="bg-white brutalist-border px-6 py-2 rounded-full font-bold text-sm" vid="178">FUNDS</button>
+                    <button class="bg-white brutalist-border px-6 py-2 rounded-full font-bold text-sm" vid="179">RESOURCES</button>
+                </div>
+                <div class="flex-grow flex gap-4" vid="180">
+                    <div class="relative flex-grow" vid="181">
+                        <input type="text" placeholder="Search keywords..." class="!py-2 !rounded-full text-sm" vid="182">
+                    </div>
+                    <select class="!w-40 !py-2 !rounded-full text-sm" vid="183">
+                        <option vid="184">LATEST</option>
+                        <option vid="185">POPULAR</option>
+                        <option vid="186">A-Z</option>
+                    </select>
+                    <button class="bg-black text-white px-6 py-2 rounded-full font-bold text-sm" vid="187">FILTER <i class="ph ph-sliders" vid="188"></i></button>
+                </div>
+            </div>
+
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8" vid="189">
+                
+                <div class="bg-white brutalist-border rounded-[32px] overflow-hidden brutalist-shadow-hover transition-all cursor-pointer" onclick="showView('listing-detail')" vid="190">
+                    <div class="h-48 bg-cyan-100 flex items-center justify-center border-b-4 border-black" vid="191">
+                        <i class="ph ph-briefcase text-6xl opacity-30" vid="192"></i>
+                    </div>
+                    <div class="p-8" vid="193">
+                        <div class="flex justify-between items-start mb-4" vid="194">
+                            <span class="bg-cyan-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="195">JOB</span>
+                            <button class="text-2xl hover:text-red-500" vid="196"><i class="ph ph-heart" vid="197"></i></button>
+                        </div>
+                        <h3 class="header-font text-2xl mb-2" vid="198">Climate Research Assistant</h3>
+                        <p class="text-sm font-bold opacity-60 mb-6" vid="199">Remote â€¢ $45k-55k â€¢ Full Time</p>
+                        <div class="flex items-center gap-3 pt-6 border-t-2 border-black" vid="200">
+                            <div class="w-10 h-10 rounded-full bg-pink-400 brutalist-border flex items-center justify-center font-bold" vid="201">G</div>
+                            <span class="font-bold text-xs" vid="202">Green Future Org</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white brutalist-border rounded-[32px] overflow-hidden brutalist-shadow-hover transition-all cursor-pointer" vid="203">
+                    <div class="h-48 bg-yellow-100 flex items-center justify-center border-b-4 border-black" vid="204">
+                        <i class="ph ph-calendar text-6xl opacity-30" vid="205"></i>
+                    </div>
+                    <div class="p-8" vid="206">
+                        <div class="flex justify-between items-start mb-4" vid="207">
+                            <span class="bg-yellow-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="208">EVENT</span>
+                            <button class="text-2xl text-red-500" vid="209"><i class="ph ph-heart-fill" vid="210"></i></button>
+                        </div>
+                        <h3 class="header-font text-2xl mb-2" vid="211">Community Garden Day</h3>
+                        <p class="text-sm font-bold opacity-60 mb-6" vid="212">Brooklyn, NY â€¢ Sept 28, 10am</p>
+                        <div class="flex items-center gap-3 pt-6 border-t-2 border-black" vid="213">
+                            <div class="w-10 h-10 rounded-full bg-green-400 brutalist-border flex items-center justify-center font-bold" vid="214">B</div>
+                            <span class="font-bold text-xs" vid="215">Brooklyn Blooms</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white brutalist-border rounded-[32px] overflow-hidden brutalist-shadow-hover transition-all cursor-pointer" vid="216">
+                    <div class="h-48 bg-green-100 flex items-center justify-center border-b-4 border-black" vid="217">
+                        <i class="ph ph-hand-coins text-6xl opacity-30" vid="218"></i>
+                    </div>
+                    <div class="p-8" vid="219">
+                        <div class="flex justify-between items-start mb-4" vid="220">
+                            <span class="bg-green-300 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="221">FUND</span>
+                            <button class="text-2xl hover:text-red-500" vid="222"><i class="ph ph-heart" vid="223"></i></button>
+                        </div>
+                        <h3 class="header-font text-2xl mb-2" vid="224">Solar Equity Grant</h3>
+                        <p class="text-sm font-bold opacity-60 mb-6" vid="225">National â€¢ Up to $10,000</p>
+                        <div class="flex items-center gap-3 pt-6 border-t-2 border-black" vid="226">
+                            <div class="w-10 h-10 rounded-full bg-blue-400 brutalist-border flex items-center justify-center font-bold" vid="227">S</div>
+                            <span class="font-bold text-xs" vid="228">Sun Power Inst.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            
+            <div id="explore-empty" class="hidden flex flex-col items-center justify-center py-40" vid="229">
+                <i class="ph ph-warning-circle text-[8rem] mb-8" vid="230"></i>
+                <h3 class="header-font text-4xl mb-4" vid="231">NO RESULTS FOUND</h3>
+                <p class="text-xl font-bold opacity-60" vid="232">Try adjusting your filters, bestie.</p>
+                <button class="mt-8 bg-black text-white px-8 py-3 rounded-full font-bold" vid="233">CLEAR ALL FILTERS</button>
+            </div>
+
+            
+            <div class="mt-20 flex justify-center gap-4" vid="234">
+                <button class="brutalist-border w-12 h-12 rounded-full flex items-center justify-center bg-white font-bold brutalist-shadow-sm" vid="235"><i class="ph ph-arrow-left" vid="236"></i></button>
+                <button class="brutalist-border w-12 h-12 rounded-full flex items-center justify-center bg-black text-white font-bold brutalist-shadow-sm" vid="237">1</button>
+                <button class="brutalist-border w-12 h-12 rounded-full flex items-center justify-center bg-white font-bold brutalist-shadow-sm hover:bg-pink-100" vid="238">2</button>
+                <button class="brutalist-border w-12 h-12 rounded-full flex items-center justify-center bg-white font-bold brutalist-shadow-sm hover:bg-pink-100" vid="239">3</button>
+                <button class="brutalist-border w-12 h-12 rounded-full flex items-center justify-center bg-white font-bold brutalist-shadow-sm" vid="240"><i class="ph ph-arrow-right" vid="241"></i></button>
+            </div>
+        </section>
+
+        
+        <section id="view-listing-detail" class="view-section ml-[280px] p-12 hidden" vid="242">
+            <button onclick="showView('explore')" class="mb-10 flex items-center gap-2 font-bold hover:translate-x-[-5px] transition-all" vid="243">
+                <i class="ph ph-arrow-left" vid="244"></i> BACK TO EXPLORE
+            </button>
+
+            <div class="grid md:grid-cols-3 gap-12" vid="245">
+                <div class="md:col-span-2" vid="246">
+                    <div class="bg-white brutalist-border p-12 rounded-[48px] brutalist-shadow" vid="247">
+                        <div class="flex justify-between items-start mb-8" vid="248">
+                            <span class="bg-cyan-300 brutalist-border px-6 py-2 rounded-full font-bold text-sm" vid="249">JOB LISTING</span>
+                            <div class="flex gap-4" vid="250">
+                                <button class="w-12 h-12 brutalist-border rounded-full flex items-center justify-center text-2xl hover:bg-red-100" vid="251"><i class="ph ph-heart" vid="252"></i></button>
+                                <button class="w-12 h-12 brutalist-border rounded-full flex items-center justify-center text-2xl hover:bg-blue-100" vid="253"><i class="ph ph-share-network" vid="254"></i></button>
+                            </div>
+                        </div>
+                        <h1 class="header-font text-6xl mb-8 leading-tight" vid="255">Climate Research Assistant</h1>
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-12" vid="256">
+                            <div class="bg-pink-50 brutalist-border p-4 rounded-2xl" vid="257">
+                                <div class="text-xs font-bold opacity-60 mb-1" vid="258">SALARY</div>
+                                <div class="font-bold" vid="259">$45,000 - $55,000</div>
+                            </div>
+                            <div class="bg-cyan-50 brutalist-border p-4 rounded-2xl" vid="260">
+                                <div class="text-xs font-bold opacity-60 mb-1" vid="261">LOCATION</div>
+                                <div class="font-bold" vid="262">Remote (US-Based)</div>
+                            </div>
+                            <div class="bg-yellow-50 brutalist-border p-4 rounded-2xl" vid="263">
+                                <div class="text-xs font-bold opacity-60 mb-1" vid="264">DEADLINE</div>
+                                <div class="font-bold" vid="265">Oct 31, 2024</div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-6 text-lg leading-relaxed font-bold mb-12" vid="266">
+                            <p vid="267">We are looking for a passionate Research Assistant to join our policy team. You'll be responsible for gathering data on local climate legislation and helping us build a database of successful grassroots campaigns.</p>
+                            <h4 class="header-font text-xl" vid="268">RESPONSIBILITIES</h4>
+                            <ul class="list-disc list-inside space-y-2" vid="269">
+                                <li vid="270">Conduct secondary research on environmental policy.</li>
+                                <li vid="271">Draft summaries of legislative changes.</li>
+                                <li vid="272">Collaborate with local organizers to verify data.</li>
+                                <li vid="273">Maintain and update our Community Knowledge Hub.</li>
+                            </ul>
+                        </div>
+
+                        <button class="w-full bg-black text-white py-6 rounded-full header-font text-2xl brutalist-shadow-hover transition-all" vid="274">APPLY NOW!</button>
+                    </div>
+
+                    
+                    <div class="mt-12" vid="275">
+                        <h2 class="header-font text-3xl mb-8" vid="276">COMMENTS (3)</h2>
+                        <div class="space-y-6" vid="277">
+                            <div class="bg-white brutalist-border p-6 rounded-3xl brutalist-shadow-sm" vid="278">
+                                <div class="flex gap-4 mb-4" vid="279">
+                                    <div class="w-10 h-10 rounded-full bg-blue-300 brutalist-border flex items-center justify-center font-bold" vid="280">A</div>
+                                    <div vid="281">
+                                        <div class="font-bold text-sm" vid="282">Alex Chen</div>
+                                        <div class="text-xs opacity-60" vid="283">Yesterday</div>
+                                    </div>
+                                </div>
+                                <p class="font-bold text-sm" vid="284">Is this position open to international candidates if they work US hours?</p>
+                            </div>
+                            
+                            <div class="relative" vid="285">
+                                <textarea placeholder="Add a comment..." class="h-24 pr-20" vid="286"></textarea>
+                                <button class="absolute right-4 bottom-4 bg-black text-white px-4 py-2 rounded-full text-xs font-bold" vid="287">POST</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-8" vid="288">
+                    <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow" vid="289">
+                        <h3 class="header-font text-xl mb-6" vid="290">POSTED BY</h3>
+                        <div class="flex items-center gap-4 mb-6" vid="291">
+                            <div class="w-16 h-16 rounded-full bg-purple-400 brutalist-border flex items-center justify-center text-2xl font-bold" vid="292">GF</div>
+                            <div vid="293">
+                                <div class="font-bold" vid="294">Green Future Org</div>
+                                <div class="text-xs opacity-60 underline" vid="295">View Organization</div>
+                            </div>
+                        </div>
+                        <p class="text-sm font-bold opacity-70 mb-6" vid="296">A non-profit dedicated to making climate policy accessible to everyone.</p>
+                        <button class="w-full brutalist-border py-3 rounded-full font-bold hover:bg-gray-50" vid="297">FOLLOW</button>
+                    </div>
+
+                    <div vid="298">
+                        <h3 class="header-font text-xl mb-6" vid="299">SIMILAR LISTINGS</h3>
+                        <div class="space-y-4" vid="300">
+                            <div class="bg-white brutalist-border p-4 rounded-2xl brutalist-shadow-sm hover:translate-y-[-2px] transition-all cursor-pointer" vid="301">
+                                <span class="text-[10px] bg-cyan-100 px-2 py-0.5 rounded-full border border-black font-bold mb-2 inline-block" vid="302">JOB</span>
+                                <div class="font-bold text-sm" vid="303">Policy Internship</div>
+                                <div class="text-xs opacity-60" vid="304">Eco-Justice League</div>
+                            </div>
+                            <div class="bg-white brutalist-border p-4 rounded-2xl brutalist-shadow-sm hover:translate-y-[-2px] transition-all cursor-pointer" vid="305">
+                                <span class="text-[10px] bg-cyan-100 px-2 py-0.5 rounded-full border border-black font-bold mb-2 inline-block" vid="306">JOB</span>
+                                <div class="font-bold text-sm" vid="307">Data Analyst</div>
+                                <div class="text-xs opacity-60" vid="308">Earth Watch</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-submit" class="view-section ml-[280px] p-12 hidden" vid="309">
+            <h1 class="header-font text-6xl mb-4" vid="310">SUBMIT TO HUB</h1>
+            <p class="text-2xl font-bold mb-12" vid="311">Spread the word and grow our community.</p>
+
+            
+            <div class="flex items-center gap-4 mb-16" vid="312">
+                <div class="flex items-center gap-3" vid="313">
+                    <div class="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center font-bold" vid="314">1</div>
+                    <span class="font-bold" vid="315">Category</span>
+                </div>
+                <div class="h-1 w-12 bg-black/20 rounded-full" vid="316"></div>
+                <div class="flex items-center gap-3" vid="317">
+                    <div class="w-10 h-10 bg-white brutalist-border rounded-full flex items-center justify-center font-bold" vid="318">2</div>
+                    <span class="font-bold opacity-40" vid="319">Details</span>
+                </div>
+                <div class="h-1 w-12 bg-black/20 rounded-full" vid="320"></div>
+                <div class="flex items-center gap-3" vid="321">
+                    <div class="w-10 h-10 bg-white brutalist-border rounded-full flex items-center justify-center font-bold" vid="322">3</div>
+                    <span class="font-bold opacity-40" vid="323">Media</span>
+                </div>
+            </div>
+
+            
+            <div id="submit-step-1" class="grid grid-cols-1 md:grid-cols-4 gap-8" vid="324">
+                <button onclick="nextStep(2, 'Job')" class="bg-white brutalist-border p-10 rounded-[40px] brutalist-shadow-hover transition-all text-center group" vid="325">
+                    <div class="w-20 h-20 bg-cyan-300 brutalist-border rounded-full mx-auto mb-6 flex items-center justify-center text-4xl group-hover:rotate-12 transition-transform" vid="326">
+                        <i class="ph ph-briefcase" vid="327"></i>
+                    </div>
+                    <h3 class="header-font text-2xl" vid="328">JOB</h3>
+                </button>
+                <button onclick="nextStep(2, 'Event')" class="bg-white brutalist-border p-10 rounded-[40px] brutalist-shadow-hover transition-all text-center group" vid="329">
+                    <div class="w-20 h-20 bg-yellow-300 brutalist-border rounded-full mx-auto mb-6 flex items-center justify-center text-4xl group-hover:rotate-12 transition-transform" vid="330">
+                        <i class="ph ph-calendar" vid="331"></i>
+                    </div>
+                    <h3 class="header-font text-2xl" vid="332">EVENT</h3>
+                </button>
+                <button onclick="nextStep(2, 'Funding')" class="bg-white brutalist-border p-10 rounded-[40px] brutalist-shadow-hover transition-all text-center group" vid="333">
+                    <div class="w-20 h-20 bg-green-300 brutalist-border rounded-full mx-auto mb-6 flex items-center justify-center text-4xl group-hover:rotate-12 transition-transform" vid="334">
+                        <i class="ph ph-hand-coins" vid="335"></i>
+                    </div>
+                    <h3 class="header-font text-2xl" vid="336">FUNDING</h3>
+                </button>
+                <button onclick="nextStep(2, 'Resource')" class="bg-white brutalist-border p-10 rounded-[40px] brutalist-shadow-hover transition-all text-center group" vid="337">
+                    <div class="w-20 h-20 bg-purple-300 brutalist-border rounded-full mx-auto mb-6 flex items-center justify-center text-4xl group-hover:rotate-12 transition-transform" vid="338">
+                        <i class="ph ph-book-open" vid="339"></i>
+                    </div>
+                    <h3 class="header-font text-2xl" vid="340">RESOURCE</h3>
+                </button>
+            </div>
+
+            
+            <div id="submit-step-2" class="hidden max-w-2xl bg-white brutalist-border p-12 rounded-[48px] brutalist-shadow" vid="341">
+                <h3 class="header-font text-3xl mb-8" vid="342">ADD <span id="category-label" vid="343">JOB</span> DETAILS</h3>
+                <form class="space-y-6" vid="344">
+                    <div vid="345">
+                        <label class="font-bold text-xs block mb-2" vid="346">TITLE</label>
+                        <input type="text" placeholder="e.g. Environmental Justice Coordinator" vid="347">
+                    </div>
+                    <div class="grid grid-cols-2 gap-6" vid="348">
+                        <div vid="349">
+                            <label class="font-bold text-xs block mb-2" vid="350">LOCATION / TYPE</label>
+                            <input type="text" placeholder="e.g. Atlanta or Remote" vid="351">
+                        </div>
+                        <div vid="352">
+                            <label class="font-bold text-xs block mb-2" vid="353">COMPENSATION / AMOUNT</label>
+                            <input type="text" placeholder="e.g. $60k or $5,000" vid="354">
+                        </div>
+                    </div>
+                    <div vid="355">
+                        <label class="font-bold text-xs block mb-2" vid="356">DESCRIPTION</label>
+                        <textarea rows="6" placeholder="Tell us all about it..." vid="357"></textarea>
+                    </div>
+                    <button type="button" onclick="nextStep(3)" class="w-full bg-black text-white py-4 rounded-full font-bold" vid="358">NEXT: ADD MEDIA</button>
+                </form>
+            </div>
+
+            
+            <div id="submit-step-3" class="hidden max-w-2xl bg-white brutalist-border p-12 rounded-[48px] brutalist-shadow text-center" vid="359">
+                <h3 class="header-font text-3xl mb-8" vid="360">ADD IMAGES</h3>
+                <div class="border-4 border-dashed border-black/20 rounded-[32px] p-20 mb-8 hover:bg-gray-50 transition-all cursor-pointer" vid="361">
+                    <i class="ph ph-cloud-arrow-up text-[6rem] mb-6 opacity-20" vid="362"></i>
+                    <p class="font-bold text-xl" vid="363">Drag &amp; drop images here</p>
+                    <p class="text-sm opacity-60" vid="364">or click to browse from your computer</p>
+                </div>
+                <div class="flex gap-4" vid="365">
+                    <button onclick="nextStep(2)" class="flex-1 brutalist-border py-4 rounded-full font-bold" vid="366">BACK</button>
+                    <button onclick="completeSubmit()" class="flex-[2] bg-[#d53f8c] text-white py-4 rounded-full header-font text-xl brutalist-shadow-sm" vid="367">SUBMIT FOR REVIEW! ðŸš€</button>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-community" class="view-section ml-[280px] p-12 hidden" vid="368">
+            <div class="flex justify-between items-center mb-12" vid="369">
+                <h1 class="header-font text-6xl" vid="370">GPE COMMUNITY</h1>
+                <button class="bg-black text-white px-8 py-4 rounded-full font-bold brutalist-shadow-sm flex items-center gap-3" vid="371">
+                    <i class="ph ph-plus" vid="372"></i> NEW POST
+                </button>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-12" vid="373">
+                <div class="md:col-span-2 space-y-8" vid="374">
+                    
+                    <div class="bg-white brutalist-border p-8 rounded-[40px] brutalist-shadow" vid="375">
+                        <div class="flex gap-4 mb-6" vid="376">
+                            <div class="w-14 h-14 rounded-full bg-cyan-400 brutalist-border flex items-center justify-center font-bold text-xl" vid="377">M</div>
+                            <div vid="378">
+                                <div class="font-bold" vid="379">Maya J.</div>
+                                <div class="text-sm opacity-60" vid="380">Active Now â€¢ Community Hub</div>
+                            </div>
+                        </div>
+                        <p class="text-xl font-bold mb-8" vid="381">Quick poll! Which topic should our next webinar focus on? ðŸŒâœ¨</p>
+                        
+                        
+                        <div class="space-y-4 mb-8" vid="382">
+                            <div class="relative h-14 brutalist-border rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.01] transition-transform" vid="383">
+                                <div class="absolute inset-0 bg-cyan-100 w-[65%]" vid="384"></div>
+                                <div class="absolute inset-0 flex justify-between items-center px-6 font-bold" vid="385">
+                                    <span vid="386">Water Conservation</span>
+                                    <span vid="387">65%</span>
+                                </div>
+                            </div>
+                            <div class="relative h-14 brutalist-border rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.01] transition-transform" vid="388">
+                                <div class="absolute inset-0 bg-yellow-100 w-[20%]" vid="389"></div>
+                                <div class="absolute inset-0 flex justify-between items-center px-6 font-bold" vid="390">
+                                    <span vid="391">Urban Farming</span>
+                                    <span vid="392">20%</span>
+                                </div>
+                            </div>
+                            <div class="relative h-14 brutalist-border rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.01] transition-transform" vid="393">
+                                <div class="absolute inset-0 bg-magenta-100 w-[15%]" vid="394"></div>
+                                <div class="absolute inset-0 flex justify-between items-center px-6 font-bold" vid="395">
+                                    <span vid="396">Renewable Policy</span>
+                                    <span vid="397">15%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-6 pt-6 border-t-2 border-black" vid="398">
+                            <button class="flex items-center gap-2 font-bold hover:text-red-500" vid="399"><i class="ph ph-heart text-2xl" vid="400"></i> 142</button>
+                            <button class="flex items-center gap-2 font-bold hover:text-blue-500" vid="401"><i class="ph ph-chat-circle text-2xl" vid="402"></i> 48</button>
+                            <button class="flex items-center gap-2 font-bold ml-auto" vid="403"><i class="ph ph-bookmark text-2xl" vid="404"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="space-y-8" vid="405">
+                    <div class="bg-white brutalist-border p-8 rounded-[32px] brutalist-shadow" vid="406">
+                        <h3 class="header-font text-xl mb-6" vid="407">COMMUNITY TOPICS</h3>
+                        <div class="flex flex-wrap gap-2" vid="408">
+                            <span class="bg-pink-100 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="409">#ENVIRONMENT</span>
+                            <span class="bg-cyan-100 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="410">#JUSTICE</span>
+                            <span class="bg-yellow-100 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="411">#CLEANWATER</span>
+                            <span class="bg-green-100 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="412">#POLICY</span>
+                            <span class="bg-purple-100 brutalist-border px-4 py-1 rounded-full text-xs font-bold" vid="413">#CAREERS</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-black text-white p-8 rounded-[32px] brutalist-shadow" vid="414">
+                        <h3 class="header-font text-xl mb-6 text-yellow-400" vid="415">GPE GROUPS</h3>
+                        <p class="text-sm font-bold opacity-80 mb-6" vid="416">Join specialized squads for focused action!</p>
+                        <div class="space-y-4" vid="417">
+                            <div class="flex items-center justify-between" vid="418">
+                                <span class="font-bold" vid="419">Gulf South Squad</span>
+                                <button class="bg-white text-black px-3 py-1 rounded-full text-[10px] font-black" vid="420">JOIN</button>
+                            </div>
+                            <div class="flex items-center justify-between" vid="421">
+                                <span class="font-bold" vid="422">Tech for Earth</span>
+                                <button class="bg-white text-black px-3 py-1 rounded-full text-[10px] font-black" vid="423">JOIN</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-messages" class="view-section ml-[280px] h-screen hidden" vid="424">
+            <div class="flex h-full" vid="425">
+                
+                <div class="w-80 border-r-4 border-black bg-white flex flex-col" vid="426">
+                    <div class="p-6 border-b-4 border-black" vid="427">
+                        <div class="flex justify-between items-center mb-6" vid="428">
+                            <h2 class="header-font text-2xl" vid="429">MESSAGES</h2>
+                            <button class="w-10 h-10 brutalist-border rounded-full flex items-center justify-center text-xl hover:bg-pink-100" vid="430"><i class="ph ph-note-pencil" vid="431"></i></button>
+                        </div>
+                        <input type="text" placeholder="Find a bestie..." class="!py-2 !text-sm !rounded-full" vid="432">
+                    </div>
+                    <div class="flex-grow overflow-y-auto custom-scrollbar" vid="433">
+                        <div class="p-4 bg-cyan-100 border-b-2 border-black flex gap-4 cursor-pointer" vid="434">
+                            <div class="w-12 h-12 rounded-full bg-magenta-400 brutalist-border flex-shrink-0" vid="435"></div>
+                            <div class="overflow-hidden" vid="436">
+                                <div class="font-bold text-sm" vid="437">Global Action Group</div>
+                                <div class="text-xs opacity-60 truncate" vid="438">Keisha: Did everyone see the...</div>
+                            </div>
+                        </div>
+                        <div class="p-4 border-b-2 border-black flex gap-4 cursor-pointer hover:bg-gray-50" vid="439">
+                            <div class="w-12 h-12 rounded-full bg-yellow-400 brutalist-border flex-shrink-0" vid="440"></div>
+                            <div vid="441">
+                                <div class="font-bold text-sm" vid="442">Jordan Lee</div>
+                                <div class="text-xs opacity-60" vid="443">Hey! Can we chat about...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="p-6 text-center" vid="444">
+                            <button class="font-bold text-sm underline flex items-center justify-center gap-2 mx-auto" vid="445"><i class="ph ph-plus-circle" vid="446"></i> CREATE GROUP</button>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="flex-grow bg-[#fdf2f8] flex flex-col" vid="447">
+                    <div class="p-6 border-b-4 border-black bg-white flex items-center justify-between" vid="448">
+                        <div class="flex items-center gap-4" vid="449">
+                            <div class="w-12 h-12 rounded-full bg-magenta-400 brutalist-border" vid="450"></div>
+                            <div vid="451">
+                                <div class="font-bold" vid="452">Global Action Group</div>
+                                <div class="text-xs text-green-600 font-black" vid="453">8 MEMBERS ONLINE</div>
+                            </div>
+                        </div>
+                        <button class="text-2xl" vid="454"><i class="ph ph-info" vid="455"></i></button>
+                    </div>
+
+                    <div class="flex-grow p-8 overflow-y-auto custom-scrollbar space-y-6" vid="456">
+                        <div class="flex gap-4" vid="457">
+                            <div class="w-10 h-10 rounded-full bg-yellow-400 brutalist-border mt-auto flex-shrink-0" vid="458"></div>
+                            <div class="bg-white brutalist-border p-4 rounded-3xl rounded-bl-none max-w-md brutalist-shadow-sm font-bold text-sm" vid="459">
+                                Besties, we just hit 500 signatures on the energy petition! ðŸŽ‰
+                            </div>
+                        </div>
+                        <div class="flex gap-4 justify-end" vid="460">
+                            <div class="bg-cyan-200 brutalist-border p-4 rounded-3xl rounded-br-none max-w-md brutalist-shadow-sm font-bold text-sm" vid="461">
+                                OMG YAY!! Let's keep it going! Who's sharing on TikTok today?
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-pink-400 brutalist-border mt-auto flex-shrink-0" vid="462"></div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 bg-white border-t-4 border-black" vid="463">
+                        <div class="flex gap-4" vid="464">
+                            <button class="text-3xl" vid="465"><i class="ph ph-plus-circle" vid="466"></i></button>
+                            <input type="text" placeholder="Type a message..." class="!rounded-full !py-3" vid="467">
+                            <button class="bg-black text-white w-14 h-14 rounded-full flex items-center justify-center text-2xl" vid="468"><i class="ph ph-paper-plane-right" vid="469"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-admin" class="view-section ml-[280px] p-12 hidden" vid="470">
+            <h1 class="header-font text-6xl mb-12" vid="471">ADMIN HUB</h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12" vid="472">
+                <div class="bg-white brutalist-border p-6 rounded-3xl brutalist-shadow-sm" vid="473">
+                    <div class="text-xs font-bold opacity-60 mb-1" vid="474">PENDING POSTS</div>
+                    <div class="header-font text-4xl" vid="475">12</div>
+                </div>
+                <div class="bg-white brutalist-border p-6 rounded-3xl brutalist-shadow-sm" vid="476">
+                    <div class="text-xs font-bold opacity-60 mb-1" vid="477">REPORTS</div>
+                    <div class="header-font text-4xl text-red-500" vid="478">0</div>
+                </div>
+                <div class="bg-white brutalist-border p-6 rounded-3xl brutalist-shadow-sm" vid="479">
+                    <div class="text-xs font-bold opacity-60 mb-1" vid="480">TOTAL MEMBERS</div>
+                    <div class="header-font text-4xl" vid="481">1,482</div>
+                </div>
+                <div class="bg-white brutalist-border p-6 rounded-3xl brutalist-shadow-sm" vid="482">
+                    <div class="text-xs font-bold opacity-60 mb-1" vid="483">ACTIVE GROUPS</div>
+                    <div class="header-font text-4xl" vid="484">24</div>
+                </div>
+            </div>
+
+            <div class="bg-white brutalist-border rounded-[40px] overflow-hidden brutalist-shadow" vid="485">
+                <div class="bg-black text-white p-6 flex justify-between items-center" vid="486">
+                    <h3 class="header-font text-xl" vid="487">MODERATION QUEUE</h3>
+                    <div class="flex gap-4" vid="488">
+                        <button class="bg-white text-black px-4 py-1 rounded-full text-xs font-black" vid="489">ALL</button>
+                        <button class="bg-black border border-white text-white px-4 py-1 rounded-full text-xs font-black" vid="490">FLAGGED</button>
+                    </div>
+                </div>
+                
+                <div class="p-20 text-center flex flex-col items-center" vid="491">
+                    <div class="w-32 h-32 bg-green-100 brutalist-border rounded-full flex items-center justify-center text-6xl mb-8 text-green-600" vid="492">
+                        <i class="ph ph-check-circle" vid="493"></i>
+                    </div>
+                    <h4 class="header-font text-2xl mb-4" vid="494">NO FLAGGED CONTENT â€” YAY!</h4>
+                    <p class="font-bold opacity-60" vid="495">Everything is looking clean and healthy in the hub.</p>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-profile" class="view-section ml-[280px] p-12 hidden" vid="496">
+            <h1 class="header-font text-6xl mb-12" vid="497">MY PROFILE</h1>
+            
+            <div class="max-w-4xl bg-white brutalist-border rounded-[48px] overflow-hidden brutalist-shadow" vid="498">
+                
+                <div class="h-48 bg-gradient-to-r from-magenta-400 to-cyan-400 border-b-4 border-black relative" vid="499">
+                    <button class="absolute top-4 right-4 bg-white brutalist-border px-4 py-1 rounded-full text-xs font-bold brutalist-shadow-sm" vid="500">EDIT COVER</button>
+                    
+                    <div class="absolute -bottom-16 left-12 group" vid="501">
+                        <div class="w-32 h-32 bg-yellow-400 rounded-full border-4 border-black overflow-hidden flex items-center justify-center text-4xl font-black relative" vid="502">
+                            M
+                            <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center text-white text-sm cursor-pointer" vid="503">CHANGE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-20 p-12" vid="504">
+                    <form class="grid md:grid-cols-2 gap-8" vid="505">
+                        <div vid="506">
+                            <label class="font-bold text-xs block mb-2" vid="507">FULL NAME</label>
+                            <input type="text" value="Maya J." vid="508">
+                        </div>
+                        <div vid="509">
+                            <label class="font-bold text-xs block mb-2" vid="510">LOCATION</label>
+                            <input type="text" value="Atlanta, GA" vid="511">
+                        </div>
+                        <div class="md:col-span-2" vid="512">
+                            <label class="font-bold text-xs block mb-2" vid="513">BIO</label>
+                            <textarea rows="4" vid="514">Climate activist, coffee lover, and policy nerd. Helping Black and Brown communities build sustainable futures since 2021.</textarea>
+                        </div>
+                        <div vid="515">
+                            <label class="font-bold text-xs block mb-2" vid="516">SOCIAL LINK (INSTA)</label>
+                            <input type="text" placeholder="@maya_advocates" vid="517">
+                        </div>
+                        <div vid="518">
+                            <label class="font-bold text-xs block mb-2" vid="519">WEBSITE</label>
+                            <input type="url" placeholder="https://maya.me" vid="520">
+                        </div>
+                        <div class="md:col-span-2 pt-6" vid="521">
+                            <button type="button" onclick="showSuccess('Profile updated successfully!')" class="bg-black text-white px-12 py-4 rounded-full header-font text-xl brutalist-shadow-sm hover:scale-[1.02] transition-transform" vid="522">SAVE CHANGES</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        
+        <section id="view-favorites" class="view-section ml-[280px] p-12 hidden" vid="523">
+            <h1 class="header-font text-6xl mb-12" vid="524">MY FAVORITES</h1>
+            
+            <div class="flex gap-4 mb-12" vid="525">
+                <button class="bg-black text-white px-8 py-3 rounded-full font-bold brutalist-shadow-sm text-sm" vid="526">ALL</button>
+                <button class="bg-white brutalist-border px-8 py-3 rounded-full font-bold text-sm" vid="527">JOBS</button>
+                <button class="bg-white brutalist-border px-8 py-3 rounded-full font-bold text-sm" vid="528">EVENTS</button>
+                <button class="bg-white brutalist-border px-8 py-3 rounded-full font-bold text-sm" vid="529">FUNDS</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8" vid="530">
+                
+                <div class="bg-white brutalist-border rounded-[32px] overflow-hidden brutalist-shadow-hover transition-all" vid="531">
+                    <div class="h-40 bg-yellow-100 flex items-center justify-center border-b-4 border-black" vid="532">
+                        <i class="ph ph-calendar text-5xl opacity-30" vid="533"></i>
+                    </div>
+                    <div class="p-6" vid="534">
+                        <div class="flex justify-between items-start mb-2" vid="535">
+                            <span class="bg-yellow-300 brutalist-border px-3 py-0.5 rounded-full text-[10px] font-bold" vid="536">EVENT</span>
+                            <button class="text-xl text-red-500" vid="537"><i class="ph ph-x-circle-fill" vid="538"></i></button>
+                        </div>
+                        <h3 class="header-font text-xl mb-4" vid="539">Community Garden Day</h3>
+                        <button class="w-full bg-black text-white py-3 rounded-full text-xs font-bold" vid="540">VIEW DETAILS</button>
+                    </div>
+                </div>
+            </div>
+
+            
+            <div id="favorites-empty" class="hidden py-40 text-center" vid="541">
+                <i class="ph ph-heart-break text-[8rem] mb-8 opacity-20" vid="542"></i>
+                <h3 class="header-font text-4xl mb-4" vid="543">NO FAVORITES YET!</h3>
+                <p class="text-xl font-bold opacity-60" vid="544">Start exploring and save what you love, bestie.</p>
+                <button onclick="showView('explore')" class="mt-8 bg-black text-white px-8 py-3 rounded-full font-bold" vid="545">EXPLORE NOW</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script vid="546">
+        function showView(viewId) {
+            
+            document.querySelectorAll('.view-section').forEach(view => {
+                view.classList.remove('active-view');
+            });
+            
+            
+            const targetView = document.getElementById('view-' + viewId);
+            if (targetView) {
+                targetView.classList.add('active-view');
+            }
+
+            
+            document.querySelectorAll('.nav-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            const activeBtn = document.getElementById('btn-' + viewId);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+
+            
+            const sidebar = document.getElementById('main-sidebar');
+            if (viewId === 'auth') {
+                sidebar.classList.add('hidden');
+                sidebar.classList.remove('flex');
+                document.getElementById('content-area').style.marginLeft = '0';
+            } else {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                document.getElementById('content-area').style.marginLeft = '280px';
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        function switchAuthTab(tab) {
+            const forms = ['login', 'signup', 'reset'];
+            forms.forEach(f => {
+                document.getElementById('form-' + f).classList.add('hidden');
+                const t = document.getElementById('tab-' + f);
+                if (t) t.classList.remove('active', 'brutalist-shadow-sm');
+            });
+            
+            document.getElementById('form-' + tab).classList.remove('hidden');
+            const activeTab = document.getElementById('tab-' + tab);
+            if (activeTab) activeTab.classList.add('active', 'brutalist-shadow-sm');
+        }
+
+        function login() {
+            showSuccess('Logging you in...');
+            setTimeout(() => {
+                showView('dashboard');
+            }, 1000);
+        }
+
+        function logout() {
+            showView('auth');
+        }
+
+        function showSuccess(msg) {
+            const feedback = document.getElementById('auth-feedback');
+            const text = document.getElementById('feedback-text');
+            text.innerText = msg;
+            feedback.classList.remove('hidden');
+            setTimeout(() => feedback.classList.add('hidden'), 3000);
+        }
+
+        
+        function nextStep(step, category) {
+            document.getElementById('submit-step-1').classList.add('hidden');
+            document.getElementById('submit-step-2').classList.add('hidden');
+            document.getElementById('submit-step-3').classList.add('hidden');
+            
+            document.getElementById('submit-step-' + step).classList.remove('hidden');
+            
+            if (category) {
+                document.getElementById('category-label').innerText = category.toUpperCase();
+            }
+        }
+
+        function completeSubmit() {
+            alert('Submitted for review! We will notify you once it is live.');
+            showView('dashboard');
+            nextStep(1); 
+        }
+
+        
+        showView('auth');
+    </script>
+
+
+
+</body></html>
 </html>

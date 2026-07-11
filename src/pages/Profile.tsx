@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase, supabasePublicStorageUrl } from "@/lib/supabaseClient";
 import { validateContent } from "@/lib/profanityFilter";
 import { format } from "date-fns";
+import { getPreferredDisplayName, normalizeUsername, shortenEmail, USERNAME_PATTERN } from "@/lib/auth";
 
 type ProfileFormState = {
   full_name: string;
@@ -67,20 +68,29 @@ const Profile = () => {
 
     const newAvatarUrl = profile?.avatar_url ??
       ((user.user_metadata?.avatar_url as string | undefined) ?? "");
-    
-    console.log('Setting avatar URL:', newAvatarUrl);
 
-    setFormState({
-      full_name:
-        profile?.full_name ??
-        (user.user_metadata?.full_name as string | undefined) ??
-        user.email ??
-        "",
-      username: profile?.username ?? "",
-      bio: profile?.bio ?? "",
-      avatar_url: newAvatarUrl,
+    setFormState((previous) => {
+      const nextState = {
+        full_name:
+          profile?.full_name ??
+          (user.user_metadata?.full_name as string | undefined) ??
+          "",
+        username:
+          profile?.username ??
+          ((user.user_metadata?.username as string | undefined) ?? ""),
+        bio: profile?.bio ?? "",
+        avatar_url: newAvatarUrl,
+      };
+
+      return JSON.stringify(previous) === JSON.stringify(nextState) ? previous : nextState;
     });
   }, [profile, user]);
+
+  const normalizedUsername = formState.username.trim() ? normalizeUsername(formState.username) : "";
+  const usernameError =
+    normalizedUsername && !USERNAME_PATTERN.test(normalizedUsername)
+      ? "Username must be 3-20 characters using lowercase letters, numbers, dots, underscores, or hyphens."
+      : null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -89,6 +99,15 @@ const Profile = () => {
     }
 
     setIsSaving(true);
+    if (usernameError) {
+      toast({
+        title: "Invalid username",
+        description: usernameError,
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
     // Validate profile content before saving
     try {
       if (formState.full_name.trim()) {
@@ -100,10 +119,13 @@ const Profile = () => {
       if (formState.bio.trim()) {
         validateContent(formState.bio);
       }
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your profile contains inappropriate language. Please revise and try again.",
+        description:
+          validationError instanceof Error
+            ? validationError.message
+            : "Your profile contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSaving(false);
@@ -115,8 +137,8 @@ const Profile = () => {
       .upsert(
         {
           id: user.id,
-          full_name: formState.full_name,
-          username: formState.username,
+          full_name: formState.full_name.trim() || null,
+          username: normalizedUsername || null,
           bio: formState.bio,
           avatar_url: formState.avatar_url || null,
           updated_at: new Date().toISOString(),
@@ -261,12 +283,25 @@ const Profile = () => {
   };
 
   const avatarInitial =
-    formState.full_name?.charAt(0)?.toUpperCase() ??
-    user?.email?.charAt(0)?.toUpperCase() ??
+    getPreferredDisplayName({
+      fullName: formState.full_name,
+      username: normalizedUsername,
+      email: user?.email,
+    })
+      .charAt(0)
+      .toUpperCase() ??
     "Y";
 
-  const profileDisplayName = formState.full_name || "Your Name";
-  const profileSecondaryLine = formState.username ? `@${formState.username}` : user.email ?? "";
+  const profileDisplayName = getPreferredDisplayName({
+    fullName: formState.full_name,
+    username: normalizedUsername,
+    email: user?.email,
+  });
+  const profileSecondaryLine = normalizedUsername
+    ? `@${normalizedUsername}`
+    : user.email
+    ? shortenEmail(user.email)
+    : "";
 
   if (loading) {
     return (
@@ -422,7 +457,13 @@ const Profile = () => {
                             setFormState((previous) => ({ ...previous, username: event.target.value }))
                           }
                           placeholder="Choose a username"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                         />
+                        <p className={`text-xs font-bold ${usernameError ? "text-red-700" : "text-muted-foreground"}`}>
+                          {usernameError || "Optional. Lowercase letters, numbers, dots, underscores, or hyphens."}
+                        </p>
                       </div>
                     </div>
 

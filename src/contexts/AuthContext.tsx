@@ -9,6 +9,12 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  classifySignupError,
+  getAuthRedirectUrl,
+  normalizeUsername,
+  type SignupErrorState,
+} from "@/lib/auth";
 
 type Profile = {
   id: string;
@@ -27,7 +33,18 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   signIn: (args: { email: string; password: string }) => Promise<{ error: string | null }>;
-  signUp: (args: { email: string; password: string }) => Promise<{ error: string | null }>;
+  signUp: (args: {
+    email: string;
+    password: string;
+    displayName?: string;
+    username?: string;
+  }) => Promise<{
+    error: string | null;
+    errorKind?: SignupErrorState;
+  }>;
+  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<Profile | null>;
 };
@@ -40,6 +57,58 @@ type AuthProviderProps = {
 
 const PROFILE_FIELDS =
   "id, username, full_name, avatar_url, bio, points, created_at, updated_at";
+
+const syncProfileFieldsFromMetadata = async (
+  targetUser: User,
+  existingProfile: Profile | null,
+): Promise<Profile | null> => {
+  const metadataFullName = (targetUser.user_metadata?.full_name as string | undefined)?.trim() || null;
+  const metadataUsernameRaw = (targetUser.user_metadata?.username as string | undefined) ?? null;
+  const metadataUsername = metadataUsernameRaw ? normalizeUsername(metadataUsernameRaw) : null;
+  const metadataAvatarUrl = (targetUser.user_metadata?.avatar_url as string | undefined) ?? null;
+
+  const nextFullName = existingProfile?.full_name?.trim() || metadataFullName || null;
+  const nextUsername =
+    existingProfile?.username?.trim() ||
+    metadataUsername ||
+    targetUser.email?.split("@")[0] ||
+    null;
+  const nextAvatarUrl = existingProfile?.avatar_url || metadataAvatarUrl || null;
+
+  const needsUpdate =
+    !existingProfile ||
+    existingProfile.full_name !== nextFullName ||
+    existingProfile.username !== nextUsername ||
+    existingProfile.avatar_url !== nextAvatarUrl;
+
+  if (!needsUpdate) {
+    return existingProfile;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: targetUser.id,
+        username: nextUsername,
+        full_name: nextFullName,
+        avatar_url: nextAvatarUrl,
+        bio: existingProfile?.bio ?? null,
+        points: existingProfile?.points ?? 0,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
+    .select(PROFILE_FIELDS)
+    .single();
+
+  if (error) {
+    console.error("Failed to sync profile metadata", error);
+    return existingProfile;
+  }
+
+  return data ?? existingProfile;
+};
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -88,18 +157,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     if (data) {
-      return data;
+      return syncProfileFieldsFromMetadata(targetUser, data);
     }
 
     const { data: insertedProfile, error: insertError } = await supabase
       .from("profiles")
       .insert({
         id: targetUser.id,
-        username: targetUser.email?.split("@")[0] ?? null,
+        username:
+          ((targetUser.user_metadata?.username as string | undefined)?.trim()
+            ? normalizeUsername(targetUser.user_metadata.username as string)
+            : targetUser.email?.split("@")[0]) ?? null,
         full_name:
-          (targetUser.user_metadata?.full_name as string | undefined) ??
-          targetUser.email ??
-          null,
+          (targetUser.user_metadata?.full_name as string | undefined) ?? null,
         avatar_url:
           (targetUser.user_metadata?.avatar_url as string | undefined) ?? null,
         bio: null,
@@ -193,18 +263,71 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     [loadProfile],
   );
 
-  const signUp: AuthContextValue["signUp"] = useCallback(async ({ email, password }) => {
+  const signUp: AuthContextValue["signUp"] = useCallback(async ({
+    email,
+    password,
+    displayName,
+    username,
+  }) => {
+    const normalizedUsername = username?.trim() ? normalizeUsername(username) : undefined;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo:
-          typeof window !== "undefined" ? `${window.location.origin}/login` : undefined,
+        data: {
+          full_name: displayName?.trim() || undefined,
+          username: normalizedUsername || undefined,
+        },
+        emailRedirectTo: getAuthRedirectUrl("/login"),
       },
     });
 
     if (error) {
-      console.error("Sign up failed", error);
+      if (import.meta.env.DEV) {
+        console.error("Sign up failed", error);
+      }
+      return {
+        error: error.message,
+        errorKind: classifySignupError(error.message),
+      };
+    }
+
+    return { error: null };
+  }, []);
+
+  const resendConfirmation: AuthContextValue["resendConfirmation"] = useCallback(async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl("/login"),
+      },
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { error: null };
+  }, []);
+
+  const requestPasswordReset: AuthContextValue["requestPasswordReset"] = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: getAuthRedirectUrl("/reset-password"),
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { error: null };
+  }, []);
+
+  const updatePassword: AuthContextValue["updatePassword"] = useCallback(async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
       return { error: error.message };
     }
 
@@ -229,10 +352,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       loading: initializing || profileLoading,
       signIn,
       signUp,
+      resendConfirmation,
+      requestPasswordReset,
+      updatePassword,
       signOut,
       refreshProfile: loadProfile,
     }),
-    [session, user, profile, initializing, profileLoading, signIn, signUp, signOut, loadProfile],
+    [
+      session,
+      user,
+      profile,
+      initializing,
+      profileLoading,
+      signIn,
+      signUp,
+      resendConfirmation,
+      requestPasswordReset,
+      updatePassword,
+      signOut,
+      loadProfile,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

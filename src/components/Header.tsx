@@ -20,8 +20,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { MessagesContext } from "@/contexts/MessagesContext";
 import { PointsBadge } from "@/components/PointsBadge";
+import { InstallAppButton } from "@/components/InstallAppButton";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { getPreferredDisplayName, shortenEmail } from "@/lib/auth";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -52,18 +54,22 @@ const Header = () => {
     })();
   }, [user, user?.id]);
 
-  const displayName =
-    profile?.full_name ??
-    profile?.username ??
-    user?.email ??
-    "Community Member";
+  const displayName = getPreferredDisplayName({
+    fullName: profile?.full_name,
+    username: profile?.username,
+    email: user?.email,
+  });
 
   const avatarUrl =
     profile?.avatar_url ??
     ((user?.user_metadata?.avatar_url as string | undefined) ?? "");
 
   const secondaryIdentity =
-    profile?.username ? `@${profile.username}` : user?.email ?? "";
+    profile?.username
+      ? `@${profile.username}`
+      : user?.email
+      ? shortenEmail(user.email)
+      : "";
 
   const navItems = [
     { to: "/", label: "Dashboard", icon: Home },
@@ -163,6 +169,8 @@ const Header = () => {
             </nav>
 
             <div className="mt-6 space-y-3 border-t-[3px] border-black pt-4">
+              <InstallAppButton className="w-full" />
+
               <NavLink
                 to="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -216,6 +224,8 @@ const Header = () => {
               ) : null}
             </div>
           )}
+
+          <InstallAppButton className="w-full" />
 
           <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 p-3">
             <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">

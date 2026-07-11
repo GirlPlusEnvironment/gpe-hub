@@ -197,6 +197,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo:
+          typeof window !== "undefined" ? `${window.location.origin}/login` : undefined,
+      },
     });
 
     if (error) {
@@ -241,4 +245,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

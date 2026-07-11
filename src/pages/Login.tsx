@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,11 @@ type AuthMode = "login" | "signup";
 const Login = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [mode, setMode] = useState<AuthMode>("login");
+  const [mode, setMode] = useState<AuthMode>(
+    location.pathname === "/sign-up" ? "signup" : "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,6 +27,12 @@ const Login = () => {
       navigate("/", { replace: true });
     }
   }, [loading, user, navigate]);
+
+  useEffect(() => {
+    setMode(location.pathname === "/sign-up" ? "signup" : "login");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  }, [location.pathname]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -54,9 +63,7 @@ const Login = () => {
   };
 
   const toggleMode = () => {
-    setMode((current) => (current === "login" ? "signup" : "login"));
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    navigate(mode === "login" ? "/sign-up" : "/login");
   };
 
   return (

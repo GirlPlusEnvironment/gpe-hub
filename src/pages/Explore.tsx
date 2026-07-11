@@ -214,7 +214,7 @@ const Explore = () => {
         case "jobs":
           return matchesSearch && (listing as JobListing).jobType === selectedFilter;
         case "events":
-          return matchesSearch && (listing as EventListing).date === selectedFilter;
+          return matchesSearch && (listing as EventListing).eventType === selectedFilter;
         case "fundraisers":
           return matchesSearch && (listing.tags ?? []).includes(selectedFilter);
         case "resources":

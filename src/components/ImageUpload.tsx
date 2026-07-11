@@ -68,8 +68,16 @@ export function ImageUpload({ bucket, onUploadComplete, currentImage, folder }: 
 
         const fileExt = file.name.split(".").pop() ?? "png";
         const timestamp = Date.now();
-        const folderPath = folder || user.id;
-        const filePath = `${folderPath}/${timestamp}.${fileExt}`;
+        const normalizedFolder = folder ? folder.replace(/^\/+|\/+$/g, "") : "";
+        const pathSegments = [user.id];
+
+        if (normalizedFolder) {
+          pathSegments.push(normalizedFolder);
+        }
+
+        pathSegments.push(`${timestamp}.${fileExt}`);
+
+        const filePath = pathSegments.join("/");
 
         const { error: uploadError } = await supabase.storage
           .from(bucket)

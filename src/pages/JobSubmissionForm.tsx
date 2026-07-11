@@ -97,6 +97,7 @@ export default function JobSubmissionForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     // Validate required fields and show inline errors
     const newErrors: Record<string, string> = {};
 
@@ -129,6 +130,7 @@ export default function JobSubmissionForm() {
     // If any errors, set them and bail out
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      setIsSubmitting(false);
       return;
     }
     // Get authenticated user
@@ -138,6 +140,7 @@ export default function JobSubmissionForm() {
     } = await supabase.auth.getUser();
     if (userError || !user) {
       toast({ title: "You must be logged in", description: "You must be logged in to submit a job." });
+      setIsSubmitting(false);
       return;
     }
 
@@ -148,10 +151,15 @@ export default function JobSubmissionForm() {
       summary: form.description.slice(0, 120),
       description: form.description,
       image_url: form.image,
+      location: form.state,
       tags: [],
       status: "published",
       submitted_by: user.id,
-        metadata: {
+      metadata: {
+        location: form.state,
+        job_type: Array.isArray(form.workArrangements) && form.workArrangements.length > 0
+          ? form.workArrangements[0]
+          : "Full-time",
         salary: form.salary,
         company: form.company,
         state: form.state,
@@ -176,12 +184,14 @@ export default function JobSubmissionForm() {
         description: validationError.message || "Your content contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
+      setIsSubmitting(false);
       return;
     }
 
     const { data, error } = await supabase.from("listings").insert([jobData]).select();
     if (error) {
       toast({ title: "Error submitting job", description: "We couldn't submit your job listing. Please try again." });
+      setIsSubmitting(false);
     } else if (data && data.length > 0) {
       const newListingId = data[0].id;
       // Clear the draft after successful submission

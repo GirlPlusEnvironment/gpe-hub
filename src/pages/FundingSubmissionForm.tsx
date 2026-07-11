@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ const fundingTypes = ["Grant", "Scholarship", "Fellowship", "Award", "Other"];
 const STORAGE_KEY = "funding-submission-draft";
 
 export default function FundingSubmissionForm() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -134,11 +136,15 @@ export default function FundingSubmissionForm() {
       submitted_by: user.id,
       status: "published",
       metadata: {
+        organizer: form.source,
         source: form.source,
         funding_type: form.fundingType,
         amount: form.amount,
+        goal_amount: form.amount,
+        current_amount: "0",
         deadline: form.deadline,
         link: form.link,
+        donation_url: form.link,
         contact_email: form.contactEmail,
         notes: form.notes,
       },
@@ -179,7 +185,7 @@ export default function FundingSubmissionForm() {
         title: "Funding opportunity posted!",
         description: "Your funding opportunity has been successfully submitted.",
       });
-      window.location.href = `/listing/${newListingId}`;
+      navigate(`/listing/${newListingId}`);
     }
   };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ const resourceCategories = ["Toolkit", "Video", "Guide", "Handbook", "Technical 
 const STORAGE_KEY = "resource-submission-draft";
 
 export default function ResourceSubmissionForm() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -115,7 +117,10 @@ export default function ResourceSubmissionForm() {
       metadata: {
         source: form.source,
         resource_category: form.resourceCategory,
+        resource_type: form.resourceCategory,
+        topic: form.resourceCategory,
         link: form.link,
+        download_url: form.link,
         notes: form.notes,
       },
     };
@@ -155,7 +160,7 @@ export default function ResourceSubmissionForm() {
         title: "Resource posted!",
         description: "Your resource has been successfully submitted.",
       });
-      window.location.href = `/listing/${newListingId}`;
+      navigate(`/listing/${newListingId}`);
     }
   };
 

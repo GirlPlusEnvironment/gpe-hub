@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ const usStates = ["Alabama", "Alaska", "Arizona", "Arkansas", "California", "Col
 const STORAGE_KEY = "event-submission-draft";
 
 export default function EventSubmissionForm() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -189,7 +191,7 @@ export default function EventSubmissionForm() {
         title: "Event posted!",
         description: "Your event has been successfully submitted.",
       });
-      window.location.href = `/listing/${newListingId}`;
+      navigate(`/listing/${newListingId}`);
     }
   };
 

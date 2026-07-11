@@ -84,9 +84,16 @@ const transformJob = (row: ListingRow): JobListing => {
 
   const jobTypeOptions = ["Full-time", "Part-time", "Contract", "Remote"] as const;
   const experienceOptions = ["Entry-level", "Mid-level", "Senior"] as const;
+  const legacyWorkArrangements = ensureStringArray(metadata.work_arrangements);
+  const derivedJobType = legacyWorkArrangements.find((value) =>
+    jobTypeOptions.includes(value as (typeof jobTypeOptions)[number]),
+  );
 
   const location =
-    ensureString(metadata.location) || ensureString(row.location) || "Remote";
+    ensureString(metadata.location) ||
+    ensureString(metadata.state) ||
+    ensureString(row.location) ||
+    "Remote";
 
   const poster: Poster | undefined = row.profiles ? {
     id: row.profiles.id,
@@ -108,7 +115,11 @@ const transformJob = (row: ListingRow): JobListing => {
     submitted_by: poster,
     created_at: row.created_at ?? undefined,
     location,
-    jobType: ensureEnum(metadata.job_type ?? metadata.jobType, jobTypeOptions, "Full-time"),
+    jobType: ensureEnum(
+      metadata.job_type ?? metadata.jobType ?? derivedJobType,
+      jobTypeOptions,
+      "Full-time",
+    ),
     experienceLevel: ensureEnum(
       metadata.experience_level ?? metadata.experienceLevel,
       experienceOptions,
@@ -185,12 +196,16 @@ const transformFundraiser = (row: ListingRow): FundraiserListing => {
     tags: ensureStringArray(metadata.tags ?? row.tags),
     submitted_by: poster,
     created_at: row.created_at ?? undefined,
-    goalAmount: ensureString(metadata.goal_amount ?? metadata.goal ?? "Goal to be announced"),
+    goalAmount: ensureString(
+      metadata.goal_amount ?? metadata.goal ?? metadata.amount ?? "Goal to be announced",
+    ),
     currentAmount: ensureString(metadata.current_amount ?? metadata.raised ?? "0"),
     deadline: ensureString(metadata.deadline ?? metadata.end_date ?? "Ongoing"),
-    organizer: ensureString(metadata.organizer ?? metadata.host ?? "Organizer to be announced"),
+    organizer: ensureString(
+      metadata.organizer ?? metadata.host ?? metadata.source ?? "Organizer to be announced",
+    ),
     contactEmail: ensureString(metadata.contact_email ?? metadata.email ?? ""),
-    donationUrl: ensureString(metadata.donation_url ?? metadata.url ?? ""),
+    donationUrl: ensureString(metadata.donation_url ?? metadata.link ?? metadata.url ?? ""),
     updates: ensureStringArray(metadata.updates),
     progressPercentage:
       typeof metadata.progress_percentage === "number"
@@ -231,8 +246,12 @@ const transformResource = (row: ListingRow): ResourceListing => {
     tags: ensureStringArray(metadata.tags ?? row.tags),
     submitted_by: poster,
     created_at: row.created_at ?? undefined,
-    resourceType: ensureEnum(metadata.resource_type ?? metadata.type, resourceTypeOptions, "Guide"),
-    topic: ensureString(metadata.topic ?? "General"),
+    resourceType: ensureEnum(
+      metadata.resource_type ?? metadata.resource_category ?? metadata.type,
+      resourceTypeOptions,
+      "Guide",
+    ),
+    topic: ensureString(metadata.topic ?? metadata.resource_category ?? "General"),
     difficultyLevel: ensureEnum(
       metadata.difficulty_level ?? metadata.level,
       difficultyOptions,

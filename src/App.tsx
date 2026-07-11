@@ -134,6 +134,7 @@ const App = () => (
               }
             />
             <Route path="/login" element={<Login />} />
+            <Route path="/sign-up" element={<Login />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route
               path="*"

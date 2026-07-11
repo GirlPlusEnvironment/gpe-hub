@@ -20,6 +20,26 @@ Notion Link: https://www.notion.so/GPE-DS-v1-Foundations-v1-0-28e5ed7294f380759b
 
 3. The app expects the `profiles` table to exist (the Supabase quickstart creates it). The login screen handles sign up + sign in, and the Profile page reads/writes to that table via Supabase Auth.
 
+## GitHub Pages Deployment
+
+GitHub Pages deploys through `.github/workflows/deploy-pages.yml`.
+
+Required GitHub repository secrets:
+
+```
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+```
+
+Before cutover:
+
+1. In Supabase Auth, set the Site URL to `https://members.girlplusenvironment.org`.
+2. Add redirect URLs for:
+   - `https://members.girlplusenvironment.org/login`
+   - `https://members.girlplusenvironment.org/sign-up`
+3. Review the targeted SQL in `supabase/migrations/20260710_add_profile_trigger.sql` and `supabase/migrations/20260710_harden_storage_and_realtime.sql`.
+4. If live verification is needed, run the read-only checks in `supabase/audits/live_backend_verification.sql`.
+
 ## Explore Listings Schema
 
 To feed the Explore tabs from Supabase instead of mock data:

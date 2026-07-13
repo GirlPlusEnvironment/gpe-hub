@@ -20,8 +20,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { MessagesContext } from "@/contexts/MessagesContext";
 import { PointsBadge } from "@/components/PointsBadge";
+import { InstallAppButton } from "@/components/InstallAppButton";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { getPreferredDisplayName, shortenEmail } from "@/lib/auth";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -52,15 +54,23 @@ const Header = () => {
     })();
   }, [user, user?.id]);
 
-  const displayName =
-    profile?.full_name ??
-    profile?.username ??
-    user?.email ??
-    "Community Member";
+  const displayName = getPreferredDisplayName({
+    fullName: profile?.full_name,
+    username: profile?.username,
+    email: user?.email,
+  });
 
   const avatarUrl =
     profile?.avatar_url ??
     ((user?.user_metadata?.avatar_url as string | undefined) ?? "");
+  const resolvedAvatarUrl = avatarUrl.trim() || null;
+
+  const secondaryIdentity =
+    profile?.username
+      ? `@${profile.username}`
+      : user?.email
+      ? shortenEmail(user.email)
+      : "";
 
   const navItems = [
     { to: "/", label: "Dashboard", icon: Home },
@@ -90,7 +100,7 @@ const Header = () => {
         onClick={() => setIsMobileMenuOpen(false)}
         className={({ isActive }) =>
           cn(
-            "gpe-pill flex items-center justify-between gap-3 text-left transition-all",
+            "gpe-pill flex min-w-0 items-center justify-between gap-3 text-left transition-all",
             mobile ? "w-full px-4 py-3 text-sm" : "w-full px-5 py-4 text-sm",
             isActive ? "bg-black text-white" : "bg-white hover:bg-pink-100",
           )
@@ -114,15 +124,20 @@ const Header = () => {
   return (
     <>
       <div className="sticky top-0 z-40 border-b-[3px] border-black bg-white md:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 sm:px-4">
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="gpe-heading text-xl"
+            className="flex min-w-0 shrink items-center"
+            aria-label="Go to dashboard"
           >
-            GPE HUB™
+            <img
+              src="/logo.png"
+              alt="GPE Hub"
+              className="h-auto w-full max-w-[120px] object-contain sm:max-w-[140px]"
+            />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
             {user && <PointsBadge />}
             <Button
               type="button"
@@ -139,9 +154,13 @@ const Header = () => {
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
-          <div className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[320px] flex-col overflow-y-auto border-r-[3px] border-black bg-white p-4">
+          <div className="absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[3px] border-black bg-white p-3 sm:p-4">
             <div className="mb-6 flex items-center justify-between">
-              <div className="gpe-heading text-2xl">GPE HUB™</div>
+              <img
+                src="/logo.png"
+                alt="GPE Hub"
+                className="h-auto w-full max-w-[140px] object-contain"
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -160,20 +179,31 @@ const Header = () => {
             </nav>
 
             <div className="mt-6 space-y-3 border-t-[3px] border-black pt-4">
+              <InstallAppButton className="w-full" />
+
               <NavLink
                 to="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="gpe-card-sm flex items-center gap-3 p-3"
+                className="gpe-card-sm flex items-start gap-3 p-3"
               >
-                <Avatar className="h-12 w-12 border-[3px] border-black">
-                  <AvatarImage src={avatarUrl} alt={displayName} />
+                <Avatar className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-black">
+                  <AvatarImage
+                    src={resolvedAvatarUrl || undefined}
+                    alt={displayName || "Profile photo"}
+                    className="h-full w-full object-cover"
+                    loading="eager"
+                  />
                   <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                     {userInitial}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
-                  <div className="truncate font-bold">{displayName}</div>
-                  <div className="text-xs uppercase text-black/60">Profile</div>
+                <div className="flex-1 min-w-0">
+                  <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
+                    {displayName}
+                  </div>
+                <div className="break-words text-[11px] uppercase leading-tight text-black/60">
+                    {secondaryIdentity || "Profile"}
+                  </div>
                 </div>
               </NavLink>
 
@@ -190,9 +220,14 @@ const Header = () => {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="gpe-heading mb-10 text-3xl text-left"
+          className="mb-10 flex items-center text-left"
+          aria-label="Go to dashboard"
         >
-          GPE HUB™
+          <img
+            src="/logo.png"
+            alt="GPE Hub"
+            className="h-auto w-full max-w-[180px] object-contain"
+          />
         </button>
 
         <nav className="flex flex-1 flex-col gap-4">
@@ -210,16 +245,22 @@ const Header = () => {
             </div>
           )}
 
-          <NavLink to="/profile" className="gpe-card-sm flex items-center gap-3 p-3">
-            <Avatar className="h-12 w-12 border-[3px] border-black">
+          <InstallAppButton className="w-full" />
+
+          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 p-3">
+            <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
               <AvatarImage src={avatarUrl} alt={displayName} />
               <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                 {loading ? "…" : userInitial}
               </AvatarFallback>
             </Avatar>
-            <div className="min-w-0">
-              <div className="truncate font-bold">{displayName}</div>
-              <div className="text-xs uppercase text-black/60">View Profile</div>
+            <div className="flex-1 min-w-0">
+              <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
+                {displayName}
+              </div>
+              <div className="break-words text-[11px] uppercase leading-tight text-black/60">
+                {secondaryIdentity || "View Profile"}
+              </div>
             </div>
           </NavLink>
 

@@ -106,6 +106,12 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
   };
 
   const levelInfo = profile ? calculateLevel(profile.points) : LEVELS[0];
+  const displayName = profile?.full_name || profile?.username || "Unknown User";
+  const avatarUrl =
+    profile?.avatar_url?.trim() ||
+    (isOwnProfile ? ((user?.user_metadata?.avatar_url as string | undefined) ?? "").trim() : "") ||
+    null;
+  const initials = profile?.full_name?.charAt(0) || profile?.username?.charAt(0) || "U";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,22 +126,31 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
               <DialogTitle>User Profile</DialogTitle>
             </DialogHeader>
             
-            <div className="flex flex-col items-center text-center pt-4">
+            <div className="flex min-w-0 flex-col items-center pt-4 text-center">
               {/* Avatar */}
-              <Avatar className="h-24 w-24 mb-4 ring-4 ring-primary/20">
-                <AvatarImage src={profile.avatar_url || ""} />
+              <Avatar className="mb-4 h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-black ring-4 ring-primary/20">
+                <AvatarImage
+                  src={avatarUrl || undefined}
+                  alt={displayName || "Profile photo"}
+                  className="h-full w-full object-cover"
+                  loading="eager"
+                />
                 <AvatarFallback className="text-2xl bg-primary/10">
-                  {profile.full_name?.charAt(0) || profile.username?.charAt(0) || "U"}
+                  {initials}
                 </AvatarFallback>
               </Avatar>
 
               {/* Name and Username */}
-              <h2 className="text-xl font-bold text-foreground">
-                {profile.full_name || profile.username || "Unknown User"}
-              </h2>
-              {profile.username && profile.username !== profile.full_name && (
-                <p className="text-sm text-muted-foreground">@{profile.username}</p>
-              )}
+              <div className="min-w-0 max-w-full">
+                <h2 className="break-words font-header text-2xl uppercase leading-tight [overflow-wrap:anywhere]">
+                  {displayName}
+                </h2>
+                {profile.username && profile.username !== profile.full_name && (
+                  <p className="mt-1 max-w-full break-words text-sm text-muted-foreground">
+                    @{profile.username}
+                  </p>
+                )}
+              </div>
 
               {/* Level Badge */}
               <Badge className={`mt-3 ${levelInfo.color}`}>
@@ -145,7 +160,7 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
 
               {/* Bio */}
               {profile.bio && (
-                <p className="mt-4 text-sm text-muted-foreground max-w-xs">
+                <p className="mt-4 max-w-xs break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
                   {profile.bio}
                 </p>
               )}

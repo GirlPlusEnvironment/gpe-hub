@@ -177,7 +177,7 @@ const Login = () => {
           <div className="gpe-pattern absolute inset-0 opacity-30" />
           <div className="relative z-10 max-w-xl text-center">
             <img
-              src="/gpe-hub-icon.jpg"
+              src="/gpe-hub-icon.png"
               alt="GPE Hub"
               className="mx-auto mb-10 max-h-64 w-full max-w-[220px] object-contain drop-shadow-[8px_8px_0_rgba(0,0,0,0.55)]"
             />

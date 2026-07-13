@@ -5,7 +5,11 @@ const Footer = () => {
     <footer className="border-t-[3px] border-black bg-white md:pl-[304px]">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:flex-row md:items-end md:justify-between md:px-8">
         <div>
-          <div className="gpe-heading text-2xl">GPE HUB™</div>
+          <img
+            src="/logo.png"
+            alt="GPE Hub"
+            className="h-auto w-full max-w-[180px] object-contain"
+          />
           <p className="mt-2 max-w-xl text-sm text-black/70">
             A shared space for environmental justice jobs, events, funding, resources,
             community conversations, and member connections.

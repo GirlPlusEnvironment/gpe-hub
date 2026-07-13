@@ -127,9 +127,14 @@ const Header = () => {
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="gpe-heading text-xl"
+            className="flex items-center"
+            aria-label="Go to dashboard"
           >
-            GPE HUB™
+            <img
+              src="/logo.png"
+              alt="GPE Hub"
+              className="h-auto w-full max-w-[140px] object-contain"
+            />
           </button>
           <div className="flex items-center gap-2">
             {user && <PointsBadge />}
@@ -150,7 +155,11 @@ const Header = () => {
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
           <div className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[320px] flex-col overflow-y-auto border-r-[3px] border-black bg-white p-4">
             <div className="mb-6 flex items-center justify-between">
-              <div className="gpe-heading text-2xl">GPE HUB™</div>
+              <img
+                src="/logo.png"
+                alt="GPE Hub"
+                className="h-auto w-full max-w-[140px] object-contain"
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -205,9 +214,14 @@ const Header = () => {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="gpe-heading mb-10 text-3xl text-left"
+          className="mb-10 flex items-center text-left"
+          aria-label="Go to dashboard"
         >
-          GPE HUB™
+          <img
+            src="/logo.png"
+            alt="GPE Hub"
+            className="h-auto w-full max-w-[180px] object-contain"
+          />
         </button>
 
         <nav className="flex flex-1 flex-col gap-4">

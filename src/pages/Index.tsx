@@ -74,13 +74,18 @@ const Index = () => {
   });
 
   const headingName = welcomeName.split(" ")[0] || "Bestie";
+  const secondaryIdentity = profile?.username
+    ? `@${profile.username}`
+    : profile?.full_name
+    ? ""
+    : welcomeName;
 
   return (
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main space-y-10">
-        <section className="gpe-card p-8 md:p-12">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+        <section className="gpe-card p-5 sm:p-8 md:p-12">
+          <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <div className="min-w-0">
               <h1
                 className="gpe-heading leading-[0.95] [font-size:clamp(2.25rem,5vw,4.5rem)]"
@@ -94,9 +99,9 @@ const Index = () => {
                 Your community hub for jobs, events, funding, resources, group chats, and
                 environmental justice conversation.
               </p>
-              {welcomeName && (
-                <p className="mt-4 text-sm font-bold uppercase tracking-wide text-black/60">
-                  Signed in as {welcomeName}
+              {secondaryIdentity && (
+                <p className="mt-4 break-words text-sm font-bold uppercase tracking-wide text-black/60">
+                  {secondaryIdentity}
                 </p>
               )}
             </div>
@@ -134,7 +139,7 @@ const Index = () => {
 
                 return (
                   <article key={category} className="gpe-card gpe-hover-lift p-6">
-                    <span className={`inline-flex rounded-full border-[3px] border-black px-4 py-1 text-xs font-bold uppercase ${config.badge}`}>
+                    <span className={`inline-flex max-w-full rounded-full border-[3px] border-black px-3 py-1 text-xs font-bold uppercase sm:px-4 ${config.badge}`}>
                       {config.label}
                     </span>
                     {listing ? (
@@ -168,22 +173,22 @@ const Index = () => {
 
         <section>
           <h2 className="gpe-section-title mb-6">Quick Links</h2>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex min-w-0 flex-wrap gap-3 sm:gap-4">
             {quickLinks.map(({ to, label, icon: Icon, dark }) => (
               <Link
                 key={to}
                 to={to}
                 className={dark ? "gpe-pill bg-black text-white" : "gpe-pill gpe-shadow-sm hover:bg-pink-100"}
               >
-                <span className="flex items-center gap-3">
-                  <Icon className="h-5 w-5" />
+                <span className="flex min-w-0 items-center justify-center gap-2 sm:gap-3">
+                  <Icon className="h-5 w-5 shrink-0" />
                   {label}
                 </span>
               </Link>
             ))}
             <Link to="/messages" className="gpe-pill gpe-shadow-sm hover:bg-pink-100">
-              <span className="flex items-center gap-3">
-                <Users className="h-5 w-5" />
+              <span className="flex min-w-0 items-center justify-center gap-2 sm:gap-3">
+                <Users className="h-5 w-5 shrink-0" />
                 Groups in Messages
               </span>
             </Link>

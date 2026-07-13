@@ -118,6 +118,11 @@ const ResetPassword = () => {
     <div className="min-h-screen bg-[#fbd3d3]">
       <div className="mx-auto flex min-h-screen max-w-2xl items-center justify-center px-6 py-12">
         <div className="gpe-card w-full p-8 md:p-10">
+          <img
+            src="/gpe-hub-icon.png"
+            alt="GPE Hub"
+            className="mb-6 h-24 w-auto object-contain"
+          />
           <Link
             to="/login"
             className="mb-4 inline-flex items-center gap-2 text-xs font-bold uppercase underline"

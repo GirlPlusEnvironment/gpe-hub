@@ -34,7 +34,7 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-4 bg-background/50 rounded-lg border border-border w-64 h-32">
+      <div className="flex h-32 w-full min-w-0 max-w-64 items-center justify-center rounded-lg border border-border bg-background/50 p-4">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -42,7 +42,7 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
 
   if (!post) {
     return (
-      <div className="p-4 bg-background/50 rounded-lg border border-border w-64">
+      <div className="w-full min-w-0 max-w-64 rounded-lg border border-border bg-background/50 p-4">
         <p className="text-sm text-muted-foreground">Post unavailable</p>
       </div>
     );
@@ -50,7 +50,7 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
 
   return (
     <Card 
-      className="w-64 max-w-full cursor-pointer overflow-hidden bg-background text-foreground transition-shadow hover:shadow-md"
+      className="w-full min-w-0 max-w-64 cursor-pointer overflow-hidden bg-background text-foreground transition-shadow hover:shadow-md"
       onClick={() => navigate(`/community/post/${post.id}`)}
     >
       {post.image_url && (

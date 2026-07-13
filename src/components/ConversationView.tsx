@@ -360,9 +360,9 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full overflow-hidden">
+    <div className="flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border p-4 flex items-center gap-4 flex-shrink-0">
+      <div className="flex min-w-0 flex-shrink-0 items-center gap-3 border-b border-border p-3 sm:gap-4 sm:p-4">
         <Button
           variant="ghost"
           size="icon"
@@ -393,7 +393,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
         </Avatar>
         <div className="flex-1 min-w-0">
           {conversation.is_group_chat && isEditingName ? (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <Input
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
@@ -405,7 +405,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
                   }
                 }}
                 disabled={isUpdatingName}
-                className="flex-1"
+                className="min-w-0 flex-1"
                 autoFocus
               />
               <Button
@@ -426,8 +426,8 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold truncate">{getConversationName()}</h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="min-w-0 truncate font-semibold">{getConversationName()}</h2>
               {conversation.is_group_chat && (
                 <Button
                   variant="ghost"
@@ -453,7 +453,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-[min(calc(100vw-2rem),16rem)]">
               <DropdownMenuLabel>Group Members</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <div className="max-h-[300px] overflow-y-auto">
@@ -506,7 +506,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
       {/* Add Member Dialog */}
       {showAddMember && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-lg p-4 max-w-md w-full max-h-[80vh] overflow-y-auto">
+          <div className="max-h-[80vh] w-full max-w-md min-w-0 overflow-y-auto rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Add Member to Group</h3>
               <Button variant="ghost" size="icon" onClick={() => setShowAddMember(false)}>
@@ -529,7 +529,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
       {/* Messages */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 sm:p-4"
         onScroll={handleScroll}
       >
         {isLoadingMoreMessages && (
@@ -584,12 +584,12 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
                     </AvatarFallback>
                   </Avatar>
                   <div
-                    className={`flex flex-col gap-1 max-w-[70%] ${
+                    className={`flex min-w-0 max-w-[82%] flex-col gap-1 sm:max-w-[70%] ${
                       isOwnMessage ? "items-end" : "items-start"
                     }`}
                   >
                     <div
-                      className={`rounded-lg px-4 py-2 group relative ${
+                      className={`group relative min-w-0 max-w-full rounded-lg px-3 py-2 sm:px-4 ${
                         isOwnMessage
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
@@ -612,7 +612,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
                       )}
                       
                       {editingMessageId === message.id ? (
-                        <div className="flex flex-col gap-2 min-w-[200px]">
+                        <div className="flex w-full min-w-0 flex-col gap-2 sm:min-w-[200px]">
                           <Input
                             value={editMessageContent}
                             onChange={(e) => setEditMessageContent(e.target.value)}
@@ -627,7 +627,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
                               }
                             }}
                           />
-                          <div className="flex justify-end gap-1">
+                          <div className="flex flex-wrap justify-end gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
@@ -697,4 +697,3 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
 };
 
 export default ConversationView;
-

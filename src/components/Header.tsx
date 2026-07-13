@@ -63,6 +63,7 @@ const Header = () => {
   const avatarUrl =
     profile?.avatar_url ??
     ((user?.user_metadata?.avatar_url as string | undefined) ?? "");
+  const resolvedAvatarUrl = avatarUrl.trim() || null;
 
   const secondaryIdentity =
     profile?.username
@@ -99,7 +100,7 @@ const Header = () => {
         onClick={() => setIsMobileMenuOpen(false)}
         className={({ isActive }) =>
           cn(
-            "gpe-pill flex items-center justify-between gap-3 text-left transition-all",
+            "gpe-pill flex min-w-0 items-center justify-between gap-3 text-left transition-all",
             mobile ? "w-full px-4 py-3 text-sm" : "w-full px-5 py-4 text-sm",
             isActive ? "bg-black text-white" : "bg-white hover:bg-pink-100",
           )
@@ -123,20 +124,20 @@ const Header = () => {
   return (
     <>
       <div className="sticky top-0 z-40 border-b-[3px] border-black bg-white md:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 sm:px-4">
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="flex items-center"
+            className="flex min-w-0 shrink items-center"
             aria-label="Go to dashboard"
           >
             <img
               src="/logo.png"
               alt="GPE Hub"
-              className="h-auto w-full max-w-[140px] object-contain"
+              className="h-auto w-full max-w-[120px] object-contain sm:max-w-[140px]"
             />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
             {user && <PointsBadge />}
             <Button
               type="button"
@@ -153,7 +154,7 @@ const Header = () => {
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
-          <div className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[320px] flex-col overflow-y-auto border-r-[3px] border-black bg-white p-4">
+          <div className="absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[3px] border-black bg-white p-3 sm:p-4">
             <div className="mb-6 flex items-center justify-between">
               <img
                 src="/logo.png"
@@ -185,8 +186,13 @@ const Header = () => {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="gpe-card-sm flex items-start gap-3 p-3"
               >
-                <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
-                  <AvatarImage src={avatarUrl} alt={displayName} />
+                <Avatar className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-black">
+                  <AvatarImage
+                    src={resolvedAvatarUrl || undefined}
+                    alt={displayName || "Profile photo"}
+                    className="h-full w-full object-cover"
+                    loading="eager"
+                  />
                   <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                     {userInitial}
                   </AvatarFallback>
@@ -195,7 +201,7 @@ const Header = () => {
                   <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
                     {displayName}
                   </div>
-                  <div className="truncate text-[11px] uppercase leading-tight text-black/60">
+                <div className="break-words text-[11px] uppercase leading-tight text-black/60">
                     {secondaryIdentity || "Profile"}
                   </div>
                 </div>
@@ -252,7 +258,7 @@ const Header = () => {
               <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
                 {displayName}
               </div>
-              <div className="truncate text-[11px] uppercase leading-tight text-black/60">
+              <div className="break-words text-[11px] uppercase leading-tight text-black/60">
                 {secondaryIdentity || "View Profile"}
               </div>
             </div>

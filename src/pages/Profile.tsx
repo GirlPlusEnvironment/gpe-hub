@@ -385,7 +385,7 @@ const Profile = () => {
                         {profileDisplayName}
                       </h2>
                       {profileSecondaryLine && (
-                        <p className="mt-2 max-w-full truncate text-sm text-muted-foreground">
+                        <p className="mt-2 max-w-full break-words text-sm text-muted-foreground">
                           {profileSecondaryLine}
                         </p>
                       )}
@@ -497,10 +497,10 @@ const Profile = () => {
                       </p>
                     </div>
 
-                    <div className="flex justify-end pt-4 border-t">
+                    <div className="flex justify-stretch border-t pt-4 sm:justify-end">
                       <Button 
                         type="submit" 
-                        className="gap-2" 
+                        className="w-full gap-2 sm:w-auto" 
                         disabled={isSaving}
                       >
                         {isSaving ? (

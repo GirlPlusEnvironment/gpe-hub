@@ -109,13 +109,42 @@ Deno.serve(async (req) => {
       return jsonResponse({ submissionId: submission.id, registrationState: "already_registered", message: "You’re already signed up for Camp GPE with this email.", ...publicConfig() }, 200, origin);
     }
 
-    const account = await resolveOrCreateAccount({
-      email,
-      firstName: String(fields.firstName),
-      lastName: String(fields.lastName),
-      phone: String(fields.phone || ""),
-      allowCreate: true
-    });
+    let account: Awaited<ReturnType<typeof resolveOrCreateAccount>>;
+    try {
+      account = await resolveOrCreateAccount({
+        email,
+        firstName: String(fields.firstName),
+        lastName: String(fields.lastName),
+        phone: String(fields.phone || ""),
+        allowCreate: true
+      });
+    } catch (error) {
+      await createRegistration(email, null);
+      await upsertSeasonMember({ seasonId: season.id, email, neonAccountId: null });
+      await updateFormSubmission(String(submission.id), {
+        submission_status: "requires_manual_review",
+        neon_sync_status: "failed",
+        neon_account_id: null,
+        membership_outcome: "lookup_failed",
+        last_error_summary: safeError(error)
+      });
+      await logSync({
+        submissionId: String(submission.id),
+        integration: "neon",
+        operation: "camp_gpe_account_resolution",
+        success: false,
+        errorSummary: safeError(error)
+      });
+      console.error("camp-gpe-submit account resolution failed", safeError(error));
+      return jsonResponse({
+        submissionId: submission.id,
+        registrationState: "registration_saved_pending_review",
+        membershipOutcome: "lookup_failed",
+        partialSuccess: true,
+        message: "Your Camp GPE registration is saved. Team GPE may review membership or Hub activation details.",
+        ...publicConfig()
+      }, 200, origin);
+    }
     if (account.status === "ambiguous") {
       await updateFormSubmission(String(submission.id), { submission_status: "requires_manual_review", membership_outcome: "ambiguous_account" });
       return jsonResponse({ submissionId: submission.id, registrationState: "registration_status_unknown", membershipOutcome: "ambiguous_account", ...publicConfig() }, 200, origin);

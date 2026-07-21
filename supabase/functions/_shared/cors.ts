@@ -1,10 +1,17 @@
 declare const Deno: { env: { get(name: string): string | undefined } };
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://www.girlplusenvironment.org",
+  "https://girlplusenvironment.org",
+  "https://www-girlplusenvironment-org.filesusr.com"
+];
+
 export function allowedOrigins() {
-  return (Deno.env.get("ALLOWED_FORM_ORIGINS") || Deno.env.get("ALLOWED_HUB_ORIGINS") || "")
+  const configured = (Deno.env.get("ALLOWED_FORM_ORIGINS") || Deno.env.get("ALLOWED_HUB_ORIGINS") || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  return Array.from(new Set([...configured, ...DEFAULT_ALLOWED_ORIGINS]));
 }
 
 export function corsHeaders(origin: string | null): HeadersInit {

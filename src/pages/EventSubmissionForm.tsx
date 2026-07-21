@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { supabase } from "@/lib/supabaseClient";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
-import { awardPoints } from "@/lib/points";
 import { validateListingContent } from "@/lib/listings";
 import { Calendar, MapPin, Clock, Link, FileText, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -101,7 +100,6 @@ export default function EventSubmissionForm() {
       newErrors.registrationUrl = "Registration URL is required.";
     } else {
       try {
-        // eslint-disable-next-line no-new
         new URL(form.registrationUrl);
       } catch {
         newErrors.registrationUrl = "Please enter a valid registration URL (include https://).";
@@ -141,7 +139,7 @@ export default function EventSubmissionForm() {
       image_url: form.image,
       tags: [],
       submitted_by: user.id,
-      status: "published",
+      status: "pending_review",
       metadata: {
         organizer: form.organizer,
         event_type: form.eventType,
@@ -157,10 +155,10 @@ export default function EventSubmissionForm() {
     // Validate content before inserting
     try {
       validateListingContent(eventData);
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your content contains inappropriate language. Please revise and try again.",
+        description: validationError instanceof Error ? validationError.message : "Your content contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -180,16 +178,9 @@ export default function EventSubmissionForm() {
       // Clear the draft after successful submission
       localStorage.removeItem(STORAGE_KEY);
       
-      // Award points for listing submission
-      try {
-        await awardPoints(user.id, 3);
-      } catch (pointsError) {
-        console.error("Failed to award points for listing submission", pointsError);
-      }
-      
       toast({
-        title: "Event posted!",
-        description: "Your event has been successfully submitted.",
+        title: "Event submitted!",
+        description: "Your event is under Team GPE review.",
       });
       navigate(`/listing/${newListingId}`);
     }

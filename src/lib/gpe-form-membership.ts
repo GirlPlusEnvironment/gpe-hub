@@ -30,6 +30,12 @@ export function isValidEmail(value: string) {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
 }
 
+function assertAbsoluteFunctionUrl(functionUrl: string) {
+  if (/^https?:\/\//i.test(functionUrl)) return functionUrl;
+  console.error("GPE endpoint could not be resolved because functionBaseUrl is missing:", functionUrl);
+  return "";
+}
+
 export async function checkGpeMembership(input: {
   functionUrl: string;
   email: string;
@@ -48,7 +54,20 @@ export async function checkGpeMembership(input: {
     };
   }
 
-  const response = await fetch(input.functionUrl, {
+  const endpoint = assertAbsoluteFunctionUrl(input.functionUrl);
+  if (!endpoint) {
+    return {
+      matched: false,
+      isActiveMember: false,
+      neonAccountId: null,
+      membershipStatus: null,
+      hubAccess: "unknown",
+      outcome: "lookup_failed"
+    };
+  }
+
+  console.log("Calling endpoint:", endpoint);
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

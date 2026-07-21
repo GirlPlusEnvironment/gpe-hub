@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
-import { awardPoints } from "@/lib/points";
 import { validateListingContent } from "@/lib/listings";
 import { Building, MapPin, Briefcase, DollarSign, Clock, Mail, Link, FileText, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -120,7 +119,6 @@ export default function JobSubmissionForm() {
       newErrors.applicationUrl = "Application URL is required.";
     } else {
       try {
-        // eslint-disable-next-line no-new
         new URL(form.applicationUrl);
       } catch {
         newErrors.applicationUrl = "Please enter a valid application URL (include https://).";
@@ -153,7 +151,7 @@ export default function JobSubmissionForm() {
       image_url: form.image,
       location: form.state,
       tags: [],
-      status: "published",
+      status: "pending_review",
       submitted_by: user.id,
       metadata: {
         location: form.state,
@@ -178,10 +176,10 @@ export default function JobSubmissionForm() {
     // Validate content before inserting
     try {
       validateListingContent(jobData);
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your content contains inappropriate language. Please revise and try again.",
+        description: validationError instanceof Error ? validationError.message : "Your content contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -198,16 +196,9 @@ export default function JobSubmissionForm() {
       localStorage.removeItem(STORAGE_KEY);
       setErrors({});
       
-      // Award points for listing submission
-      try {
-        await awardPoints(user.id, 3);
-      } catch (pointsError) {
-        console.error("Failed to award points for listing submission", pointsError);
-      }
-      
       toast({
-        title: "Job posted!",
-        description: "Your job listing has been successfully submitted.",
+        title: "Job submitted!",
+        description: "Your job listing is under Team GPE review.",
       });
       navigate(`/listing/${newListingId}`);
     }

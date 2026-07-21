@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { supabase } from "@/lib/supabaseClient";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
-import { awardPoints } from "@/lib/points";
 import { validateListingContent } from "@/lib/listings";
 import { DollarSign, Building, Calendar, Link, FileText, CheckCircle2, Loader2, Info } from "lucide-react";
 
@@ -134,7 +133,7 @@ export default function FundingSubmissionForm() {
       image_url: form.image,
       tags: [],
       submitted_by: user.id,
-      status: "published",
+      status: "pending_review",
       metadata: {
         organizer: form.source,
         source: form.source,
@@ -153,10 +152,10 @@ export default function FundingSubmissionForm() {
     // Validate content before inserting
     try {
       validateListingContent(fundingData);
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your content contains inappropriate language. Please revise and try again.",
+        description: validationError instanceof Error ? validationError.message : "Your content contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -175,15 +174,9 @@ export default function FundingSubmissionForm() {
       const newListingId = insertData[0].id;
       localStorage.removeItem(STORAGE_KEY);
       
-      try {
-        await awardPoints(user.id, 3);
-      } catch (pointsError) {
-        console.error("Failed to award points for listing submission", pointsError);
-      }
-      
       toast({
-        title: "Funding opportunity posted!",
-        description: "Your funding opportunity has been successfully submitted.",
+        title: "Funding opportunity submitted!",
+        description: "Your funding opportunity is under Team GPE review.",
       });
       navigate(`/listing/${newListingId}`);
     }

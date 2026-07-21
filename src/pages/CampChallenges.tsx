@@ -90,20 +90,6 @@ export default function CampChallenges() {
       setError("Your Hub profile needs an email address before you can submit a Camp challenge.");
       return;
     }
-    if (selected.length === 0 && !otherSelected) {
-      setError("Select at least one challenge or choose Other.");
-      return;
-    }
-    if (otherSelected && !otherAction.trim()) {
-      setError("Describe your Other action before submitting.");
-      return;
-    }
-
-    const selectedChallenges = challenges.filter((challenge) => selected.includes(challenge.id));
-    if (selectedChallenges.some((challenge) => challenge.requires_proof) && !proof.trim()) {
-      setError("Proof is required for one or more selected challenges.");
-      return;
-    }
 
     setSubmitting(true);
     try {
@@ -126,7 +112,7 @@ export default function CampChallenges() {
       });
       if (invokeError) throw invokeError;
       if (!data?.ok && !data?.duplicate) throw new Error(data?.message || "Challenge submission failed.");
-      setSuccess(data.message || "Your Camp GPE challenge was submitted.");
+      setSuccess(data.message || "Your submission has been received and will be reviewed by Team GPE. Approved actions will be added to your points.");
       setSelected([]);
       setProof("");
       setNotes("");
@@ -189,7 +175,7 @@ export default function CampChallenges() {
                 <CardHeader>
                   <CardTitle>Active Challenges</CardTitle>
                   <CardDescription>
-                    Select each action you completed. Completion limits are enforced again on the server.
+                    Select actions when they fit what you completed. Team GPE can classify or adjust submissions during review.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -217,7 +203,7 @@ export default function CampChallenges() {
                           {challenge.short_description && <span className="mt-1 block text-sm font-bold text-black/70">{challenge.short_description}</span>}
                           <span className="mt-2 flex flex-wrap gap-2">
                             <Badge>{challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}</Badge>
-                            <Badge variant="outline">{challenge.requires_proof ? "Proof required" : "No proof required"}</Badge>
+                            <Badge variant="outline">Proof optional</Badge>
                             {limitReached && <Badge variant="outline">Completed</Badge>}
                           </span>
                           {challenge.action_url && (
@@ -242,7 +228,7 @@ export default function CampChallenges() {
               <Card>
                 <CardHeader>
                   <CardTitle>Proof and Notes</CardTitle>
-                  <CardDescription>Paste links to screenshots, posts, or files when proof is required.</CardDescription>
+                  <CardDescription>Share whatever context you have. Missing links or details will not block review.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Textarea value={proof} onChange={(event) => setProof(event.target.value)} placeholder="https://..." />

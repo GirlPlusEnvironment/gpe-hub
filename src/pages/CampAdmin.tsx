@@ -7,21 +7,41 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   type CampSeason,
   type CampSeasonMember,
   type CampSubmission,
   addManualCampPoints,
+  associateCampSubmissionMember,
   approveCampSubmissionAction,
   getActiveCampSeason,
   getPendingCampSubmissions,
   markCampSubmissionAction,
+  reopenCampSubmissionAction,
   searchSeasonMembers,
+  updateCampSubmissionActionReview,
 } from "@/lib/camp";
+
+type ReviewFilter = "pending" | "approved" | "needs_information" | "rejected" | "all";
+
+const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "needs_information", label: "Needs follow-up" },
+  { value: "rejected", label: "Rejected" },
+  { value: "all", label: "All submissions" },
+];
+
+function submissionSource(submission: CampSubmission, fields: Record<string, unknown>) {
+  const payload = submission.submitted_payload as (CampSubmission["submitted_payload"] & { source?: unknown }) | null;
+  return String(payload?.source || fields.sourcePage || "Camp challenge form");
+}
 
 export default function CampAdmin() {
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<CampSeasonMember[]>([]);
   const [manualPoints, setManualPoints] = useState("10");
@@ -82,6 +102,61 @@ export default function CampAdmin() {
     }
   }
 
+  async function handleUpdateAction(actionId: string, defaultPoints: number | null) {
+    const challengeId = prompt("Challenge ID to associate? Leave blank to keep current challenge.", "") || "";
+    const otherDescription = prompt("Action description? Leave blank to keep current description.", "") || "";
+    const pointsInput = prompt("Suggested points for approval?", String(defaultPoints ?? 0));
+    const requestedPoints = pointsInput === null || pointsInput.trim() === "" ? null : Number(pointsInput);
+    if (requestedPoints !== null && !Number.isFinite(requestedPoints)) return;
+    const notes = prompt("Internal reviewer notes?", "") || "";
+    setBusyId(actionId);
+    setError(null);
+    try {
+      await updateCampSubmissionActionReview({
+        actionId,
+        challengeId: challengeId.trim() || null,
+        otherDescription: otherDescription.trim() || null,
+        requestedPoints,
+        notes,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update submission action.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleAssociateSubmission(submissionId: string) {
+    const seasonMemberId = prompt("Season member ID to associate with this submission?", "");
+    if (!seasonMemberId?.trim()) return;
+    const notes = prompt("Association notes?", "") || "";
+    setBusyId(submissionId);
+    setError(null);
+    try {
+      await associateCampSubmissionMember({ submissionId, seasonMemberId: seasonMemberId.trim(), notes });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not associate submission with member.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReopenAction(actionId: string) {
+    const notes = prompt("Why reopen this submission action?", "Reopened for review") || "";
+    setBusyId(actionId);
+    setError(null);
+    try {
+      await reopenCampSubmissionAction({ actionId, notes });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reopen submission action.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleSearch() {
     if (!season) return;
     setError(null);
@@ -115,6 +190,13 @@ export default function CampAdmin() {
       setBusyId(null);
     }
   }
+
+  const visibleSubmissions = submissions.filter((submission) => {
+    if (reviewFilter === "all") return true;
+    const actions = submission.gpe_camp_submission_actions || [];
+    if (actions.length === 0) return reviewFilter === "pending" && submission.review_status === "pending";
+    return actions.some((action) => action.review_status === reviewFilter);
+  });
 
   return (
     <div className="gpe-page">
@@ -159,12 +241,27 @@ export default function CampAdmin() {
               <Card>
                 <CardHeader>
                   <CardTitle>Submission Review</CardTitle>
-                  <CardDescription>{season.name}. Pending and reviewed submissions are shown together for audit visibility.</CardDescription>
+                  <CardDescription>{season.name}. Points are awarded only after Team GPE approval.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {submissions.length === 0 ? (
+                  <div className="flex flex-wrap gap-2" role="tablist" aria-label="Submission review filters">
+                    {reviewFilters.map((filter) => (
+                      <Button
+                        key={filter.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={reviewFilter === filter.value}
+                        variant={reviewFilter === filter.value ? "default" : "outline"}
+                        onClick={() => setReviewFilter(filter.value)}
+                      >
+                        {filter.label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {visibleSubmissions.length === 0 ? (
                     <p className="text-sm font-bold text-black/60">No challenge submissions yet.</p>
-                  ) : submissions.map((submission) => {
+                  ) : visibleSubmissions.map((submission) => {
                     const fields = submission.submitted_payload?.fields || {};
                     const actions = submission.gpe_camp_submission_actions || [];
                     return (
@@ -173,11 +270,27 @@ export default function CampAdmin() {
                           <div className="min-w-0">
                             <div className="text-lg font-black">{submission.challenge_key.replaceAll("_", " ")}</div>
                             <div className="text-sm font-bold text-black/60">{submission.contact_email}</div>
-                            <div className="mt-2 text-xs font-bold uppercase text-black/50">{submission.review_status}</div>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold uppercase">
+                              <Badge variant="outline">{submission.review_status.replaceAll("_", " ")}</Badge>
+                              <Badge variant={submission.member_link_status === "linked" ? "default" : "outline"}>
+                                {submission.member_link_status === "linked" ? "Member linked" : "Identity pending"}
+                              </Badge>
+                              {submission.user_id ? <Badge variant="outline">Hub profile linked</Badge> : null}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" disabled={busyId === submission.id} onClick={() => handleAssociateSubmission(submission.id)}>
+                              Associate Member
+                            </Button>
                           </div>
                         </div>
                         <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                          <div><span className="font-black">Name:</span> {[fields.firstName, fields.lastName].filter(Boolean).join(" ") || "Not provided"}</div>
+                          <div><span className="font-black">Hub profile:</span> {submission.user_id || "Not linked"}</div>
+                          <div><span className="font-black">Neon account:</span> {submission.neon_account_id || "Not linked"}</div>
                           <div><span className="font-black">Actions:</span> {Array.isArray(fields.actions) ? fields.actions.join(", ") : String(fields.actions || "None listed")}</div>
+                          <div><span className="font-black">Member description:</span> {String(fields.otherAction || fields.notes || "Not provided")}</div>
+                          <div><span className="font-black">Source page:</span> {submissionSource(submission, fields)}</div>
                           <div><span className="font-black">Submitted:</span> {new Date(submission.created_at).toLocaleString()}</div>
                         </div>
                         <div className="mt-4 space-y-3">
@@ -197,11 +310,12 @@ export default function CampAdmin() {
                                   <div>
                                     <div className="font-black">{title}</div>
                                     <div className="mt-1 text-xs font-bold uppercase text-black/60">
-                                      {action.review_status.replaceAll("_", " ")} · {defaultPoints} point{defaultPoints === 1 ? "" : "s"}
+                                      {action.review_status.replaceAll("_", " ")} · suggested {defaultPoints} point{defaultPoints === 1 ? "" : "s"}
+                                      {action.approved_points !== null ? ` · awarded ${action.approved_points}` : ""}
                                     </div>
                                     {challenge && (
                                       <div className="mt-1 text-xs font-bold text-black/60">
-                                        {challenge.requires_proof ? "Proof required" : "Proof optional"} · {challenge.auto_approve ? "Auto approval allowed" : "Team review"}
+                                        {challenge.category} · Team review
                                       </div>
                                     )}
                                   </div>
@@ -210,9 +324,13 @@ export default function CampAdmin() {
                                       <Trophy className="mr-2 h-4 w-4" />
                                       Approve
                                     </Button>
+                                    <Button size="sm" variant="outline" disabled={busyId === action.id || action.review_status === "approved"} onClick={() => handleUpdateAction(action.id, defaultPoints)}>Edit</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "needs_information")}>Needs Info</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "duplicate")}>Duplicate</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "rejected")}>Reject</Button>
+                                    {action.review_status !== "pending" && (
+                                      <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleReopenAction(action.id)}>Reopen</Button>
+                                    )}
                                   </div>
                                 </div>
                                 {proofUrls.length > 0 && (

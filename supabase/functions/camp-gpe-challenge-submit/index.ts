@@ -40,11 +40,11 @@ function unauthorized(origin: string | null, message = "Sign in to the GPE Hub b
   return jsonResponse({ ok: false, message }, 401, origin);
 }
 
-async function requireAuthenticatedUser(req: Request, origin: string | null): Promise<AuthUser> {
+async function authenticatedUser(req: Request, origin: string | null): Promise<AuthUser | null> {
   const header = req.headers.get("authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1]?.trim();
-  if (!token) throw unauthorized(origin);
+  if (!token) return null;
 
   const base = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -176,11 +176,13 @@ async function completionCount(params: { seasonMemberId: string; challengeId: st
 async function createReviewSubmission(params: {
   formSubmissionId: string;
   seasonId: string;
-  seasonMemberId: string;
+  seasonMemberId: string | null;
   userId: string | null;
   neonAccountId: string | null;
   email: string;
   fields: Record<string, unknown>;
+  authUserId: string | null;
+  memberLinkStatus: "linked" | "pending_reconciliation";
 }) {
   const res = await supabaseFetch("gpe_camp_challenge_submissions", {
     method: "POST",
@@ -195,7 +197,9 @@ async function createReviewSubmission(params: {
       challenge_key: "multi_action",
       submitted_payload: { fields: params.fields },
       proof_links: proofLinks(params.fields),
-      review_status: "pending"
+      review_status: "pending",
+      authenticated_user_id: params.authUserId,
+      member_link_status: params.memberLinkStatus
     })
   });
   if (!res.ok) throw new Error("Could not save Camp GPE challenge for review.");
@@ -229,24 +233,14 @@ async function createSubmissionAction(params: {
   return rows[0] as { id: string; review_status: string; requested_points: number | null };
 }
 
-async function autoApproveAction(actionId: string) {
-  const res = await supabaseFetch("rpc/auto_approve_camp_submission_action", {
-    method: "POST",
-    body: JSON.stringify({ p_action_id: actionId })
-  });
-  if (!res.ok) throw new Error("Automatic point award failed.");
-  const rows = await res.json();
-  return Array.isArray(rows) ? rows[0] : rows;
-}
-
-function preferredName(fields: Record<string, unknown>, profile: Awaited<ReturnType<typeof profileByUserId>>, authUser: AuthUser, key: "firstName" | "lastName") {
+function preferredName(fields: Record<string, unknown>, profile: Awaited<ReturnType<typeof profileByUserId>>, authUser: AuthUser | null, key: "firstName" | "lastName") {
   const fieldValue = sanitizeText(fields[key], 120);
   if (fieldValue) return fieldValue;
   const profileKey = key === "firstName" ? "first_name" : "last_name";
   const profileValue = sanitizeText(profile?.[profileKey], 120);
   if (profileValue) return profileValue;
   const metaKey = key === "firstName" ? "first_name" : "last_name";
-  return sanitizeText(authUser.user_metadata?.[metaKey], 120);
+  return sanitizeText(authUser?.user_metadata?.[metaKey], 120);
 }
 
 Deno.serve(async (req) => {
@@ -255,21 +249,15 @@ Deno.serve(async (req) => {
     assertAllowedOrigin(origin);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (req.method !== "POST") return jsonResponse({ message: "Method not allowed." }, 405, origin);
-    const authUser = await requireAuthenticatedUser(req, origin);
-
     const body = await readJson(req);
     const idempotencyKey = validateIdempotencyKey(req.headers.get("idempotency-key") || body.idempotencyKey);
     const fields = validateFields((body.fields || {}) as Record<string, unknown>, CHALLENGE_FIELDS);
     const submittedEmail = String(fields.email).toLowerCase();
-    const email = authUser.email;
-    if (submittedEmail && submittedEmail !== email) {
-      throw new ValidationError("Sign in with the same email used on the challenge form.");
-    }
+    const authUser = await authenticatedUser(req, origin);
+    const email = authUser?.email || submittedEmail;
     const selectedChallengeIds = Array.isArray(fields.challengeIds) ? fields.challengeIds.map(String) : [];
     const wantsOther = Array.isArray(fields.actions) && fields.actions.includes("other");
     const otherDescription = String(fields.otherAction || "").trim();
-    if (wantsOther && !otherDescription) throw new ValidationError("Please describe your other action.");
-    if (selectedChallengeIds.length === 0 && !wantsOther) throw new ValidationError("Select at least one challenge or describe an other action.");
 
     const { submission, duplicate } = await createFormSubmission({
       idempotencyKey,
@@ -281,57 +269,60 @@ Deno.serve(async (req) => {
     });
     if (duplicate) return jsonResponse({ duplicate: true, submissionId: submission.id, ...publicConfig() }, 200, origin);
 
-    const profile = await profileByUserId(authUser.id);
+    const profile = authUser ? await profileByUserId(authUser.id) : null;
     const firstName = preferredName(fields, profile, authUser, "firstName");
     const lastName = preferredName(fields, profile, authUser, "lastName");
-    const membership = await resolveMembership({
-      email,
-      firstName,
-      lastName,
-      neonAccountId: profile?.neon_account_id || undefined
-    });
-    if (membership.outcome === "ambiguous_account" || membership.requiresManualReview) {
-      await updateFormSubmission(String(submission.id), { submission_status: "requires_manual_review", membership_outcome: "ambiguous_account" });
-      return jsonResponse({ ok: false, submissionId: submission.id, membershipOutcome: "ambiguous_account", message: "Team GPE needs to review your membership connection before this challenge can affect points.", ...publicConfig() }, 409, origin);
+    let membership: Awaited<ReturnType<typeof resolveMembership>> | null = null;
+    try {
+      membership = await resolveMembership({
+        email,
+        firstName,
+        lastName,
+        neonAccountId: profile?.neon_account_id || undefined
+      });
+      if (membership.neonAccountId) {
+        await createActivity({
+          neonAccountId: membership.neonAccountId,
+          subject: "Camp GPE Challenge Submission",
+          type: "Camp GPE",
+          note: { formKey: FORM_KEY, fields }
+        });
+        await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: true });
+      }
+    } catch (error) {
+      await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: false, errorSummary: safeError(error) });
     }
-    if (!membership.isActiveMember || !membership.neonAccountId) {
-      await updateFormSubmission(String(submission.id), { submission_status: "rejected", membership_outcome: membership.outcome });
-      return jsonResponse({ ok: false, submissionId: submission.id, membershipOutcome: membership.outcome, message: "An active GPE membership connected to your Hub account is required before submitting a Camp challenge.", ...publicConfig() }, 403, origin);
-    }
-
-    await createActivity({
-      neonAccountId: membership.neonAccountId,
-      subject: "Camp GPE Challenge Submission",
-      type: "Camp GPE",
-      note: { formKey: FORM_KEY, fields }
-    });
-    await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: true });
 
     const season = await activeSeason();
-    const member = await seasonMember(season.id, authUser.id, email, membership.neonAccountId);
+    let member: { id: string; user_id: string | null } | null = null;
+    const canLinkMember = Boolean(authUser?.id && membership?.isActiveMember && membership?.neonAccountId);
+    if (canLinkMember && authUser) {
+      try {
+        member = await seasonMember(season.id, authUser.id, email, membership?.neonAccountId || null);
+      } catch (error) {
+        await logSync({ submissionId: String(submission.id), integration: "camp", operation: "season_member_link", success: false, errorSummary: safeError(error) });
+      }
+    }
     const challenges = await loadChallenges(season.id, selectedChallengeIds);
-    if (challenges.length !== selectedChallengeIds.length) throw new ValidationError("One or more selected challenges are unavailable.");
     const submittedProofLinks = proofLinks(fields);
-    const missingProof = challenges.find((challenge) => challenge.requires_proof && submittedProofLinks.length === 0);
-    if (missingProof) throw new ValidationError(`Proof is required for ${missingProof.title}.`);
 
     const reviewSubmission = await createReviewSubmission({
       formSubmissionId: String(submission.id),
       seasonId: season.id,
-      seasonMemberId: member.id,
-      userId: member.user_id,
-      neonAccountId: membership.neonAccountId,
+      seasonMemberId: member?.id || null,
+      userId: member?.user_id || authUser?.id || null,
+      neonAccountId: membership?.neonAccountId || null,
       email,
-      fields
+      fields,
+      authUserId: authUser?.id || null,
+      memberLinkStatus: member?.id ? "linked" : "pending_reconciliation"
     });
-    const actionResults: Array<{ id: string; status: string; points?: number }> = [];
-    let awardedPoints = 0;
-    let approvedActions = 0;
+    const actionResults: Array<{ id: string; status: string }> = [];
     let pendingActions = 0;
 
     for (const challenge of challenges) {
-      const completed = await completionCount({ seasonMemberId: member.id, challengeId: challenge.id });
-      const limitReached = completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0);
+      const completed = member?.id ? await completionCount({ seasonMemberId: member.id, challengeId: challenge.id }) : 0;
+      const limitReached = Boolean(member?.id) && (completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0));
       const action = await createSubmissionAction({
         submissionId: reviewSubmission.id,
         challenge,
@@ -342,28 +333,15 @@ Deno.serve(async (req) => {
         actionResults.push({ id: action.id, status: "duplicate" });
         continue;
       }
-      if (challenge.auto_approve && !challenge.requires_review && !challenge.requires_proof && challenge.point_value !== null) {
-        try {
-          await autoApproveAction(action.id);
-          awardedPoints += challenge.point_value;
-          approvedActions += 1;
-          actionResults.push({ id: action.id, status: "approved", points: challenge.point_value });
-        } catch (error) {
-          pendingActions += 1;
-          await logSync({ submissionId: String(submission.id), integration: "camp", operation: "auto_approve", success: false, errorSummary: safeError(error) });
-          actionResults.push({ id: action.id, status: "pending" });
-        }
-      } else {
-        pendingActions += 1;
-        actionResults.push({ id: action.id, status: "pending" });
-      }
+      pendingActions += 1;
+      actionResults.push({ id: action.id, status: "pending" });
     }
 
-    if (wantsOther) {
+    if (wantsOther || challenges.length === 0) {
       const action = await createSubmissionAction({
         submissionId: reviewSubmission.id,
         challenge: null,
-        otherDescription,
+        otherDescription: otherDescription || "Unspecified member action",
         proofUrls: submittedProofLinks,
         status: "pending"
       });
@@ -372,29 +350,25 @@ Deno.serve(async (req) => {
     }
 
     await updateFormSubmission(String(submission.id), {
-      submission_status: pendingActions > 0 && approvedActions > 0 ? "partial_failure" : "completed",
-      neon_sync_status: "succeeded",
-      neon_account_id: membership.neonAccountId,
-      membership_outcome: membership.outcome
+      submission_status: "requires_manual_review",
+      neon_sync_status: membership?.neonAccountId ? "succeeded" : "skipped",
+      neon_account_id: membership?.neonAccountId || null,
+      membership_outcome: membership?.outcome || "not_checked"
     });
     return jsonResponse({
       ok: true,
       submissionId: submission.id,
       reviewSubmissionId: reviewSubmission?.id,
-      status: approvedActions > 0 && pendingActions > 0 ? "partial" : approvedActions > 0 ? "approved" : "pending",
-      awardedPoints,
+      status: "pending",
+      awardedPoints: 0,
       pendingActions,
-      approvedActions,
+      approvedActions: 0,
       actions: actionResults,
-      memberLinked: Boolean(member.id),
-      membershipOutcome: membership.outcome,
-      partialSuccess: pendingActions > 0 && approvedActions > 0,
+      memberLinked: Boolean(member?.id),
+      membershipOutcome: membership?.outcome || "not_checked",
+      partialSuccess: false,
       leaderboardUrl: "https://members.girlplusenvironment.org/leaderboard",
-      message: approvedActions > 0 && pendingActions > 0
-        ? `You earned ${awardedPoints} points, and ${pendingActions} action${pendingActions === 1 ? " is" : "s are"} still under review.`
-        : approvedActions > 0
-          ? `Challenge approved! You earned ${awardedPoints} points.`
-          : "Your challenge was submitted for Team GPE review.",
+      message: "Your submission has been received and will be reviewed by Team GPE. Approved actions will be added to your points.",
       ...publicConfig()
     }, 200, origin);
   } catch (error) {

@@ -45,7 +45,7 @@ export type MembershipLookupInput = {
   neonAccountId?: string;
 };
 
-const NEON_BASE_URL = Deno.env.get("NEON_BASE_URL") || "https://api.neoncrm.com/v2";
+const NEON_BASE_URL = Deno.env.get("NEON_API_BASE_URL") || Deno.env.get("NEON_BASE_URL") || "https://api.neoncrm.com/v2";
 const NEON_API_VERSION = Deno.env.get("NEON_API_VERSION") || "2.11";
 
 export function normalizeEmail(value: unknown): string {

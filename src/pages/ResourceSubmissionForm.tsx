@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { supabase } from "@/lib/supabaseClient";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
-import { awardPoints } from "@/lib/points";
 import { validateListingContent } from "@/lib/listings";
 import { BookOpen, FolderOpen, Link, FileText, CheckCircle2, Loader2, Info } from "lucide-react";
 
@@ -113,7 +112,7 @@ export default function ResourceSubmissionForm() {
       description: form.description,
       tags: [],
       submitted_by: user.id,
-      status: "published",
+      status: "pending_review",
       metadata: {
         source: form.source,
         resource_category: form.resourceCategory,
@@ -128,10 +127,10 @@ export default function ResourceSubmissionForm() {
     // Validate content before inserting
     try {
       validateListingContent(resourceData);
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your content contains inappropriate language. Please revise and try again.",
+        description: validationError instanceof Error ? validationError.message : "Your content contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -150,15 +149,9 @@ export default function ResourceSubmissionForm() {
       const newListingId = insertData[0].id;
       localStorage.removeItem(STORAGE_KEY);
       
-      try {
-        await awardPoints(user.id, 3);
-      } catch (pointsError) {
-        console.error("Failed to award points for listing submission", pointsError);
-      }
-      
       toast({
-        title: "Resource posted!",
-        description: "Your resource has been successfully submitted.",
+        title: "Resource submitted!",
+        description: "Your resource is under Team GPE review.",
       });
       navigate(`/listing/${newListingId}`);
     }

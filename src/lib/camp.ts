@@ -96,6 +96,7 @@ export type CampSubmission = {
   season_id: string;
   season_member_id: string | null;
   user_id: string | null;
+  neon_account_id: string | null;
   contact_email: string;
   challenge_key: string;
   submitted_payload: { fields?: Record<string, unknown> } | null;
@@ -103,6 +104,9 @@ export type CampSubmission = {
   review_status: "pending" | "approved" | "rejected" | "needs_info";
   reviewed_by: string | null;
   reviewed_at: string | null;
+  member_link_status?: string | null;
+  member_link_notes?: string | null;
+  authenticated_user_id?: string | null;
   created_at: string;
   gpe_camp_submission_actions?: CampSubmissionAction[];
 };
@@ -128,13 +132,24 @@ export type CampPointsLedgerRow = {
 };
 
 export async function getActiveCampSeason() {
-  const { data, error } = await supabase
+  const { data: active, error: activeError } = await supabase
+    .from("gpe_seasons")
+    .select("id,slug,name,description,status,is_visible")
+    .eq("status", "active")
+    .eq("is_visible", true)
+    .order("starts_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  if (activeError) throw activeError;
+  if (active) return active as CampSeason;
+
+  const { data: campFallback, error: fallbackError } = await supabase
     .from("gpe_seasons")
     .select("id,slug,name,description,status,is_visible")
     .eq("slug", "camp-gpe-2026")
     .maybeSingle();
-  if (error) throw error;
-  return data as CampSeason | null;
+  if (fallbackError) throw fallbackError;
+  return campFallback as CampSeason | null;
 }
 
 export async function getCampLeaderboard(seasonId: string, limit = 50) {
@@ -157,7 +172,24 @@ export async function getHubCampChallenges(seasonId: string) {
     .order("display_order", { ascending: true })
     .order("title", { ascending: true });
   if (error) throw error;
-  return (data || []) as CampChallenge[];
+  return (data || []).map((challenge) => ({
+    ...challenge,
+    action_url: canonicalCampActionUrl(challenge.action_url),
+  })) as CampChallenge[];
+}
+
+export function canonicalCampActionUrl(url: string | null | undefined) {
+  if (!url) return null;
+  if (/actionnetwork\.org\/letters\/tell-congress-we-need-relief-from-high-energy-bills-partner/i.test(url)) {
+    return "https://www.girlplusenvironment.org/high-energy-bills-action";
+  }
+  if (/actionnetwork\.org\/petitions\/stop-trumps-700-million-coal-slush-fund-partner/i.test(url)) {
+    return "https://www.girlplusenvironment.org/coal-slush-fund-action";
+  }
+  if (/actionnetwork\.org\/letters\/extreme-weather-puts-our-communities-at-risk-its-time-for-bold-climate-action-2/i.test(url)) {
+    return "https://www.girlplusenvironment.org/extreme-weather-action";
+  }
+  return url;
 }
 
 export async function getMyCampStatus(seasonId: string) {
@@ -266,6 +298,47 @@ export async function markCampSubmissionAction(params: {
   const { error } = await supabase.rpc("mark_camp_submission_action", {
     p_action_id: params.actionId,
     p_status: params.status,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function associateCampSubmissionMember(params: {
+  submissionId: string;
+  seasonMemberId: string;
+  notes?: string | null;
+}) {
+  const { error } = await supabase.rpc("associate_camp_submission_member", {
+    p_submission_id: params.submissionId,
+    p_season_member_id: params.seasonMemberId,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function updateCampSubmissionActionReview(params: {
+  actionId: string;
+  challengeId?: string | null;
+  otherDescription?: string | null;
+  requestedPoints?: number | null;
+  notes?: string | null;
+}) {
+  const { error } = await supabase.rpc("update_camp_submission_action_review", {
+    p_action_id: params.actionId,
+    p_challenge_id: params.challengeId ?? null,
+    p_other_description: params.otherDescription ?? null,
+    p_requested_points: params.requestedPoints ?? null,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function reopenCampSubmissionAction(params: {
+  actionId: string;
+  notes?: string | null;
+}) {
+  const { error } = await supabase.rpc("reopen_camp_submission_action", {
+    p_action_id: params.actionId,
     p_notes: params.notes ?? null,
   });
   if (error) throw error;

@@ -11,12 +11,18 @@ declare const Deno: {
 };
 
 const MAX_BODY_BYTES = 20_000;
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://www.girlplusenvironment.org",
+  "https://girlplusenvironment.org",
+  "https://www-girlplusenvironment-org.filesusr.com"
+];
 
 function allowedOrigins(): string[] {
-  return (Deno.env.get("ALLOWED_HUB_ORIGINS") || Deno.env.get("ALLOWED_FORM_ORIGINS") || "")
+  const configured = (Deno.env.get("ALLOWED_HUB_ORIGINS") || Deno.env.get("ALLOWED_FORM_ORIGINS") || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  return Array.from(new Set([...configured, ...DEFAULT_ALLOWED_ORIGINS]));
 }
 
 function corsHeaders(origin: string | null): HeadersInit {

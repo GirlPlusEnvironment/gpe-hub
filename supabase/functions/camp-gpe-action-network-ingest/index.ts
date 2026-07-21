@@ -208,16 +208,6 @@ async function createSubmissionAction(params: { submissionId: string; challenge:
   return rows[0] as { id: string };
 }
 
-async function autoApproveAction(actionId: string) {
-  const res = await supabaseFetch("rpc/auto_approve_camp_submission_action", {
-    method: "POST",
-    body: JSON.stringify({ p_action_id: actionId })
-  });
-  if (!res.ok) throw new Error("Automatic petition point award failed.");
-  const rows = await res.json();
-  return Array.isArray(rows) ? rows[0] : rows;
-}
-
 async function emit(eventType: string, args: { userId: string | null; seasonMemberId: string | null; seasonId: string; submissionId: string; actionId: string; payload?: Json }) {
   await supabaseFetch("rpc/emit_gpe_notification", {
     method: "POST",
@@ -280,22 +270,18 @@ Deno.serve(async (req) => {
     });
     await emit("challenge_submitted", { userId: seasonMember?.user_id || null, seasonMemberId: seasonMember?.id || null, seasonId: season.id, submissionId: campSubmission.id, actionId: action.id, payload: { source: "action_network", actionSlug } });
 
-    let status = "pending";
-    let awardedPoints = 0;
-    if (challenge && seasonMember && challenge.auto_approve && !challenge.requires_review && !challenge.requires_proof && challenge.point_value !== null) {
-      try {
-        await autoApproveAction(action.id);
-        status = "approved";
-        awardedPoints = challenge.point_value;
-      } catch (error) {
-        await logSync({ submissionId: String(formSubmission.id), integration: "camp", operation: "action_network_auto_approve", success: false, errorSummary: safeError(error) });
-      }
-    } else {
-      await emit("challenge_needs_review", { userId: seasonMember?.user_id || null, seasonMemberId: seasonMember?.id || null, seasonId: season.id, submissionId: campSubmission.id, actionId: action.id, payload: { reason: challenge ? "review_required_or_unlinked_member" : "unmatched_challenge" } });
-    }
+    const status = "pending";
+    await emit("challenge_needs_review", {
+      userId: seasonMember?.user_id || null,
+      seasonMemberId: seasonMember?.id || null,
+      seasonId: season.id,
+      submissionId: campSubmission.id,
+      actionId: action.id,
+      payload: { reason: challenge ? "team_review_required" : "unmatched_challenge" }
+    });
 
     await updateFormSubmission(String(formSubmission.id), {
-      submission_status: status === "approved" ? "completed" : "requires_manual_review",
+      submission_status: "requires_manual_review",
       membership_outcome: membership.outcome,
       neon_account_id: membership.neonAccountId,
       neon_sync_status: "skipped"
@@ -310,7 +296,8 @@ Deno.serve(async (req) => {
       actionSlug,
       challengeMatched: Boolean(challenge),
       memberLinked: Boolean(seasonMember),
-      awardedPoints
+      awardedPoints: 0,
+      message: "Your action was received for Team GPE review. Approved actions will be added to your points."
     }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;

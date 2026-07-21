@@ -21,9 +21,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { MessagesContext } from "@/contexts/MessagesContext";
 import { PointsBadge } from "@/components/PointsBadge";
 import { InstallAppButton } from "@/components/InstallAppButton";
-import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { getPreferredDisplayName, shortenEmail } from "@/lib/auth";
+import { canManageCamp, isAdmin as checkIsAdmin } from "@/lib/roles";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -31,7 +31,7 @@ const Header = () => {
   const messagesContext = useContext(MessagesContext);
   const unreadCount = messagesContext?.unreadCount ?? 0;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [role, setRole] = useState<"user" | "admin">("user");
+  const [role, setRole] = useState<"user" | "team_gpe" | "admin">("user");
 
   useEffect(() => {
     if (!user) {
@@ -40,15 +40,11 @@ const Header = () => {
     }
 
     void (async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (!error && data?.role === "admin") {
-        setRole("admin");
-      } else {
+      try {
+        if (await checkIsAdmin()) setRole("admin");
+        else if (await canManageCamp()) setRole("team_gpe");
+        else setRole("user");
+      } catch {
         setRole("user");
       }
     })();
@@ -79,6 +75,7 @@ const Header = () => {
     { to: "/messages", label: "Messages", icon: MessageSquare, badge: unreadCount },
     { to: "/favorites", label: "Favorites", icon: Heart },
     { to: "/submit", label: "Submit New", icon: PlusCircle },
+    { to: "/camp-gpe/challenges", label: "Camp Challenges", icon: Trophy },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
   ];
 
@@ -176,6 +173,8 @@ const Header = () => {
               {navItems.map((item) => renderNavLink(item, true))}
               {role === "admin" &&
                 renderNavLink({ to: "/admin", label: "Admin", icon: Shield }, true)}
+              {(role === "admin" || role === "team_gpe") &&
+                renderNavLink({ to: "/admin/camp", label: "Camp Admin", icon: Shield }, true)}
             </nav>
 
             <div className="mt-6 space-y-3 border-t-[3px] border-black pt-4">
@@ -233,6 +232,8 @@ const Header = () => {
         <nav className="flex flex-1 flex-col gap-4">
           {navItems.map((item) => renderNavLink(item))}
           {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
+          {(role === "admin" || role === "team_gpe") &&
+            renderNavLink({ to: "/admin/camp", label: "Camp Admin", icon: Shield })}
         </nav>
 
         <div className="mt-6 space-y-4 border-t-[3px] border-black pt-4">

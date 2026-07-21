@@ -13,16 +13,19 @@ import JobSubmissionForm from "./pages/JobSubmissionForm";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites.tsx";
 import Leaderboard from "./pages/Leaderboard";
+import CampChallenges from "./pages/CampChallenges";
 import NotFound from "./pages/NotFound";
 import ListingDetailPage from "./pages/ListingDetailPage";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
+import CampAdmin from "./pages/CampAdmin";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FavoriteProvider } from "@/contexts/FavoriteContext";
 import { MessagesProvider } from "@/contexts/MessagesContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminRoute from "@/components/AdminRoute";
+import TeamRoute from "@/components/TeamRoute";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +124,48 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/challenges"
+              element={
+                <ProtectedRoute>
+                  <CampChallenges />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/submissions"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/leaderboard"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/camp"
+              element={
+                <ProtectedRoute>
+                  <TeamRoute>
+                    <CampAdmin />
+                  </TeamRoute>
                 </ProtectedRoute>
               }
             />

@@ -11,11 +11,25 @@ import {
   USERNAME_PATTERN,
   type SignupErrorState,
 } from "@/lib/auth";
+import {
+  checkNeonMembership,
+  getMembershipGateMessage,
+  GPE_MEMBERSHIP_URL,
+  type MembershipCheckResult,
+} from "@/lib/membership";
 import { AuthEmailNotice } from "@/components/AuthEmailNotice";
 
 type AuthMode = "login" | "signup" | "reset";
 
 const SIGNUP_USERNAME_HELP = "3-20 characters: lowercase letters, numbers, dots, hyphens, or underscores.";
+
+const splitDisplayName = (value: string) => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "",
+  };
+};
 
 const Login = () => {
   const {
@@ -31,6 +45,10 @@ const Login = () => {
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const requestedMode = params.get("mode");
+  const returnPath =
+    typeof location.state?.from === "string" && location.state.from.startsWith("/")
+      ? location.state.from
+      : "/";
 
   const [mode, setMode] = useState<AuthMode>(
     requestedMode === "signup" ? "signup" : requestedMode === "reset" ? "reset" : "login",
@@ -49,9 +67,9 @@ const Login = () => {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate("/", { replace: true });
+      navigate(returnPath, { replace: true });
     }
-  }, [loading, user, navigate]);
+  }, [loading, user, navigate, returnPath]);
 
   useEffect(() => {
     const nextMode =
@@ -99,13 +117,38 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
+      let membership: MembershipCheckResult | null = null;
+      if (mode !== "reset") {
+        const nameParts = splitDisplayName(displayName);
+        const membershipResult = await checkNeonMembership({
+          email,
+          firstName: nameParts.firstName,
+          lastName: nameParts.lastName,
+        });
+
+        if (membershipResult.error) {
+          setErrorMessage(membershipResult.error);
+          return;
+        }
+
+        membership = membershipResult.data;
+        const gateMessage = getMembershipGateMessage(membership?.outcome ?? "lookup_failed");
+        const loginCanContinue = mode === "login" && membership?.outcome === "active_member_existing_hub_user";
+        const signupCanContinue = mode === "signup" && membership?.outcome === "active_member_needs_hub_invite";
+
+        if (!loginCanContinue && !signupCanContinue) {
+          setErrorMessage(gateMessage || "GPE Hub access requires an active GPE membership.");
+          return;
+        }
+      }
+
       if (mode === "login") {
         const { error } = await signIn({ email, password });
         if (error) {
           setErrorMessage(error);
           return;
         }
-        navigate("/", { replace: true });
+        navigate(returnPath, { replace: true });
         return;
       }
 
@@ -138,7 +181,11 @@ const Login = () => {
         return;
       }
 
-      setSuccessMessage("Account created. Check your inbox to confirm your account, then return here to sign in.");
+      setSuccessMessage(
+        membership?.outcome === "active_member_needs_hub_invite"
+          ? "Your GPE membership is confirmed. Account created. Check your inbox to confirm your account, then return here to sign in."
+          : "Account created. Check your inbox to confirm your account, then return here to sign in.",
+      );
       setEmailNoticeKind("signup");
       setShowResendConfirmation(true);
     } finally {
@@ -332,6 +379,11 @@ const Login = () => {
                     role="alert"
                   >
                     {errorMessage}
+                    {(errorMessage.includes("member benefit") || errorMessage.includes("inactive or expired")) && (
+                      <a href={GPE_MEMBERSHIP_URL} className="mt-3 block underline">
+                        Become a Member
+                      </a>
+                    )}
                   </div>
                 )}
 

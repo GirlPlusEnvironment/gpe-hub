@@ -1,297 +1,235 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Award, CalendarDays, Loader2, Trophy, Users } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Trophy, Award, Zap, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { getLeaderboard } from "@/lib/points";
-import { UserProfileCard } from "@/components/UserProfileCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  type CampLeaderboardRow,
+  type CampPointsLedgerRow,
+  type CampSeason,
+  type CampSubmission,
+  getActiveCampSeason,
+  getCampLeaderboard,
+  getMyCampHistory,
+  getMyCampStatus,
+} from "@/lib/camp";
 
-type TimeRange = "all" | "7d" | "30d";
+const statusLabel: Record<string, string> = {
+  pending: "Pending review",
+  approved: "Approved",
+  rejected: "Not approved",
+  needs_info: "Needs info",
+};
 
-interface LeaderboardUser {
-  id: string;
-  username: string | null;
-  full_name: string | null;
-  avatar?: string;
-  points: number;
-  level: number;
-  rank: number;
-}
-
-const LEVELS = [
-  { level: 1, threshold: 0, color: "bg-gray-200" },
-  { level: 2, threshold: 100, color: "bg-blue-200" },
-  { level: 3, threshold: 500, color: "bg-green-200" },
-  { level: 4, threshold: 1000, color: "bg-purple-200" },
-  { level: 5, threshold: 2000, color: "bg-amber-300" },
-];
-
-const Leaderboard = () => {
-  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export default function Leaderboard() {
+  const [season, setSeason] = useState<CampSeason | null>(null);
+  const [leaderboard, setLeaderboard] = useState<CampLeaderboardRow[]>([]);
+  const [memberStatus, setMemberStatus] = useState<any>(null);
+  const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
+  const [ledger, setLedger] = useState<CampPointsLedgerRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const totalPoints = useMemo(
+    () => ledger.filter((row) => !row.reversed_at).reduce((sum, row) => sum + row.points, 0),
+    [ledger],
+  );
 
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const data = await getLeaderboard(timeRange, 10);
-        setLeaderboard(data);
-      } catch (err) {
-        console.error("Failed to fetch leaderboard", err);
-        setError(err instanceof Error ? err.message : "Failed to load leaderboard");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    void loadCamp();
+  }, []);
 
-    fetchLeaderboard();
-  }, [timeRange]);
-
-  const getRankMedal = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return <Trophy className="h-5 w-5 text-amber-500" />;
-      case 2:
-        return <Trophy className="h-5 w-5 text-gray-400" />;
-      case 3:
-        return <Trophy className="h-5 w-5 text-amber-600" />;
-      default:
-        return <Award className="h-5 w-5 text-muted-foreground" />;
+  async function loadCamp() {
+    setLoading(true);
+    setError(null);
+    try {
+      const active = await getActiveCampSeason();
+      setSeason(active);
+      if (!active) return;
+      const [boardRows, status, history] = await Promise.all([
+        getCampLeaderboard(active.id, 50),
+        getMyCampStatus(active.id),
+        getMyCampHistory(active.id),
+      ]);
+      setLeaderboard(boardRows);
+      setMemberStatus(status);
+      setSubmissions(history.submissions);
+      setLedger(history.ledger);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Camp GPE could not be loaded.");
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const getLevelColor = (level: number) => {
-    const lvl = LEVELS.find(l => l.level === level) ?? LEVELS[0];
-    return lvl.color;
-  };
-
-  const handleUserClick = (userId: string) => {
-    setSelectedUserId(userId);
-    setIsProfileOpen(true);
-  };
+  }
 
   return (
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Zap className="h-8 w-8 text-primary" />
-              <h1 className="gpe-heading text-4xl md:text-6xl">Community Leaderboard</h1>
-              <Zap className="h-8 w-8 text-primary" />
+        <div className="mx-auto max-w-6xl space-y-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border-[3px] border-black bg-yellow-200 px-4 py-2 text-xs font-black uppercase">
+                <Trophy className="h-4 w-4" />
+                Camp GPE
+              </div>
+              <h1 className="gpe-heading text-4xl md:text-6xl">Season Leaderboard</h1>
+              <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
+                {season?.name || "Camp GPE"} points are season-specific. Challenge submissions appear in your history after they are saved, and points are added after Team GPE review.
+              </p>
             </div>
-            <p className="mx-auto max-w-2xl text-lg font-bold text-black/70">
-              Celebrate our most engaged community members. Earn points by participating, contributing, and connecting!
-            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={loadCamp}>Refresh</Button>
+              <Link to="/"><Button variant="outline">Dashboard</Button></Link>
+            </div>
           </div>
 
-          {/* Time Range Selector */}
-          <div className="flex justify-center gap-3 mb-8 flex-wrap">
-            {(["all", "30d", "7d"] as const).map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "default" : "outline"}
-                onClick={() => setTimeRange(range)}
-                className="uppercase tracking-wide"
-              >
-                {range === "all" ? "All Time" : range === "7d" ? "This Week" : "This Month"}
-              </Button>
-            ))}
-          </div>
+          {loading ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card className="border-red-500 bg-red-100">
+              <CardContent className="py-8 text-sm font-bold text-red-700">{error}</CardContent>
+            </Card>
+          ) : !season ? (
+            <Card>
+              <CardContent className="py-8 text-sm font-bold text-black/70">
+                No visible Camp GPE season is configured yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CalendarDays className="h-5 w-5" />
+                      Season
+                    </CardTitle>
+                    <CardDescription>{season.status}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-black">{season.name}</CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Users className="h-5 w-5" />
+                      My Camp Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-black">{memberStatus?.status || "Not linked"}</div>
+                    <p className="mt-2 text-xs font-bold text-black/60">
+                      {memberStatus?.gpe_cabins?.name ? `Cabin: ${memberStatus.gpe_cabins.name}` : "Join Camp GPE from the public Camp page if your account is not linked yet."}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Award className="h-5 w-5" />
+                      My Points
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-4xl font-black text-primary">{totalPoints}</CardContent>
+                </Card>
+              </div>
 
-          {/* Leaderboard Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Top Contributors</CardTitle>
-              <CardDescription>
-                {timeRange === "all" && "All-time points"}
-                {timeRange === "7d" && "Points earned in the last 7 days"}
-                {timeRange === "30d" && "Points earned in the last 30 days"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : error ? (
-                <div className="text-center py-12">
-                  <p className="text-destructive mb-2">Failed to load leaderboard</p>
-                  <p className="text-sm text-muted-foreground">{error}</p>
-                </div>
-              ) : leaderboard.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">No users found for this time period.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {leaderboard.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex cursor-pointer items-center justify-between rounded-[1.5rem] border-[3px] border-black bg-white p-4 transition-colors hover:bg-pink-100"
-                      onClick={() => handleUserClick(user.id)}
-                    >
-                      {/* Rank and User Info */}
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        {/* Rank Medal */}
-                        <div className="flex items-center justify-center w-8 text-center">
-                          {user.rank <= 3 ? (
-                            getRankMedal(user.rank)
-                          ) : (
-                            <span className="font-semibold text-muted-foreground">#{user.rank}</span>
-                          )}
-                        </div>
-
-                        {/* Avatar */}
-                        <Avatar className="h-12 w-12 ring-2 ring-primary/10">
-                          <AvatarImage src={user.avatar || ""} />
-                          <AvatarFallback className="bg-primary/10">
-                            {user.full_name?.charAt(0) || user.username?.charAt(0) || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-foreground truncate">
-                              {user.full_name || user.username || "Unknown"}
-                            </span>
-                            <Badge
-                              className={`${getLevelColor(user.level)} text-foreground text-xs font-semibold`}
-                            >
-                              Level {user.level}
-                            </Badge>
-                          </div>
-                          {user.username && user.username !== user.full_name && (
-                            <div className="text-sm text-muted-foreground mt-0.5">
-                              @{user.username}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Leaderboard</CardTitle>
+                  <CardDescription>Ranked by reviewed, unreversed points for this Camp season.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {leaderboard.length === 0 ? (
+                    <div className="py-10 text-center text-sm font-bold text-black/60">
+                      No Camp points have been awarded yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {leaderboard.map((row) => (
+                        <div key={row.season_member_id} className="flex items-center justify-between gap-4 rounded-[1.5rem] border-[3px] border-black bg-white p-4">
+                          <div className="flex min-w-0 items-center gap-4">
+                            <div className="w-10 text-center text-xl font-black">#{row.rank}</div>
+                            <Avatar className="h-12 w-12 border-[3px] border-black">
+                              <AvatarImage src={row.avatar_url || undefined} />
+                              <AvatarFallback className="bg-cyan-200 font-black">
+                                {(row.full_name || row.username || row.contact_email).charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="truncate font-black">{row.full_name || row.username || row.contact_email}</div>
+                              <div className="text-xs font-bold uppercase text-black/60">{row.cabin_name || "No cabin yet"}</div>
                             </div>
-                          )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-black text-primary">{row.points}</div>
+                            <div className="text-xs font-bold uppercase text-black/50">points</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>My Challenge History</CardTitle>
+                    <CardDescription>Submissions are reviewed before points appear on the leaderboard.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {submissions.length === 0 ? (
+                      <p className="text-sm font-bold text-black/60">No challenge submissions are linked to this Hub account yet.</p>
+                    ) : submissions.map((submission) => (
+                      <div key={submission.id} className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-black">{submission.challenge_key.replaceAll("_", " ")}</div>
+                          <Badge>{statusLabel[submission.review_status] || submission.review_status}</Badge>
+                        </div>
+                        <div className="mt-2 text-xs font-bold text-black/60">
+                          {new Date(submission.created_at).toLocaleString()}
                         </div>
                       </div>
+                    ))}
+                  </CardContent>
+                </Card>
 
-                      {/* Points Display */}
-                      <div className="text-right ml-4">
-                        <div className="text-2xl font-bold text-primary">
-                          {user.points}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>My Point Ledger</CardTitle>
+                    <CardDescription>Corrections and reversals are preserved for auditability.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {ledger.length === 0 ? (
+                      <p className="text-sm font-bold text-black/60">No reviewed points yet.</p>
+                    ) : ledger.map((row) => (
+                      <div key={row.id} className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-black">{row.reason}</div>
+                          <div className={row.reversed_at ? "font-black text-black/40 line-through" : "font-black text-primary"}>
+                            {row.points > 0 ? "+" : ""}{row.points}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">pts</div>
+                        <div className="mt-2 text-xs font-bold uppercase text-black/60">{row.adjustment_type}</div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Level Info Card */}
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="text-lg">Level Tiers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                {LEVELS.map((lvl) => (
-                  <div key={lvl.level} className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 text-center">
-                    <div className={`w-12 h-12 rounded-full ${lvl.color} mx-auto mb-3 flex items-center justify-center font-bold text-lg`}>
-                      {lvl.level}
-                    </div>
-                    <div className="font-semibold text-foreground">Level {lvl.level}</div>
-                    <div className="text-sm text-muted-foreground mt-2">
-                      {lvl.threshold.toLocaleString()}+ pts
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* How to Earn Points */}
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="text-lg">How to Earn Points</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+1</Badge>
-                    <div>
-                      <div className="font-medium">Like a Post</div>
-                      <div className="text-sm text-muted-foreground">Appreciate community content</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+1</Badge>
-                    <div>
-                      <div className="font-medium">Favorite a Listing</div>
-                      <div className="text-sm text-muted-foreground">Save listings you're interested in</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+2</Badge>
-                    <div>
-                      <div className="font-medium">Leave a Comment</div>
-                      <div className="text-sm text-muted-foreground">Share your thoughts and insights</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+10</Badge>
-                    <div>
-                      <div className="font-medium">Create a Post</div>
-                      <div className="text-sm text-muted-foreground">Contribute new discussions</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+3</Badge>
-                    <div>
-                      <div className="font-medium">Make a Submission</div>
-                      <div className="text-sm text-muted-foreground">Create a listing on the explore page</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Badge className="mt-1 bg-primary text-primary-foreground">+1</Badge>
-                    <div>
-                      <div className="font-medium">Send Messages</div>
-                      <div className="text-sm text-muted-foreground">Talk with other members of the hub</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="mt-12 text-center">
-            <Link to="/" className="text-primary hover:text-primary/80 underline">
-              Back to Home
-            </Link>
-          </div>
+            </>
+          )}
         </div>
       </main>
       <Footer />
-
-      {/* User Profile Card Modal */}
-      {selectedUserId && (
-        <UserProfileCard
-          userId={selectedUserId}
-          open={isProfileOpen}
-          onOpenChange={setIsProfileOpen}
-        />
-      )}
     </div>
   );
-};
-
-export default Leaderboard;
+}

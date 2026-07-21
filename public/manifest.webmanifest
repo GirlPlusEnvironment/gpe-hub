@@ -1,0 +1,18 @@
+{
+  "name": "Girl + Environment Community Hub",
+  "short_name": "GPE Hub",
+  "description": "A community platform for environmental justice jobs, events, funding, resources, and member connection.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#d53f8c",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/gpe-hub-icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

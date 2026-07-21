@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
+import { isAdmin } from "@/lib/roles";
 
 type Listing = {
   id: string;
@@ -39,19 +40,7 @@ export default function AdminDashboard() {
   }, [flags]);
 
   async function checkAdmin() {
-    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
-    if (sessionErr) throw sessionErr;
-    const user = sessionData.session?.user;
-    if (!user) return false;
-
-    const { data: profile, error: profErr } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profErr) throw profErr;
-    return profile?.role === "admin";
+    return isAdmin();
   }
 
   async function loadData() {

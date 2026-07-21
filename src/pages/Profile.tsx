@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase, supabasePublicStorageUrl } from "@/lib/supabaseClient";
 import { validateContent } from "@/lib/profanityFilter";
 import { format } from "date-fns";
+import { getPreferredDisplayName, normalizeUsername, shortenEmail, USERNAME_PATTERN } from "@/lib/auth";
 
 type ProfileFormState = {
   full_name: string;
@@ -67,20 +68,29 @@ const Profile = () => {
 
     const newAvatarUrl = profile?.avatar_url ??
       ((user.user_metadata?.avatar_url as string | undefined) ?? "");
-    
-    console.log('Setting avatar URL:', newAvatarUrl);
 
-    setFormState({
-      full_name:
-        profile?.full_name ??
-        (user.user_metadata?.full_name as string | undefined) ??
-        user.email ??
-        "",
-      username: profile?.username ?? "",
-      bio: profile?.bio ?? "",
-      avatar_url: newAvatarUrl,
+    setFormState((previous) => {
+      const nextState = {
+        full_name:
+          profile?.full_name ??
+          (user.user_metadata?.full_name as string | undefined) ??
+          "",
+        username:
+          profile?.username ??
+          ((user.user_metadata?.username as string | undefined) ?? ""),
+        bio: profile?.bio ?? "",
+        avatar_url: newAvatarUrl,
+      };
+
+      return JSON.stringify(previous) === JSON.stringify(nextState) ? previous : nextState;
     });
   }, [profile, user]);
+
+  const normalizedUsername = formState.username.trim() ? normalizeUsername(formState.username) : "";
+  const usernameError =
+    normalizedUsername && !USERNAME_PATTERN.test(normalizedUsername)
+      ? "Username must be 3-20 characters using lowercase letters, numbers, dots, underscores, or hyphens."
+      : null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -89,6 +99,15 @@ const Profile = () => {
     }
 
     setIsSaving(true);
+    if (usernameError) {
+      toast({
+        title: "Invalid username",
+        description: usernameError,
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
     // Validate profile content before saving
     try {
       if (formState.full_name.trim()) {
@@ -100,10 +119,13 @@ const Profile = () => {
       if (formState.bio.trim()) {
         validateContent(formState.bio);
       }
-    } catch (validationError: any) {
+    } catch (validationError: unknown) {
       toast({
         title: "Error",
-        description: validationError.message || "Your profile contains inappropriate language. Please revise and try again.",
+        description:
+          validationError instanceof Error
+            ? validationError.message
+            : "Your profile contains inappropriate language. Please revise and try again.",
         variant: "destructive",
       });
       setIsSaving(false);
@@ -115,8 +137,8 @@ const Profile = () => {
       .upsert(
         {
           id: user.id,
-          full_name: formState.full_name,
-          username: formState.username,
+          full_name: formState.full_name.trim() || null,
+          username: normalizedUsername || null,
           bio: formState.bio,
           avatar_url: formState.avatar_url || null,
           updated_at: new Date().toISOString(),
@@ -261,9 +283,25 @@ const Profile = () => {
   };
 
   const avatarInitial =
-    formState.full_name?.charAt(0)?.toUpperCase() ??
-    user?.email?.charAt(0)?.toUpperCase() ??
+    getPreferredDisplayName({
+      fullName: formState.full_name,
+      username: normalizedUsername,
+      email: user?.email,
+    })
+      .charAt(0)
+      .toUpperCase() ??
     "Y";
+
+  const profileDisplayName = getPreferredDisplayName({
+    fullName: formState.full_name,
+    username: normalizedUsername,
+    email: user?.email,
+  });
+  const profileSecondaryLine = normalizedUsername
+    ? `@${normalizedUsername}`
+    : user.email
+    ? shortenEmail(user.email)
+    : "";
 
   if (loading) {
     return (
@@ -305,7 +343,7 @@ const Profile = () => {
             <div className="md:col-span-1">
               <Card className="sticky top-24">
                 <CardContent className="pt-6">
-                  <div className="flex flex-col items-center text-center">
+                  <div className="flex min-w-0 flex-col items-center text-center">
                     {/* Avatar with Upload */}
                     <div className="relative group mb-4">
                       <Avatar key={avatarKey} className="h-28 w-28 ring-4 ring-primary/20">
@@ -342,12 +380,16 @@ const Profile = () => {
                     </div>
 
                     {/* Name Preview */}
-                    <h2 className="font-header text-3xl uppercase">
-                      {formState.full_name || "Your Name"}
-                    </h2>
-                    {formState.username && (
-                      <p className="text-sm text-muted-foreground">@{formState.username}</p>
-                    )}
+                    <div className="min-w-0 max-w-full">
+                      <h2 className="font-header text-3xl uppercase leading-tight break-words [overflow-wrap:anywhere]">
+                        {profileDisplayName}
+                      </h2>
+                      {profileSecondaryLine && (
+                        <p className="mt-2 max-w-full break-words text-sm text-muted-foreground">
+                          {profileSecondaryLine}
+                        </p>
+                      )}
+                    </div>
 
                     {/* Level Badge */}
                     <Badge className={`mt-3 ${calculateLevel(profile?.points || 0).color}`}>
@@ -356,14 +398,14 @@ const Profile = () => {
                     </Badge>
 
                     {/* Stats */}
-                    <div className="w-full mt-6 pt-6 border-t space-y-3">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Points</span>
-                        <span className="font-semibold text-primary">{profile?.points || 0}</span>
+                    <div className="mt-6 w-full space-y-3 border-t pt-6">
+                      <div className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-muted-foreground">Points</span>
+                        <span className="text-right font-semibold text-primary">{profile?.points || 0}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Member since</span>
-                        <span className="font-medium">
+                      <div className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-muted-foreground">Member since</span>
+                        <span className="text-right font-medium">
                           {profile?.created_at 
                             ? format(new Date(profile.created_at), "MMM yyyy")
                             : "—"
@@ -415,13 +457,25 @@ const Profile = () => {
                             setFormState((previous) => ({ ...previous, username: event.target.value }))
                           }
                           placeholder="Choose a username"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                         />
+                        <p className={`text-xs font-bold ${usernameError ? "text-red-700" : "text-muted-foreground"}`}>
+                          {usernameError || "Optional. Lowercase letters, numbers, dots, underscores, or hyphens."}
+                        </p>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" value={user.email ?? ""} disabled className="bg-muted" />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={user.email ?? ""}
+                        disabled
+                        className="overflow-hidden text-ellipsis bg-muted"
+                      />
                       <p className="text-xs text-muted-foreground">
                         Your email is linked to your account and cannot be changed here.
                       </p>
@@ -443,10 +497,10 @@ const Profile = () => {
                       </p>
                     </div>
 
-                    <div className="flex justify-end pt-4 border-t">
+                    <div className="flex justify-stretch border-t pt-4 sm:justify-end">
                       <Button 
                         type="submit" 
-                        className="gap-2" 
+                        className="w-full gap-2 sm:w-auto" 
                         disabled={isSaving}
                       >
                         {isSaving ? (

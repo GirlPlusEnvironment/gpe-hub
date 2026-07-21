@@ -208,7 +208,7 @@ const Messages = () => {
           </div>
         )}
 
-        <div className="gpe-card flex min-h-0 flex-1 gap-0 overflow-hidden p-0">
+        <div className="gpe-card flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 md:flex-row">
           {/* Conversation List */}
           <div className="flex w-full min-h-0 flex-col overflow-hidden border-b-[3px] border-black md:w-1/3 md:border-b-0 md:border-r-[3px] lg:w-[320px]">
             <div className="border-b-[3px] border-black p-4">
@@ -315,7 +315,7 @@ const Messages = () => {
           </div>
 
           {/* Conversation View or Empty State */}
-          <div className="flex-1 min-h-0 overflow-hidden bg-[#fdf2f8]">
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#fdf2f8]">
             {currentConversation ? (
               <ConversationView
                 conversation={currentConversation}

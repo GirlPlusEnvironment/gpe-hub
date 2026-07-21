@@ -1,0 +1,848 @@
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'gpe_camp_submission_action_status') then
+    create type public.gpe_camp_submission_action_status as enum ('pending', 'approved', 'rejected', 'needs_information', 'duplicate');
+  end if;
+
+  if not exists (select 1 from pg_type where typname = 'gpe_point_entry_type') then
+    create type public.gpe_point_entry_type as enum ('challenge_award', 'manual_adjustment', 'bonus', 'penalty', 'reversal');
+  end if;
+end
+$$;
+
+create table if not exists public.gpe_action_types (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  label text not null,
+  description text,
+  display_order integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.gpe_challenges (
+  id uuid primary key default gen_random_uuid(),
+  season_id uuid not null references public.gpe_seasons(id) on delete cascade,
+  action_type_id uuid references public.gpe_action_types(id) on delete set null,
+  slug text not null,
+  title text not null,
+  short_description text,
+  instructions text,
+  category text not null default 'other',
+  point_value integer,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  is_active boolean not null default false,
+  is_public boolean not null default false,
+  is_hub_visible boolean not null default true,
+  requires_proof boolean not null default true,
+  requires_review boolean not null default true,
+  auto_approve boolean not null default false,
+  allow_multiple_submissions boolean not null default false,
+  max_completions_per_member integer not null default 1,
+  display_order integer not null default 0,
+  action_url text,
+  external_source text,
+  external_action_id text,
+  external_action_slug text,
+  created_by uuid references public.profiles(id) on delete set null,
+  updated_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint gpe_challenges_unique_slug unique (season_id, slug),
+  constraint gpe_challenges_completion_limit check (max_completions_per_member >= 1),
+  constraint gpe_challenges_point_value check (point_value is null or point_value >= 0),
+  constraint gpe_challenges_category check (category in (
+    'create_content',
+    'sign_petition',
+    'share_story',
+    'repost_gpe',
+    'attend_event',
+    'recruit_friend',
+    'learn',
+    'cabin_mission',
+    'other'
+  ))
+);
+
+create table if not exists public.gpe_camp_submission_actions (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.gpe_camp_challenge_submissions(id) on delete cascade,
+  challenge_id uuid references public.gpe_challenges(id) on delete set null,
+  action_type_id uuid references public.gpe_action_types(id) on delete set null,
+  other_description text,
+  proof_urls jsonb not null default '[]'::jsonb,
+  requested_points integer,
+  approved_points integer,
+  review_status public.gpe_camp_submission_action_status not null default 'pending',
+  reviewer_notes text,
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint gpe_camp_submission_actions_proof_array check (jsonb_typeof(proof_urls) = 'array'),
+  constraint gpe_camp_submission_actions_points check (
+    (requested_points is null or requested_points >= 0)
+    and (approved_points is null or approved_points >= 0)
+  ),
+  constraint gpe_camp_submission_actions_has_action check (challenge_id is not null or nullif(trim(coalesce(other_description, '')), '') is not null)
+);
+
+alter table public.gpe_camp_challenge_submissions
+add column if not exists member_link_status text not null default 'linked',
+add column if not exists member_link_notes text,
+add column if not exists authenticated_user_id uuid references public.profiles(id) on delete set null;
+
+alter table public.gpe_camp_points_ledger
+add column if not exists submission_action_id uuid references public.gpe_camp_submission_actions(id) on delete set null,
+add column if not exists challenge_id uuid references public.gpe_challenges(id) on delete set null,
+add column if not exists entry_type public.gpe_point_entry_type not null default 'challenge_award',
+add column if not exists source text not null default 'team_gpe_review',
+add column if not exists awarded_by uuid references public.profiles(id) on delete set null,
+add column if not exists reversed_entry_id uuid references public.gpe_camp_points_ledger(id) on delete set null,
+add column if not exists metadata jsonb not null default '{}'::jsonb;
+
+create table if not exists public.gpe_notification_outbox (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  user_id uuid references public.profiles(id) on delete set null,
+  membership_id uuid references public.gpe_season_members(id) on delete set null,
+  season_id uuid references public.gpe_seasons(id) on delete set null,
+  submission_id uuid references public.gpe_camp_challenge_submissions(id) on delete set null,
+  submission_action_id uuid references public.gpe_camp_submission_actions(id) on delete set null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending',
+  attempts integer not null default 0,
+  created_at timestamptz not null default now(),
+  processed_at timestamptz,
+  constraint gpe_notification_outbox_payload_object check (jsonb_typeof(payload) = 'object')
+);
+
+create index if not exists gpe_action_types_active_order_idx on public.gpe_action_types (is_active, display_order);
+create index if not exists gpe_challenges_season_visible_idx on public.gpe_challenges (season_id, is_active, is_public, is_hub_visible, display_order);
+create index if not exists gpe_challenges_action_type_idx on public.gpe_challenges (action_type_id);
+create unique index if not exists gpe_challenges_external_action_idx
+on public.gpe_challenges (external_source, external_action_slug)
+where external_source is not null and external_action_slug is not null;
+create index if not exists gpe_camp_submission_actions_submission_idx on public.gpe_camp_submission_actions (submission_id, review_status);
+create index if not exists gpe_camp_submission_actions_challenge_idx on public.gpe_camp_submission_actions (challenge_id, review_status);
+create index if not exists gpe_notification_outbox_status_idx on public.gpe_notification_outbox (status, created_at);
+
+create unique index if not exists gpe_camp_points_one_active_award_per_action_idx
+on public.gpe_camp_points_ledger (submission_action_id)
+where submission_action_id is not null
+  and reversed_entry_id is null
+  and reversed_at is null
+  and entry_type = 'challenge_award';
+
+drop trigger if exists update_gpe_action_types_updated_at on public.gpe_action_types;
+create trigger update_gpe_action_types_updated_at
+before update on public.gpe_action_types
+for each row execute function public.update_updated_at_column();
+
+drop trigger if exists update_gpe_challenges_updated_at on public.gpe_challenges;
+create trigger update_gpe_challenges_updated_at
+before update on public.gpe_challenges
+for each row execute function public.update_updated_at_column();
+
+drop trigger if exists update_gpe_camp_submission_actions_updated_at on public.gpe_camp_submission_actions;
+create trigger update_gpe_camp_submission_actions_updated_at
+before update on public.gpe_camp_submission_actions
+for each row execute function public.update_updated_at_column();
+
+create or replace view public.gpe_public_camp_challenges as
+select
+  ch.id,
+  ch.season_id,
+  s.slug as season_slug,
+  ch.slug,
+  ch.title,
+  ch.short_description,
+  ch.instructions,
+  ch.category,
+  ch.point_value,
+  ch.starts_at,
+  ch.ends_at,
+  ch.requires_proof,
+  ch.allow_multiple_submissions,
+  ch.max_completions_per_member,
+  ch.display_order,
+  ch.action_url,
+  ch.external_source,
+  ch.external_action_slug,
+  at.slug as action_type_slug,
+  at.label as action_type_label
+from public.gpe_challenges ch
+join public.gpe_seasons s on s.id = ch.season_id
+left join public.gpe_action_types at on at.id = ch.action_type_id
+where ch.is_active
+  and ch.is_public
+  and s.status = 'active'
+  and s.is_visible
+  and (ch.starts_at is null or ch.starts_at <= now())
+  and (ch.ends_at is null or ch.ends_at >= now());
+
+create or replace view public.gpe_hub_camp_challenges as
+select
+  ch.*,
+  at.slug as action_type_slug,
+  at.label as action_type_label,
+  s.slug as season_slug,
+  s.name as season_name
+from public.gpe_challenges ch
+join public.gpe_seasons s on s.id = ch.season_id
+left join public.gpe_action_types at on at.id = ch.action_type_id
+where ch.is_active
+  and ch.is_hub_visible
+  and (ch.starts_at is null or ch.starts_at <= now())
+  and (ch.ends_at is null or ch.ends_at >= now());
+
+drop view if exists public.gpe_camp_leaderboard;
+
+create view public.gpe_camp_leaderboard as
+... as
+select
+  sm.season_id,
+  s.slug as season_slug,
+  sm.id as season_member_id,
+  sm.user_id,
+  sm.contact_email,
+  sm.neon_account_id,
+  sm.cabin_id,
+  c.name as cabin_name,
+  p.username,
+  p.full_name,
+  p.avatar_url,
+  coalesce(sum(case when ledger.reversed_at is null then ledger.points else 0 end), 0)::integer as points,
+  count(distinct case when ledger.reversed_at is null and ledger.entry_type = 'challenge_award' then ledger.submission_action_id end)::integer as approved_challenge_count,
+  rank() over (
+    partition by sm.season_id
+    order by coalesce(sum(case when ledger.reversed_at is null then ledger.points else 0 end), 0) desc, sm.joined_at asc
+  )::integer as rank,
+  now() as updated_at
+from public.gpe_season_members sm
+join public.gpe_seasons s on s.id = sm.season_id
+left join public.gpe_cabins c on c.id = sm.cabin_id
+left join public.profiles p on p.id = sm.user_id
+left join public.gpe_camp_points_ledger ledger on ledger.season_member_id = sm.id
+where sm.status in ('registered', 'active')
+group by sm.season_id, s.slug, sm.id, sm.user_id, sm.contact_email, sm.neon_account_id, sm.cabin_id, c.name, p.username, p.full_name, p.avatar_url, sm.joined_at;
+
+create or replace view public.gpe_camp_cabin_leaderboard as
+select
+  sm.season_id,
+  sm.cabin_id,
+  c.name as cabin_name,
+  coalesce(sum(case when ledger.reversed_at is null then ledger.points else 0 end), 0)::integer as points,
+  count(distinct sm.id)::integer as member_count,
+  rank() over (
+    partition by sm.season_id
+    order by coalesce(sum(case when ledger.reversed_at is null then ledger.points else 0 end), 0) desc, min(c.display_order) asc
+  )::integer as rank,
+  now() as updated_at
+from public.gpe_season_members sm
+join public.gpe_cabins c on c.id = sm.cabin_id
+left join public.gpe_camp_points_ledger ledger on ledger.season_member_id = sm.id
+where sm.status in ('registered', 'active')
+group by sm.season_id, sm.cabin_id, c.name;
+
+create or replace function public.emit_gpe_notification(
+  p_event_type text,
+  p_user_id uuid default null,
+  p_membership_id uuid default null,
+  p_season_id uuid default null,
+  p_submission_id uuid default null,
+  p_submission_action_id uuid default null,
+  p_payload jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  created_id uuid;
+begin
+  insert into public.gpe_notification_outbox (
+    event_type,
+    user_id,
+    membership_id,
+    season_id,
+    submission_id,
+    submission_action_id,
+    payload
+  )
+  values (
+    p_event_type,
+    p_user_id,
+    p_membership_id,
+    p_season_id,
+    p_submission_id,
+    p_submission_action_id,
+    coalesce(p_payload, '{}'::jsonb)
+  )
+  returning id into created_id;
+  return created_id;
+end;
+$$;
+
+create or replace function public.approve_camp_submission_action(
+  p_action_id uuid,
+  p_points integer default null,
+  p_notes text default null
+)
+returns table (
+  ledger_id uuid,
+  season_member_id uuid,
+  season_points integer,
+  season_rank integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  action_row public.gpe_camp_submission_actions%rowtype;
+  submission_row public.gpe_camp_challenge_submissions%rowtype;
+  challenge_row public.gpe_challenges%rowtype;
+  reviewer uuid := auth.uid();
+  points_to_award integer;
+begin
+  if reviewer is null or not public.can_manage_camp(reviewer) then
+    raise exception 'Not authorized to review Camp submissions.';
+  end if;
+
+  select * into action_row from public.gpe_camp_submission_actions where id = p_action_id for update;
+  if not found then
+    raise exception 'Submission action not found.';
+  end if;
+  if action_row.review_status = 'approved' then
+    raise exception 'Submission action is already approved.';
+  end if;
+
+  select * into submission_row from public.gpe_camp_challenge_submissions where id = action_row.submission_id for update;
+  if submission_row.season_member_id is null then
+    raise exception 'Submission is not linked to a Camp season member.';
+  end if;
+
+  if action_row.challenge_id is not null then
+    select * into challenge_row from public.gpe_challenges where id = action_row.challenge_id;
+  end if;
+
+  points_to_award := coalesce(p_points, action_row.requested_points, challenge_row.point_value, 0);
+  if points_to_award < 0 then
+    raise exception 'Points cannot be negative.';
+  end if;
+
+  update public.gpe_camp_submission_actions
+  set
+    review_status = 'approved',
+    approved_points = points_to_award,
+    reviewer_notes = p_notes,
+    reviewed_by = reviewer,
+    reviewed_at = now()
+  where id = p_action_id;
+
+  insert into public.gpe_camp_points_ledger (
+    season_id,
+    season_member_id,
+    user_id,
+    submission_id,
+    submission_action_id,
+    challenge_id,
+    points,
+    reason,
+    adjustment_type,
+    entry_type,
+    source,
+    created_by,
+    awarded_by,
+    metadata
+  )
+  values (
+    submission_row.season_id,
+    submission_row.season_member_id,
+    submission_row.user_id,
+    submission_row.id,
+    action_row.id,
+    action_row.challenge_id,
+    points_to_award,
+    coalesce(challenge_row.title, action_row.other_description, 'Camp GPE challenge'),
+    'award',
+    'challenge_award',
+    'team_gpe_review',
+    reviewer,
+    reviewer,
+    jsonb_build_object('reviewer_notes', p_notes)
+  )
+  returning id into ledger_id;
+
+  perform public.emit_gpe_notification('challenge_approved', submission_row.user_id, submission_row.season_member_id, submission_row.season_id, submission_row.id, action_row.id, jsonb_build_object('points', points_to_award));
+  perform public.emit_gpe_notification('points_awarded', submission_row.user_id, submission_row.season_member_id, submission_row.season_id, submission_row.id, action_row.id, jsonb_build_object('points', points_to_award));
+
+  select lb.points, lb.rank into season_points, season_rank
+  from public.gpe_camp_leaderboard lb
+  where lb.season_member_id = submission_row.season_member_id;
+
+  season_member_id := submission_row.season_member_id;
+  return next;
+end;
+$$;
+
+create or replace function public.auto_approve_camp_submission_action(p_action_id uuid)
+returns table (
+  ledger_id uuid,
+  season_member_id uuid,
+  season_points integer,
+  season_rank integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  action_row public.gpe_camp_submission_actions%rowtype;
+  submission_row public.gpe_camp_challenge_submissions%rowtype;
+  challenge_row public.gpe_challenges%rowtype;
+begin
+  select * into action_row from public.gpe_camp_submission_actions where id = p_action_id for update;
+  if not found or action_row.challenge_id is null then
+    raise exception 'Submission action is not auto-approvable.';
+  end if;
+
+  select * into submission_row from public.gpe_camp_challenge_submissions where id = action_row.submission_id for update;
+  select * into challenge_row from public.gpe_challenges where id = action_row.challenge_id for update;
+
+  if submission_row.season_member_id is null then
+    raise exception 'Submission is not linked to a Camp season member.';
+  end if;
+  if not (challenge_row.auto_approve and not challenge_row.requires_review and not challenge_row.requires_proof) then
+    raise exception 'Challenge requires review.';
+  end if;
+  if challenge_row.point_value is null then
+    raise exception 'Challenge has no confirmed point value.';
+  end if;
+  if not challenge_row.allow_multiple_submissions and exists (
+    select 1
+    from public.gpe_camp_points_ledger ledger
+    join public.gpe_camp_submission_actions act on act.id = ledger.submission_action_id
+    where ledger.season_member_id = submission_row.season_member_id
+      and act.challenge_id = challenge_row.id
+      and ledger.entry_type = 'challenge_award'
+      and ledger.reversed_entry_id is null
+      and ledger.reversed_at is null
+  ) then
+    raise exception 'Completion limit reached.';
+  end if;
+  if (
+    select count(*)
+    from public.gpe_camp_points_ledger ledger
+    join public.gpe_camp_submission_actions act on act.id = ledger.submission_action_id
+    where ledger.season_member_id = submission_row.season_member_id
+      and act.challenge_id = challenge_row.id
+      and ledger.entry_type = 'challenge_award'
+      and ledger.reversed_entry_id is null
+      and ledger.reversed_at is null
+  ) >= challenge_row.max_completions_per_member then
+    raise exception 'Completion limit reached.';
+  end if;
+
+  update public.gpe_camp_submission_actions
+  set
+    review_status = 'approved',
+    approved_points = challenge_row.point_value,
+    reviewed_at = now()
+  where id = p_action_id;
+
+  insert into public.gpe_camp_points_ledger (
+    season_id,
+    season_member_id,
+    user_id,
+    submission_id,
+    submission_action_id,
+    challenge_id,
+    points,
+    reason,
+    adjustment_type,
+    entry_type,
+    source,
+    metadata
+  )
+  values (
+    submission_row.season_id,
+    submission_row.season_member_id,
+    submission_row.user_id,
+    submission_row.id,
+    action_row.id,
+    challenge_row.id,
+    challenge_row.point_value,
+    challenge_row.title,
+    'award',
+    'challenge_award',
+    'automatic_challenge_approval',
+    jsonb_build_object('auto_approved', true)
+  )
+  returning id into ledger_id;
+
+  perform public.emit_gpe_notification('challenge_auto_approved', submission_row.user_id, submission_row.season_member_id, submission_row.season_id, submission_row.id, action_row.id, jsonb_build_object('points', challenge_row.point_value));
+  perform public.emit_gpe_notification('points_awarded', submission_row.user_id, submission_row.season_member_id, submission_row.season_id, submission_row.id, action_row.id, jsonb_build_object('points', challenge_row.point_value));
+
+  select lb.points, lb.rank into season_points, season_rank
+  from public.gpe_camp_leaderboard lb
+  where lb.season_member_id = submission_row.season_member_id;
+
+  season_member_id := submission_row.season_member_id;
+  return next;
+end;
+$$;
+
+create or replace function public.mark_camp_submission_action(
+  p_action_id uuid,
+  p_status public.gpe_camp_submission_action_status,
+  p_notes text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  reviewer uuid := auth.uid();
+  action_row public.gpe_camp_submission_actions%rowtype;
+  submission_row public.gpe_camp_challenge_submissions%rowtype;
+begin
+  if reviewer is null or not public.can_manage_camp(reviewer) then
+    raise exception 'Not authorized to review Camp submissions.';
+  end if;
+  if p_status = 'approved' then
+    raise exception 'Use approve_camp_submission_action to approve and award points.';
+  end if;
+
+  select * into action_row from public.gpe_camp_submission_actions where id = p_action_id for update;
+  if not found then
+    raise exception 'Submission action not found.';
+  end if;
+  select * into submission_row from public.gpe_camp_challenge_submissions where id = action_row.submission_id;
+
+  update public.gpe_camp_submission_actions
+  set review_status = p_status, reviewer_notes = p_notes, reviewed_by = reviewer, reviewed_at = now()
+  where id = p_action_id;
+
+  perform public.emit_gpe_notification(
+    case p_status
+      when 'rejected' then 'challenge_rejected'
+      when 'needs_information' then 'challenge_needs_information'
+      when 'duplicate' then 'challenge_rejected'
+      else 'challenge_needs_review'
+    end,
+    submission_row.user_id,
+    submission_row.season_member_id,
+    submission_row.season_id,
+    submission_row.id,
+    action_row.id,
+    jsonb_build_object('status', p_status, 'notes', p_notes)
+  );
+end;
+$$;
+
+create or replace function public.reverse_camp_point_entry(
+  p_ledger_id uuid,
+  p_reason text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor uuid := auth.uid();
+  original public.gpe_camp_points_ledger%rowtype;
+  reversal_id uuid;
+begin
+  if actor is null or not public.can_manage_camp(actor) then
+    raise exception 'Not authorized to reverse Camp points.';
+  end if;
+  select * into original from public.gpe_camp_points_ledger where id = p_ledger_id for update;
+  if not found then
+    raise exception 'Point entry not found.';
+  end if;
+  if original.reversed_at is not null then
+    raise exception 'Point entry is already reversed.';
+  end if;
+
+  update public.gpe_camp_points_ledger
+  set reversed_by = actor, reversed_at = now(), reversal_reason = p_reason
+  where id = p_ledger_id;
+
+  insert into public.gpe_camp_points_ledger (
+    season_id,
+    season_member_id,
+    user_id,
+    submission_id,
+    submission_action_id,
+    challenge_id,
+    points,
+    reason,
+    adjustment_type,
+    entry_type,
+    source,
+    created_by,
+    awarded_by,
+    reversed_entry_id,
+    metadata
+  )
+  values (
+    original.season_id,
+    original.season_member_id,
+    original.user_id,
+    original.submission_id,
+    original.submission_action_id,
+    original.challenge_id,
+    -original.points,
+    p_reason,
+    'reversal',
+    'reversal',
+    'team_gpe_review',
+    actor,
+    actor,
+    original.id,
+    jsonb_build_object('original_entry_id', original.id)
+  )
+  returning id into reversal_id;
+
+  perform public.emit_gpe_notification('points_reversed', original.user_id, original.season_member_id, original.season_id, original.submission_id, original.submission_action_id, jsonb_build_object('points', -original.points, 'reason', p_reason));
+
+  return reversal_id;
+end;
+$$;
+
+alter table public.gpe_action_types enable row level security;
+alter table public.gpe_challenges enable row level security;
+alter table public.gpe_camp_submission_actions enable row level security;
+alter table public.gpe_notification_outbox enable row level security;
+
+create policy "gpe_action_types_read_active"
+on public.gpe_action_types
+for select
+to authenticated
+using (is_active or public.can_manage_camp(auth.uid()));
+
+create policy "gpe_action_types_manage_team"
+on public.gpe_action_types
+for all
+to authenticated
+using (public.can_manage_camp(auth.uid()))
+with check (public.can_manage_camp(auth.uid()));
+
+create policy "gpe_challenges_read_visible"
+on public.gpe_challenges
+for select
+to authenticated
+using (
+  public.can_manage_camp(auth.uid())
+  or exists (
+    select 1 from public.gpe_seasons s
+    where s.id = season_id
+      and s.is_visible
+      and (is_public or is_hub_visible)
+  )
+);
+
+create policy "gpe_challenges_manage_team"
+on public.gpe_challenges
+for all
+to authenticated
+using (public.can_manage_camp(auth.uid()))
+with check (public.can_manage_camp(auth.uid()));
+
+create policy "gpe_camp_submission_actions_read_own_or_team"
+on public.gpe_camp_submission_actions
+for select
+to authenticated
+using (
+  public.can_manage_camp(auth.uid())
+  or exists (
+    select 1
+    from public.gpe_camp_challenge_submissions sub
+    where sub.id = submission_id
+      and sub.user_id = auth.uid()
+  )
+);
+
+create policy "gpe_camp_submission_actions_manage_team"
+on public.gpe_camp_submission_actions
+for all
+to authenticated
+using (public.can_manage_camp(auth.uid()))
+with check (public.can_manage_camp(auth.uid()));
+
+create policy "gpe_notification_outbox_manage_team"
+on public.gpe_notification_outbox
+for all
+to authenticated
+using (public.can_manage_camp(auth.uid()))
+with check (public.can_manage_camp(auth.uid()));
+
+insert into public.gpe_action_types (slug, label, description, display_order)
+values
+  ('create_content', 'Create Content', 'Create an original Camp GPE post or story.', 10),
+  ('sign_petition', 'Sign Petition', 'Take a petition or campaign action.', 20),
+  ('share_story', 'Share Story', 'Share a personal climate or community story.', 30),
+  ('repost_gpe', 'Repost GPE', 'Amplify a GPE post or resource.', 40),
+  ('attend_event', 'Attend Event', 'Attend a Camp or community event.', 50),
+  ('recruit_friend', 'Recruit Friend', 'Invite a friend to participate.', 60),
+  ('learn', 'Learn', 'Complete a learning action.', 70),
+  ('cabin_mission', 'Cabin Mission', 'Complete a cabin-specific mission.', 80),
+  ('other', 'Other', 'An action that needs Team GPE review.', 90)
+on conflict (slug) do update
+set label = excluded.label,
+    description = excluded.description,
+    display_order = excluded.display_order,
+    updated_at = now();
+
+insert into public.gpe_challenges (
+  season_id,
+  action_type_id,
+  slug,
+  title,
+  short_description,
+  instructions,
+  category,
+  point_value,
+  is_active,
+  is_public,
+  is_hub_visible,
+  requires_proof,
+  requires_review,
+  auto_approve,
+  allow_multiple_submissions,
+  max_completions_per_member,
+  display_order
+)
+select
+  season.id,
+  action_type.id,
+  seed.slug,
+  seed.title,
+  seed.short_description,
+  seed.instructions,
+  seed.category,
+  null::integer,
+  false,
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  1,
+  seed.display_order
+from public.gpe_seasons season
+cross join (
+  values
+    ('challenge-1-july-6-17', 'Challenge 1 - July 6-July 17', 'First Camp GPE challenge window.', 'Submit proof from Challenge 1. Point value needs Team GPE confirmation before activation.', 'create_content', 'create_content', 10),
+    ('challenge-2-july-20-31', 'Challenge 2 - July 20-31', 'Second Camp GPE challenge window.', 'Submit proof from Challenge 2. Point value needs Team GPE confirmation before activation.', 'create_content', 'create_content', 20),
+    ('challenge-3-august-3-14', 'Challenge 3 - August 3-14', 'Third Camp GPE challenge window.', 'Submit proof from Challenge 3. Point value needs Team GPE confirmation before activation.', 'create_content', 'create_content', 30),
+    ('challenge-4-august-17-28', 'Challenge 4 - August 17-28', 'Final Camp GPE challenge window.', 'Submit proof from Challenge 4. Point value needs Team GPE confirmation before activation.', 'create_content', 'create_content', 40)
+) as seed(slug, title, short_description, instructions, category, action_type_slug, display_order)
+join public.gpe_action_types action_type on action_type.slug = seed.action_type_slug
+where season.slug = 'camp-gpe-2026'
+on conflict (season_id, slug) do update
+set title = excluded.title,
+    short_description = excluded.short_description,
+    instructions = excluded.instructions,
+    category = excluded.category,
+    action_type_id = excluded.action_type_id,
+    display_order = excluded.display_order,
+    updated_at = now();
+
+insert into public.gpe_challenges (
+  season_id,
+  action_type_id,
+  slug,
+  title,
+  short_description,
+  instructions,
+  category,
+  point_value,
+  is_active,
+  is_public,
+  is_hub_visible,
+  requires_proof,
+  requires_review,
+  auto_approve,
+  allow_multiple_submissions,
+  max_completions_per_member,
+  display_order,
+  action_url,
+  external_source,
+  external_action_slug
+)
+select
+  season.id,
+  action_type.id,
+  seed.slug,
+  seed.title,
+  seed.short_description,
+  seed.instructions,
+  'sign_petition',
+  seed.point_value,
+  seed.is_active,
+  true,
+  true,
+  false,
+  false,
+  true,
+  false,
+  1,
+  seed.display_order,
+  seed.action_url,
+  'action_network',
+  seed.external_action_slug
+from public.gpe_seasons season
+join public.gpe_action_types action_type on action_type.slug = 'sign_petition'
+cross join (
+  values
+    (
+      'sign-high-energy-bills-petition',
+      'Sign the High Energy Bills Petition',
+      'Take the high energy bills action as part of Camp GPE.',
+      'Complete the Action Network letter campaign. Action Network submissions can be imported automatically for Camp points.',
+      1::integer,
+      true,
+      101,
+      'https://actionnetwork.org/letters/tell-congress-we-need-relief-from-high-energy-bills-partner/?source=GPE',
+      'tell-congress-we-need-relief-from-high-energy-bills-partner'
+    ),
+    (
+      'stop-coal-slush-fund-petition',
+      'Stop Trump''s $700 Million Coal Slush Fund',
+      'Take the coal slush fund petition action.',
+      'Complete the Action Network petition. Point value needs Team GPE confirmation before activation.',
+      null::integer,
+      false,
+      102,
+      'https://actionnetwork.org/petitions/stop-trumps-700-million-coal-slush-fund-partner?source=Girl%20Plus%20Environment',
+      'stop-trumps-700-million-coal-slush-fund-partner'
+    )
+) as seed(slug, title, short_description, instructions, point_value, is_active, display_order, action_url, external_action_slug)
+where season.slug = 'camp-gpe-2026'
+on conflict (season_id, slug) do update
+set title = excluded.title,
+    short_description = excluded.short_description,
+    instructions = excluded.instructions,
+    category = excluded.category,
+    action_type_id = excluded.action_type_id,
+    point_value = excluded.point_value,
+    is_active = excluded.is_active,
+    is_public = excluded.is_public,
+    is_hub_visible = excluded.is_hub_visible,
+    requires_proof = excluded.requires_proof,
+    requires_review = excluded.requires_review,
+    auto_approve = excluded.auto_approve,
+    action_url = excluded.action_url,
+    external_source = excluded.external_source,
+    external_action_slug = excluded.external_action_slug,
+    display_order = excluded.display_order,
+    updated_at = now();

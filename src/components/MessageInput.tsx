@@ -28,21 +28,21 @@ const MessageInput = ({ onSend, disabled = false, placeholder = "Type a message.
   };
 
   return (
-    <div className="flex items-end gap-2">
+    <div className="flex min-w-0 items-end gap-2">
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-[60px] max-h-[200px] resize-none"
+        className="max-h-[200px] min-h-[52px] min-w-0 resize-none sm:min-h-[60px]"
         rows={1}
       />
       <Button
         onClick={handleSend}
         disabled={disabled || !message.trim()}
         size="icon"
-        className="h-[60px] w-[60px] flex-shrink-0"
+        className="h-[52px] w-[52px] flex-shrink-0 sm:h-[60px] sm:w-[60px]"
       >
         <Send className="h-5 w-5" />
       </Button>
@@ -51,4 +51,3 @@ const MessageInput = ({ onSend, disabled = false, placeholder = "Type a message.
 };
 
 export default MessageInput;
-

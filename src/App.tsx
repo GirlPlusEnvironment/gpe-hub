@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import Community from "./pages/Community";
@@ -13,15 +13,19 @@ import JobSubmissionForm from "./pages/JobSubmissionForm";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites.tsx";
 import Leaderboard from "./pages/Leaderboard";
+import CampChallenges from "./pages/CampChallenges";
 import NotFound from "./pages/NotFound";
 import ListingDetailPage from "./pages/ListingDetailPage";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
+import CampAdmin from "./pages/CampAdmin";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FavoriteProvider } from "@/contexts/FavoriteContext";
 import { MessagesProvider } from "@/contexts/MessagesContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminRoute from "@/components/AdminRoute";
+import TeamRoute from "@/components/TeamRoute";
 
 const queryClient = new QueryClient();
 
@@ -124,6 +128,48 @@ const App = () => (
               }
             />
             <Route
+              path="/camp-gpe"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/challenges"
+              element={
+                <ProtectedRoute>
+                  <CampChallenges />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/submissions"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/leaderboard"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/camp"
+              element={
+                <ProtectedRoute>
+                  <TeamRoute>
+                    <CampAdmin />
+                  </TeamRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin"
               element={
                 <ProtectedRoute>
@@ -134,7 +180,8 @@ const App = () => (
               }
             />
             <Route path="/login" element={<Login />} />
-            <Route path="/sign-up" element={<Login />} />
+            <Route path="/sign-up" element={<Navigate to="/login?mode=signup" replace />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route
               path="*"

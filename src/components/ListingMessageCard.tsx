@@ -18,10 +18,10 @@ const ListingMessageCard = ({ listing }: ListingMessageCardProps) => {
   return (
     <Link 
       to={`/listing/${listing.id}`} 
-      className="block" 
+      className="block max-w-full" 
       onClick={(e) => e.stopPropagation()}
     >
-      <Card className="min-w-[260px] max-w-[400px] cursor-pointer hover:shadow-lg transition border bg-card">
+      <Card className="w-full min-w-0 max-w-[400px] cursor-pointer border bg-card transition hover:shadow-lg">
         <div className="relative">
           <img
             src={listing.image}
@@ -31,8 +31,8 @@ const ListingMessageCard = ({ listing }: ListingMessageCardProps) => {
           />
         </div>
         <CardHeader className="pb-2">
-          <CardTitle className="line-clamp-1 text-base">{listing.title}</CardTitle>
-          <CardDescription className="line-clamp-2 text-xs">
+          <CardTitle className="line-clamp-2 break-words text-base leading-tight">{listing.title}</CardTitle>
+          <CardDescription className="line-clamp-3 break-words text-xs">
             {listing.summary || listing.description}
           </CardDescription>
         </CardHeader>
@@ -48,4 +48,3 @@ const ListingMessageCard = ({ listing }: ListingMessageCardProps) => {
 };
 
 export default ListingMessageCard;
-

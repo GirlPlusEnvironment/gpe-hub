@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { Navigate } from "react-router-dom";
+import { isAdmin as checkIsAdmin } from "@/lib/roles";
 
 export default function AdminRoute({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -9,21 +9,7 @@ export default function AdminRoute({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const user = data.session?.user;
-        if (!user) {
-          setIsAdmin(false);
-          return;
-        }
-
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        if (error) throw error;
-        setIsAdmin(profile?.role === "admin");
+        setIsAdmin(await checkIsAdmin());
       } catch {
         setIsAdmin(false);
       } finally {

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Compass,
@@ -33,22 +33,39 @@ const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [role, setRole] = useState<"user" | "team_gpe" | "admin">("user");
 
-  useEffect(() => {
+  const loadRole = useCallback(async () => {
     if (!user) {
       setRole("user");
       return;
     }
 
-    void (async () => {
-      try {
-        if (await checkIsAdmin()) setRole("admin");
-        else if (await canManageCamp()) setRole("team_gpe");
-        else setRole("user");
-      } catch {
-        setRole("user");
+    try {
+      if (await checkIsAdmin()) setRole("admin");
+      else if (await canManageCamp()) setRole("team_gpe");
+      else setRole("user");
+    } catch {
+      setRole("user");
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadRole();
+  }, [loadRole]);
+
+  useEffect(() => {
+    const refreshRole = () => {
+      if (document.visibilityState !== "hidden") {
+        void loadRole();
       }
-    })();
-  }, [user, user?.id]);
+    };
+
+    window.addEventListener("focus", refreshRole);
+    document.addEventListener("visibilitychange", refreshRole);
+    return () => {
+      window.removeEventListener("focus", refreshRole);
+      document.removeEventListener("visibilitychange", refreshRole);
+    };
+  }, [loadRole]);
 
   const displayName = getPreferredDisplayName({
     fullName: profile?.full_name,

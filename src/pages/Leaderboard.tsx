@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Award, CalendarDays, Loader2, Shield, Trophy, Users, Zap } from "lucide-react";
+import { Award, BadgeCheck, Clock, Loader2, Medal, Search, Shield, Sparkles, Trophy, Users, Zap } from "lucide-react";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import { UserProfileCard } from "@/components/UserProfileCard";
@@ -10,20 +10,40 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  ActivityItem,
+  CabinCard,
+  CampButton,
+  CampProgress,
+  ChallengeCard,
+  MarqueeStrip,
+  PrizeCard,
+  SectionHeader,
+  StatSticker,
+  Sticker,
+  Tape,
+} from "@/components/camp/CampDesign";
+import {
+  type CampCabinLeaderboardRow,
+  type CampChallenge,
   type CampLeaderboardRow,
   type CampPointsLedgerRow,
+  type CampRecentActivityRow,
   type CampSeason,
   type CampSeasonMember,
   type CampSubmission,
   getActiveCampSeason,
+  getCampCabinLeaderboard,
   getCampLeaderboard,
+  getCampRecentActivity,
+  getHubCampChallenges,
   getMyCampHistory,
   getMyCampStatus,
 } from "@/lib/camp";
 import { getLeaderboard } from "@/lib/points";
+import { reviewStatusLabel } from "@/lib/review-status";
 import { canManageCamp, isAdmin as checkIsAdmin } from "@/lib/roles";
 
-type LeaderboardTab = "main" | "seasonal";
+type LeaderboardTab = "all-time" | "seasonal" | "cabins" | "badges";
 type TimeRange = "all" | "7d" | "30d";
 
 type LeaderboardUser = {
@@ -44,13 +64,6 @@ const LEVELS = [
   { level: 5, threshold: 2000, color: "bg-amber-300" },
 ];
 
-const statusLabel: Record<string, string> = {
-  pending: "Pending review",
-  approved: "Approved",
-  rejected: "Not approved",
-  needs_info: "Needs info",
-};
-
 function getRankMedal(rank: number) {
   if (rank === 1) return <Trophy className="h-5 w-5 text-amber-500" />;
   if (rank === 2) return <Trophy className="h-5 w-5 text-gray-400" />;
@@ -62,8 +75,53 @@ function getLevelColor(level: number) {
   return (LEVELS.find((entry) => entry.level === level) ?? LEVELS[0]).color;
 }
 
+function daysBetween(target: string | null | undefined) {
+  if (!target) return null;
+  return Math.ceil((new Date(target).getTime() - Date.now()) / 86400000);
+}
+
+function seasonCountdownLabel(season: CampSeason | null) {
+  if (!season) return "No active season";
+  const startsIn = daysBetween(season.starts_at);
+  const endsIn = daysBetween(season.ends_at);
+  if (startsIn !== null && startsIn > 0) return `Starts in ${startsIn} day${startsIn === 1 ? "" : "s"}`;
+  if (endsIn !== null && endsIn >= 0) return `${endsIn} day${endsIn === 1 ? "" : "s"} left`;
+  if (season.ends_at) return "Season complete";
+  return "Season active";
+}
+
+function relativeTime(value: string) {
+  const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function parsePrizes(season: CampSeason | null): Array<{ title: string; description: string }> {
+  const prizes = season?.point_rules?.prizes;
+  if (!Array.isArray(prizes)) return [];
+  return prizes
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const title = typeof record.title === "string" ? record.title : typeof record.name === "string" ? record.name : "";
+      const description = typeof record.description === "string" ? record.description : typeof record.detail === "string" ? record.detail : "";
+      if (!title.trim()) return null;
+      return { title, description };
+    })
+    .filter((entry): entry is { title: string; description: string } => Boolean(entry));
+}
+
+function rankMovementLabel(_row: CampLeaderboardRow) {
+  return "-";
+}
+
 export default function Leaderboard() {
-  const [activeTab, setActiveTab] = useState<LeaderboardTab>("main");
+  const [activeTab, setActiveTab] = useState<LeaderboardTab>("all-time");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [mainLeaderboard, setMainLeaderboard] = useState<LeaderboardUser[]>([]);
   const [mainLoading, setMainLoading] = useState(true);
@@ -73,6 +131,9 @@ export default function Leaderboard() {
 
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [seasonalLeaderboard, setSeasonalLeaderboard] = useState<CampLeaderboardRow[]>([]);
+  const [cabinLeaderboard, setCabinLeaderboard] = useState<CampCabinLeaderboardRow[]>([]);
+  const [challenges, setChallenges] = useState<CampChallenge[]>([]);
+  const [recentActivity, setRecentActivity] = useState<CampRecentActivityRow[]>([]);
   const [memberStatus, setMemberStatus] = useState<CampSeasonMember | null>(null);
   const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
   const [ledger, setLedger] = useState<CampPointsLedgerRow[]>([]);
@@ -86,6 +147,24 @@ export default function Leaderboard() {
     () => ledger.filter((row) => !row.reversed_at).reduce((sum, row) => sum + row.points, 0),
     [ledger],
   );
+  const headerCopy = useMemo(() => {
+    if (activeTab === "seasonal") return {
+      title: "Current Season",
+      description: `${seasonalTitle} competition dashboard with live rankings, cabin totals, challenge progress, and reviewed activity.`,
+    };
+    if (activeTab === "cabins") return {
+      title: "Cabin Leaderboard",
+      description: "Current-season cabin totals based only on approved and unreversed Camp points.",
+    };
+    if (activeTab === "badges") return {
+      title: "Badge Board",
+      description: "Achievement-style previews based on real points and approved challenge counts.",
+    };
+    return {
+      title: "All-Time Leaderboard",
+      description: "Permanent GPE Hub rankings for year-round community participation.",
+    };
+  }, [activeTab, seasonalTitle]);
 
   const loadRole = useCallback(async () => {
     try {
@@ -118,18 +197,27 @@ export default function Leaderboard() {
       setSeason(active);
       if (!active) {
         setSeasonalLeaderboard([]);
+        setCabinLeaderboard([]);
+        setChallenges([]);
+        setRecentActivity([]);
         setMemberStatus(null);
         setSubmissions([]);
         setLedger([]);
         setSeasonalLoaded(true);
         return;
       }
-      const [boardRows, status, history] = await Promise.all([
+      const [boardRows, cabinRows, challengeRows, activityRows, status, history] = await Promise.all([
         getCampLeaderboard(active.id, 50),
+        getCampCabinLeaderboard(active.id),
+        getHubCampChallenges(active.id),
+        getCampRecentActivity(active.id, 12),
         getMyCampStatus(active.id),
         getMyCampHistory(active.id),
       ]);
       setSeasonalLeaderboard(boardRows);
+      setCabinLeaderboard(cabinRows);
+      setChallenges(challengeRows);
+      setRecentActivity(activityRows);
       setMemberStatus(status as CampSeasonMember | null);
       setSubmissions(history.submissions);
       setLedger(history.ledger);
@@ -150,10 +238,18 @@ export default function Leaderboard() {
   }, [loadRole]);
 
   useEffect(() => {
-    if (activeTab === "seasonal" && !seasonalLoaded && !seasonalLoading) {
+    if ((activeTab === "seasonal" || activeTab === "cabins" || activeTab === "badges") && !seasonalLoaded && !seasonalLoading) {
       void loadSeasonalLeaderboard();
     }
   }, [activeTab, loadSeasonalLeaderboard, seasonalLoaded, seasonalLoading]);
+
+  useEffect(() => {
+    if (activeTab !== "seasonal" || !seasonalLoaded) return;
+    const interval = window.setInterval(() => {
+      void loadSeasonalLeaderboard();
+    }, 45000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, loadSeasonalLeaderboard, seasonalLoaded]);
 
   function openProfile(userId: string) {
     setSelectedUserId(userId);
@@ -165,39 +261,44 @@ export default function Leaderboard() {
       <Header />
       <main className="gpe-page-main">
         <div className="mx-auto max-w-6xl space-y-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border-[3px] border-black bg-yellow-200 px-4 py-2 text-xs font-black uppercase">
-                <Trophy className="h-4 w-4" />
-                Leaderboard
-              </div>
-              <h1 className="gpe-heading text-4xl md:text-6xl">GPE Leaderboard</h1>
-              <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
-                Track year-round GPE Hub participation and seasonal campaign rankings in one place.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+          <SectionHeader
+            eyebrow={<Sticker accent="yellow"><Trophy className="mr-2 h-4 w-4" /> Leaderboard</Sticker>}
+            title={headerCopy.title}
+            description={headerCopy.description}
+            action={
+              <>
               {accountRole !== "member" ? (
                 <Badge className="border-[3px] border-black bg-cyan-200 px-4 py-2 text-black">
                   <Shield className="mr-2 h-4 w-4" />
                   {accountRole === "admin" ? "Admin" : "Team GPE"}
                 </Badge>
               ) : null}
-              <Link to="/"><Button variant="outline">Dashboard</Button></Link>
-            </div>
-          </div>
+              <Link to="/"><CampButton variant="outline">Dashboard</CampButton></Link>
+              </>
+            }
+          />
+
+          <MarqueeStrip>
+            All-time rankings - current season - cabin totals - badge previews - reviewed points only
+          </MarqueeStrip>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LeaderboardTab)}>
-            <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-[1.5rem] border-[3px] border-black bg-white p-2 sm:grid-cols-2">
-              <TabsTrigger className="rounded-[1rem] py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white" value="main">
-                Main Leaderboard
+            <TabsList className="grid h-auto w-full grid-cols-1 gap-3 rounded-[2rem] border-[4px] border-black bg-white p-3 shadow-gpe-sm sm:grid-cols-2 lg:grid-cols-4">
+              <TabsTrigger className="rounded-[1.25rem] border-[3px] border-black py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white data-[state=inactive]:bg-gpe-yellow" value="all-time">
+                All-Time
               </TabsTrigger>
-              <TabsTrigger className="rounded-[1rem] py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white" value="seasonal">
-                Seasonal Leaderboard
+              <TabsTrigger className="rounded-[1.25rem] border-[3px] border-black py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white data-[state=inactive]:bg-gpe-cyan" value="seasonal">
+                Current Season
+              </TabsTrigger>
+              <TabsTrigger className="rounded-[1.25rem] border-[3px] border-black py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white data-[state=inactive]:bg-gpe-orange" value="cabins">
+                Cabins
+              </TabsTrigger>
+              <TabsTrigger className="rounded-[1.25rem] border-[3px] border-black py-3 font-black uppercase data-[state=active]:bg-black data-[state=active]:text-white data-[state=inactive]:bg-white" value="badges">
+                Badges
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="main" className="mt-8 space-y-8">
+            <TabsContent value="all-time" className="mt-8 space-y-8">
               <MainLeaderboardPanel
                 error={mainError}
                 isLoading={mainLoading}
@@ -211,6 +312,8 @@ export default function Leaderboard() {
 
             <TabsContent value="seasonal" className="mt-8 space-y-8">
               <SeasonalLeaderboardPanel
+                cabinLeaderboard={cabinLeaderboard}
+                challenges={challenges}
                 error={seasonalError}
                 isLoading={seasonalLoading}
                 ledger={ledger}
@@ -219,6 +322,7 @@ export default function Leaderboard() {
                   setSeasonalLoaded(false);
                   void loadSeasonalLeaderboard();
                 }}
+                recentActivity={recentActivity}
                 season={season}
                 seasonalLeaderboard={seasonalLeaderboard}
                 seasonalTitle={seasonalTitle}
@@ -226,9 +330,28 @@ export default function Leaderboard() {
                 totalSeasonalPoints={totalSeasonalPoints}
               />
             </TabsContent>
+            <TabsContent value="cabins" className="mt-8 space-y-8">
+              <CabinsPanel
+                cabinLeaderboard={cabinLeaderboard}
+                error={seasonalError}
+                isLoading={seasonalLoading}
+                onRefresh={() => {
+                  setSeasonalLoaded(false);
+                  void loadSeasonalLeaderboard();
+                }}
+                season={season}
+              />
+            </TabsContent>
+            <TabsContent value="badges" className="mt-8 space-y-8">
+              <BadgesPanel
+                leaderboard={seasonalLeaderboard}
+                mainLeaderboard={mainLeaderboard}
+                season={season}
+              />
+            </TabsContent>
           </Tabs>
 
-          <TeamAccountHelp />
+          {accountRole !== "member" ? <TeamAccountHelp /> : null}
         </div>
       </main>
       <Footer />
@@ -257,35 +380,54 @@ function MainLeaderboardPanel({
   setTimeRange: (range: TimeRange) => void;
   timeRange: TimeRange;
 }) {
+  const [search, setSearch] = useState("");
+  const visibleLeaderboard = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return leaderboard;
+    return leaderboard.filter((user) =>
+      [user.full_name, user.username]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [leaderboard, search]);
+
   return (
     <>
-      <div className="text-center">
-        <div className="mb-4 flex items-center justify-center gap-3">
-          <Zap className="h-8 w-8 text-primary" />
-          <h2 className="gpe-heading text-3xl md:text-5xl">Community Leaderboard</h2>
-          <Zap className="h-8 w-8 text-primary" />
+      <SectionHeader
+        eyebrow={<Sticker accent="pink"><Zap className="mr-2 h-4 w-4" /> Community XP</Sticker>}
+        title="Community Leaderboard"
+        description="Celebrate members earning general Hub points through posts, comments, listings, messages, and community participation."
+      />
+
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2" />
+          <input
+            aria-label="Search leaderboard members"
+            className="h-12 w-full rounded-full border-[4px] border-black bg-white pl-12 pr-4 text-sm font-bold shadow-gpe-sm outline-none focus:ring-4 focus:ring-gpe-cyan"
+            placeholder="Search members"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </div>
-        <p className="mx-auto max-w-2xl text-base font-bold text-black/70">
-          Celebrate members earning general Hub points through posts, comments, listings, messages, and community participation.
-        </p>
+        <div className="flex flex-wrap gap-3">
+          {(["all", "30d", "7d"] as const).map((range) => (
+            <CampButton
+              key={range}
+              variant={timeRange === range ? "default" : "sticker"}
+              onClick={() => setTimeRange(range)}
+              className="uppercase tracking-wide"
+            >
+              {range === "all" ? "All Time" : range === "7d" ? "Week" : "Month"}
+            </CampButton>
+          ))}
+          <CampButton variant="cyan" onClick={onRefresh}>Refresh</CampButton>
+        </div>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-3">
-        {(["all", "30d", "7d"] as const).map((range) => (
-          <Button
-            key={range}
-            variant={timeRange === range ? "default" : "outline"}
-            onClick={() => setTimeRange(range)}
-            className="uppercase tracking-wide"
-          >
-            {range === "all" ? "All Time" : range === "7d" ? "This Week" : "This Month"}
-          </Button>
-        ))}
-        <Button variant="outline" onClick={onRefresh}>Refresh</Button>
-      </div>
-
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
+          <Tape>Global rankings</Tape>
           <CardTitle className="text-xl">Member Rankings</CardTitle>
           <CardDescription>
             {timeRange === "all" && "All-time points from profiles.points."}
@@ -303,35 +445,37 @@ function MainLeaderboardPanel({
               <p className="mb-2 font-bold text-destructive">Failed to load leaderboard</p>
               <p className="text-sm font-bold text-muted-foreground">{error}</p>
             </div>
-          ) : leaderboard.length === 0 ? (
+          ) : visibleLeaderboard.length === 0 ? (
             <div className="py-12 text-center text-sm font-bold text-black/60">
               No general rankings are available for this time period.
             </div>
           ) : (
             <div className="space-y-3">
-              {leaderboard.map((user) => (
+              {visibleLeaderboard.map((user) => (
                 <button
                   key={user.id}
                   type="button"
-                  className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-[1.5rem] border-[3px] border-black bg-white p-4 text-left transition-colors hover:bg-pink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={`flex w-full cursor-pointer items-center justify-between gap-4 rounded-[1.75rem] border-[4px] border-black p-4 text-left shadow-gpe-sm transition-all hover:-translate-x-1 hover:-translate-y-1 hover:shadow-gpe focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    user.rank === 1 ? "bg-gpe-yellow" : user.rank === 2 ? "bg-gpe-cyan" : user.rank === 3 ? "bg-[#fbd3d3]" : "bg-white"
+                  }`}
                   onClick={() => onSelectUser(user.id)}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-4">
-                    <div className="flex w-8 items-center justify-center text-center">
+                    <div className="flex w-10 items-center justify-center text-center font-header text-2xl">
                       {user.rank <= 3 ? getRankMedal(user.rank) : <span className="font-semibold text-muted-foreground">#{user.rank}</span>}
                     </div>
-                    <Avatar className="h-12 w-12 ring-2 ring-primary/10">
+                    <Avatar className="h-14 w-14 border-[3px] border-black">
                       <AvatarImage src={user.avatar || ""} />
-                      <AvatarFallback className="bg-primary/10">
+                      <AvatarFallback className="bg-white font-black">
                         {user.full_name?.charAt(0) || user.username?.charAt(0) || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate font-medium text-foreground">
+                        <span className="truncate font-black text-foreground">
                           {user.full_name || user.username || "Unknown"}
                         </span>
-                        <Badge className={`${getLevelColor(user.level)} text-xs font-semibold text-foreground`}>
+                        <Badge className={`${getLevelColor(user.level)} border-2 border-black text-xs font-black text-foreground`}>
                           Level {user.level}
                         </Badge>
                       </div>
@@ -341,8 +485,8 @@ function MainLeaderboardPanel({
                     </div>
                   </div>
                   <div className="ml-4 text-right">
-                    <div className="text-2xl font-bold text-primary">{user.points}</div>
-                    <div className="text-xs text-muted-foreground">pts</div>
+                    <div className="font-header text-3xl text-black">{user.points}</div>
+                    <div className="text-xs font-black uppercase text-black/60">pts</div>
                   </div>
                 </button>
               ))}
@@ -354,16 +498,17 @@ function MainLeaderboardPanel({
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <Card>
           <CardHeader>
+            <Tape>XP ladder</Tape>
             <CardTitle className="text-lg">Level Tiers</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
               {LEVELS.map((entry) => (
-                <div key={entry.level} className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 text-center">
-                  <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${entry.color} text-lg font-bold`}>
+                <div key={entry.level} className="rounded-[1.5rem] border-[4px] border-black bg-white p-4 text-center shadow-gpe-sm">
+                  <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-black ${entry.color} text-lg font-black`}>
                     {entry.level}
                   </div>
-                  <div className="font-semibold text-foreground">Level {entry.level}</div>
+                  <div className="font-black text-foreground">Level {entry.level}</div>
                   <div className="mt-2 text-sm text-muted-foreground">{entry.threshold.toLocaleString()}+ pts</div>
                 </div>
               ))}
@@ -373,6 +518,7 @@ function MainLeaderboardPanel({
 
         <Card>
           <CardHeader>
+            <Tape>How points work</Tape>
             <CardTitle className="text-lg">How to Earn Points</CardTitle>
           </CardHeader>
           <CardContent>
@@ -402,35 +548,57 @@ function MainLeaderboardPanel({
 }
 
 function SeasonalLeaderboardPanel({
+  cabinLeaderboard,
+  challenges,
   error,
   isLoading,
   ledger,
   memberStatus,
   onRefresh,
+  recentActivity,
   season,
   seasonalLeaderboard,
   seasonalTitle,
   submissions,
   totalSeasonalPoints,
 }: {
+  cabinLeaderboard: CampCabinLeaderboardRow[];
+  challenges: CampChallenge[];
   error: string | null;
   isLoading: boolean;
   ledger: CampPointsLedgerRow[];
   memberStatus: CampSeasonMember | null;
   onRefresh: () => void;
+  recentActivity: CampRecentActivityRow[];
   season: CampSeason | null;
   seasonalLeaderboard: CampLeaderboardRow[];
   seasonalTitle: string;
   submissions: CampSubmission[];
   totalSeasonalPoints: number;
 }) {
+  const prizes = parsePrizes(season);
+  const activeLedger = ledger.filter((row) => !row.reversed_at);
+  const completedChallengeIds = new Set(activeLedger.map((row) => row.challenge_id).filter(Boolean));
+  const totalSeasonPoints = seasonalLeaderboard.reduce((sum, row) => sum + row.points, 0);
+  const totalActions = seasonalLeaderboard.reduce((sum, row) => sum + (row.approved_challenge_count || 0), 0);
+  const myRank = memberStatus ? seasonalLeaderboard.find((row) => row.season_member_id === memberStatus.id) : null;
+  const nextRank = myRank ? seasonalLeaderboard.find((row) => row.rank === myRank.rank - 1) : null;
+  const pointsToday = activeLedger
+    .filter((row) => new Date(row.created_at).toDateString() === new Date().toDateString())
+    .reduce((sum, row) => sum + row.points, 0);
+  const pointsToNext = myRank && nextRank ? Math.max(0, nextRank.points - myRank.points + 1) : 0;
+
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </CardContent>
-      </Card>
+      <div className="grid gap-5 md:grid-cols-2">
+        {[0, 1, 2, 3].map((item) => (
+          <Card key={item}>
+            <CardContent className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     );
   }
 
@@ -458,93 +626,59 @@ function SeasonalLeaderboardPanel({
 
   return (
     <>
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h2 className="gpe-heading text-3xl md:text-5xl">Seasonal Leaderboard</h2>
-          <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
-            {seasonalTitle} points are campaign-specific. Submissions appear in your history after they are saved, and points are added after Team GPE review.
-          </p>
-        </div>
-        <Button variant="outline" onClick={onRefresh}>Refresh</Button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CalendarDays className="h-5 w-5" />
-              Season
-            </CardTitle>
-            <CardDescription>{season.status}</CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-black">{seasonalTitle}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5" />
-              My Season Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black">{memberStatus?.status || "Not linked"}</div>
-            <p className="mt-2 text-xs font-bold text-black/60">
-              {memberStatus?.gpe_cabins?.name ? `Cabin: ${memberStatus.gpe_cabins.name}` : "Join the current seasonal campaign from the public campaign page if your account is not linked yet."}
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <Card className="relative overflow-hidden bg-white p-0">
+          <CardContent className="p-6 md:p-8">
+            <Tape className="absolute right-8 top-5">Current mission</Tape>
+            <div className="mb-5 inline-flex rounded-full border-[3px] border-black bg-gpe-yellow px-4 py-2 text-xs font-black uppercase">
+              {season.status}
+            </div>
+            <h2 className="gpe-heading text-4xl md:text-6xl">{seasonalTitle}</h2>
+            <p className="mt-4 max-w-2xl text-sm font-bold text-black/70 md:text-base">
+              {season.description || "Complete approved actions, help your cabin climb, and track reviewed points as the season unfolds."}
             </p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <CountdownCard season={season} />
+              <Link to="/camp-gpe/challenges">
+                <CampButton variant="secondary" size="lg">Submit Challenge</CampButton>
+              </Link>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Award className="h-5 w-5" />
-              My Points
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-4xl font-black text-primary">{totalSeasonalPoints}</CardContent>
-        </Card>
+
+        <YourRankCard
+          cabin={memberStatus?.gpe_cabins?.name || "No cabin yet"}
+          points={myRank?.points ?? totalSeasonalPoints}
+          pointsToday={pointsToday}
+          pointsToNext={pointsToNext}
+          rank={myRank?.rank ?? null}
+          seasonName={seasonalTitle}
+        />
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatSticker label="Members competing" value={seasonalLeaderboard.length.toLocaleString()} accent="yellow" icon={<Users className="h-14 w-14" />} />
+        <StatSticker label="Actions completed" value={totalActions.toLocaleString()} accent="cyan" icon={<BadgeCheck className="h-14 w-14" />} />
+        <StatSticker label="Points earned" value={totalSeasonPoints.toLocaleString()} accent="pink" icon={<Zap className="h-14 w-14" />} />
+        <StatSticker label="Season clock" value={seasonCountdownLabel(season)} accent="orange" icon={<Clock className="h-14 w-14" />} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{seasonalTitle} Rankings</CardTitle>
-          <CardDescription>Ranked by reviewed, unreversed points for this seasonal campaign.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {seasonalLeaderboard.length === 0 ? (
-            <div className="py-10 text-center text-sm font-bold text-black/60">
-              Season rankings are not available yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {seasonalLeaderboard.map((row) => (
-                <div key={row.season_member_id} className="flex items-center justify-between gap-4 rounded-[1.5rem] border-[3px] border-black bg-white p-4">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="w-10 text-center text-xl font-black">#{row.rank}</div>
-                    <Avatar className="h-12 w-12 border-[3px] border-black">
-                      <AvatarImage src={row.avatar_url || undefined} />
-                      <AvatarFallback className="bg-cyan-200 font-black">
-                        {(row.full_name || row.username || row.contact_email).charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <div className="truncate font-black">{row.full_name || row.username || row.contact_email}</div>
-                      <div className="text-xs font-bold uppercase text-black/60">{row.cabin_name || "No cabin yet"}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-black text-primary">{row.points}</div>
-                    <div className="text-xs font-bold uppercase text-black/50">points</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} />
+
+      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+        <SeasonRankingsCard leaderboard={seasonalLeaderboard} seasonalTitle={seasonalTitle} />
+        <RecentActivityFeed activity={recentActivity} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ChallengeTracks challenges={challenges} completedChallengeIds={completedChallengeIds} />
+        <PrizeSection prizes={prizes} />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
+            <Tape>Submission history</Tape>
             <CardTitle>My Challenge History</CardTitle>
             <CardDescription>Submissions are reviewed before points appear on the seasonal leaderboard.</CardDescription>
           </CardHeader>
@@ -552,21 +686,19 @@ function SeasonalLeaderboardPanel({
             {submissions.length === 0 ? (
               <p className="text-sm font-bold text-black/60">No seasonal challenge submissions are linked to this Hub account yet.</p>
             ) : submissions.map((submission) => (
-              <div key={submission.id} className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-black">{submission.challenge_key.replaceAll("_", " ")}</div>
-                  <Badge>{statusLabel[submission.review_status] || submission.review_status}</Badge>
-                </div>
-                <div className="mt-2 text-xs font-bold text-black/60">
-                  {new Date(submission.created_at).toLocaleString()}
-                </div>
-              </div>
+              <ActivityItem
+                key={submission.id}
+                title={submission.challenge_key.replaceAll("_", " ")}
+                detail={reviewStatusLabel(submission.review_status)}
+                timestamp={new Date(submission.created_at).toLocaleString()}
+              />
             ))}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
+            <Tape>Point ledger</Tape>
             <CardTitle>My Point Ledger</CardTitle>
             <CardDescription>Corrections and reversals are preserved for auditability.</CardDescription>
           </CardHeader>
@@ -574,18 +706,387 @@ function SeasonalLeaderboardPanel({
             {ledger.length === 0 ? (
               <p className="text-sm font-bold text-black/60">No reviewed seasonal points yet.</p>
             ) : ledger.map((row) => (
-              <div key={row.id} className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-black">{row.reason}</div>
-                  <div className={row.reversed_at ? "font-black text-black/40 line-through" : "font-black text-primary"}>
-                    {row.points > 0 ? "+" : ""}{row.points}
-                  </div>
-                </div>
-                <div className="mt-2 text-xs font-bold uppercase text-black/60">{row.adjustment_type}</div>
-              </div>
+              <ActivityItem
+                key={row.id}
+                title={row.reason}
+                detail={row.adjustment_type}
+                points={<span className={row.reversed_at ? "line-through" : ""}>{row.points > 0 ? "+" : ""}{row.points} pts</span>}
+                timestamp={new Date(row.created_at).toLocaleString()}
+              />
             ))}
           </CardContent>
         </Card>
+      </div>
+    </>
+  );
+}
+
+function CountdownCard({ season }: { season: CampSeason }) {
+  const startsIn = daysBetween(season.starts_at);
+  const endsIn = daysBetween(season.ends_at);
+  const detail = startsIn !== null && startsIn > 0
+    ? season.starts_at
+    : season.ends_at;
+  return (
+    <div className="rounded-[2rem] border-[4px] border-black bg-gpe-cyan p-5 shadow-gpe-sm">
+      <div className="flex items-center gap-3">
+        <Clock className="h-8 w-8" />
+        <div>
+          <div className="font-header text-3xl uppercase leading-none">{seasonCountdownLabel(season)}</div>
+          <div className="mt-1 text-xs font-black uppercase text-black/60">
+            {detail ? new Date(detail).toLocaleString() : "Dates pending"}
+          </div>
+        </div>
+      </div>
+      {endsIn !== null && startsIn !== null && startsIn <= 0 ? (
+        <div className="mt-4">
+          <CampProgress
+            label="Season progress"
+            value={Math.max(0, Date.now() - new Date(season.starts_at || Date.now()).getTime())}
+            max={Math.max(1, new Date(season.ends_at || Date.now()).getTime() - new Date(season.starts_at || Date.now()).getTime())}
+            accent="black"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function YourRankCard({
+  cabin,
+  points,
+  pointsToday,
+  pointsToNext,
+  rank,
+  seasonName,
+}: {
+  cabin: string;
+  points: number;
+  pointsToday: number;
+  pointsToNext: number;
+  rank: number | null;
+  seasonName: string;
+}) {
+  return (
+    <Card className="bg-black text-white">
+      <CardHeader>
+        <Tape>Your rank</Tape>
+        <CardTitle className="text-white">{rank ? `#${rank}` : "Not ranked yet"}</CardTitle>
+        <CardDescription className="text-white/70">{seasonName}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 text-sm font-black uppercase">
+        <div className="flex items-center justify-between gap-4 border-b-2 border-white/30 pb-3">
+          <span>Current season</span>
+          <span>{points.toLocaleString()} pts</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b-2 border-white/30 pb-3">
+          <span>Today</span>
+          <span>{pointsToday > 0 ? "+" : ""}{pointsToday} pts</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b-2 border-white/30 pb-3">
+          <span>Cabin</span>
+          <span>{cabin}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span>Next rank</span>
+          <span>{pointsToNext > 0 ? `${pointsToNext} pts away` : rank ? "Top spot" : "Submit to rank"}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampCabinLeaderboardRow[] }) {
+  const maxPoints = Math.max(1, ...cabinLeaderboard.map((row) => row.points));
+  if (cabinLeaderboard.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-sm font-bold text-black/60">Cabin totals are not available yet.</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        eyebrow={<Sticker accent="cyan"><Users className="mr-2 h-4 w-4" /> Cabins</Sticker>}
+        title="Cabin Leaderboard"
+        description="Current-season cabin totals update from approved Camp point ledger entries."
+      />
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {cabinLeaderboard.map((row, index) => (
+          <CabinCard
+            key={row.cabin_id}
+            name={`${row.rank}. ${row.cabin_name}`}
+            members={`${row.member_count} member${row.member_count === 1 ? "" : "s"}`}
+            score={`${row.points.toLocaleString()} pts`}
+            progress={Math.round((row.points / maxPoints) * 100)}
+            accent={(["pink", "yellow", "cyan", "orange"] as const)[index % 4]}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SeasonRankingsCard({
+  leaderboard,
+  seasonalTitle,
+}: {
+  leaderboard: CampLeaderboardRow[];
+  seasonalTitle: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <Tape>Reviewed points only</Tape>
+        <CardTitle>{seasonalTitle} Rankings</CardTitle>
+        <CardDescription>Ranked by approved, unreversed points for this seasonal campaign.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {leaderboard.length === 0 ? (
+          <div className="py-10 text-center text-sm font-bold text-black/60">
+            Season rankings are not available yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {leaderboard.map((row) => (
+              <div key={row.season_member_id} className={`grid gap-4 rounded-[1.75rem] border-[4px] border-black p-4 shadow-gpe-sm md:grid-cols-[1fr_auto] md:items-center ${row.rank === 1 ? "bg-gpe-yellow" : row.rank === 2 ? "bg-gpe-cyan" : row.rank === 3 ? "bg-[#fbd3d3]" : "bg-white"}`}>
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="w-12 text-center font-header text-2xl">#{row.rank}</div>
+                  <Avatar className="h-12 w-12 border-[3px] border-black">
+                    <AvatarImage src={row.avatar_url || undefined} />
+                    <AvatarFallback className="bg-cyan-200 font-black">
+                      {(row.full_name || row.username || row.contact_email).charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="truncate font-black">{row.full_name || row.username || row.contact_email}</div>
+                    <div className="text-xs font-bold uppercase text-black/60">{row.cabin_name || "No cabin yet"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-5 text-right md:justify-end">
+                  <Badge variant="outline" className="bg-white">Move {rankMovementLabel(row)}</Badge>
+                  <div>
+                    <div className="font-header text-3xl text-black">{row.points.toLocaleString()}</div>
+                    <div className="text-xs font-bold uppercase text-black/50">points</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecentActivityFeed({ activity }: { activity: CampRecentActivityRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <Tape>Live activity</Tape>
+        <CardTitle>Recent Activity</CardTitle>
+        <CardDescription>Visible approved ledger activity refreshes while this tab is open.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {activity.length === 0 ? (
+          <p className="text-sm font-bold text-black/60">No visible approved activity yet.</p>
+        ) : activity.map((row) => {
+          const profileName = row.profiles?.full_name || row.profiles?.username || "A member";
+          const challengeTitle = row.gpe_challenges?.title || row.reason;
+          return (
+            <ActivityItem
+              key={row.id}
+              avatar={
+                <Avatar className="h-10 w-10 border-2 border-black">
+                  <AvatarImage src={row.profiles?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gpe-yellow font-black">{profileName.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+              }
+              icon={<Sparkles className="h-5 w-5" />}
+              title={`${profileName} completed ${challengeTitle}`}
+              detail={row.gpe_challenges?.category || row.entry_type || "Approved action"}
+              points={<span>+{row.points} pts</span>}
+              timestamp={relativeTime(row.created_at)}
+            />
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChallengeTracks({
+  challenges,
+  completedChallengeIds,
+}: {
+  challenges: CampChallenge[];
+  completedChallengeIds: Set<string | null | undefined>;
+}) {
+  const tracks = Object.values(
+    challenges.reduce<Record<string, { category: string; total: number; complete: number; points: number }>>((acc, challenge) => {
+      const category = challenge.category || "General";
+      const current = acc[category] || { category, total: 0, complete: 0, points: 0 };
+      current.total += 1;
+      current.points += challenge.point_value || 0;
+      if (completedChallengeIds.has(challenge.id)) current.complete += 1;
+      acc[category] = current;
+      return acc;
+    }, {}),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <Tape>Challenge tracks</Tape>
+        <CardTitle>Track Progress</CardTitle>
+        <CardDescription>Completed counts use your approved Camp ledger entries.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {tracks.length === 0 ? (
+          <p className="text-sm font-bold text-black/60">No active challenge tracks are configured.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {tracks.map((track, index) => (
+              <ChallengeCard
+                key={track.category}
+                accent={(["cyan", "pink", "orange", "yellow"] as const)[index % 4]}
+                title={track.category}
+                description={`${track.complete} / ${track.total} complete`}
+                points={`Up to ${track.points} pts`}
+                status={`${Math.round((track.complete / Math.max(1, track.total)) * 100)}%`}
+                action={<CampProgress label="Progress" value={track.complete} max={track.total} accent="black" />}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PrizeSection({ prizes }: { prizes: Array<{ title: string; description: string }> }) {
+  return (
+    <Card className="bg-black text-white">
+      <CardHeader>
+        <Tape>Prizes</Tape>
+        <CardTitle className="text-white">Season Rewards</CardTitle>
+        <CardDescription className="text-white/70">Configured from the active season point rules.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {prizes.length === 0 ? (
+          <p className="text-sm font-bold text-white/70">No prize details are configured for this season yet.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {prizes.map((prize, index) => (
+              <PrizeCard
+                key={`${prize.title}-${index}`}
+                title={prize.title}
+                description={prize.description || "Details coming soon."}
+                accent={(["pink", "cyan", "yellow", "orange"] as const)[index % 4]}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CabinsPanel({
+  cabinLeaderboard,
+  error,
+  isLoading,
+  onRefresh,
+  season,
+}: {
+  cabinLeaderboard: CampCabinLeaderboardRow[];
+  error: string | null;
+  isLoading: boolean;
+  onRefresh: () => void;
+  season: CampSeason | null;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    );
+  }
+  if (error) return <Card><CardContent className="py-8 text-sm font-bold text-red-700">{error}</CardContent></Card>;
+  if (!season) return <Card><CardContent className="py-8 text-sm font-bold text-black/60">No active season is configured.</CardContent></Card>;
+  return (
+    <>
+      <SectionHeader
+        eyebrow={<Sticker accent="pink"><Users className="mr-2 h-4 w-4" /> Current Season</Sticker>}
+        title="Cabin Competition"
+        description={`${season.name} cabin totals from approved seasonal ledger entries.`}
+        action={<CampButton variant="cyan" onClick={onRefresh}>Refresh</CampButton>}
+      />
+      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} />
+    </>
+  );
+}
+
+function BadgesPanel({
+  leaderboard,
+  mainLeaderboard,
+  season,
+}: {
+  leaderboard: CampLeaderboardRow[];
+  mainLeaderboard: LeaderboardUser[];
+  season: CampSeason | null;
+}) {
+  const topSeasonMember = leaderboard[0];
+  const topHubMember = mainLeaderboard[0];
+  const badges = [
+    {
+      title: "Season Leader",
+      description: topSeasonMember ? `${topSeasonMember.full_name || topSeasonMember.username || topSeasonMember.contact_email} leads ${season?.name || "the current season"}.` : "Awarded when seasonal rankings begin.",
+      icon: Trophy,
+      accent: "yellow" as const,
+    },
+    {
+      title: "Petition Pro",
+      description: "Previewed from approved challenge counts until dedicated badge tables are added.",
+      icon: BadgeCheck,
+      accent: "cyan" as const,
+    },
+    {
+      title: "Hub XP Leader",
+      description: topHubMember ? `${topHubMember.full_name || topHubMember.username || "A member"} leads all-time Hub points.` : "Awarded from all-time Hub rankings.",
+      icon: Zap,
+      accent: "pink" as const,
+    },
+    {
+      title: "Cabin Champion",
+      description: "Awarded to members contributing to top cabin totals.",
+      icon: Medal,
+      accent: "orange" as const,
+    },
+  ];
+  return (
+    <>
+      <SectionHeader
+        eyebrow={<Sticker accent="yellow"><Award className="mr-2 h-4 w-4" /> Badges</Sticker>}
+        title="Badge Board"
+        description="Reusable badge previews powered by available leaderboard and challenge data."
+      />
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {badges.map(({ title, description, icon: Icon, accent }) => (
+          <Card key={title} className="gpe-hover-lift">
+            <CardContent className="p-6">
+              <div className={`mb-5 inline-flex h-16 w-16 items-center justify-center rounded-[1.5rem] border-[4px] border-black ${accent === "yellow" ? "bg-gpe-yellow" : accent === "cyan" ? "bg-gpe-cyan" : accent === "pink" ? "bg-gpe-pink text-white" : "bg-gpe-orange"}`}>
+                <Icon className="h-8 w-8" />
+              </div>
+              <h2 className="font-header text-2xl uppercase">{title}</h2>
+              <p className="mt-3 text-sm font-bold text-black/70">{description}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </>
   );

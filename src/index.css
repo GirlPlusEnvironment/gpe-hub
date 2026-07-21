@@ -37,7 +37,14 @@
     --input: 0 0% 0%;
     --ring: 0 0% 0%;
 
-    --radius: 1.5rem;
+    --gpe-pink: #d53f8c;
+    --gpe-bg-pink: #fbd3d3;
+    --gpe-yellow: #facc15;
+    --gpe-cyan: #22d3ee;
+    --gpe-orange: #fb923c;
+    --gpe-white: #ffffff;
+    --gpe-black: #000000;
+    --radius: 2rem;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 0%;
@@ -84,6 +91,12 @@
     max-width: 100%;
     min-width: 0;
     overflow-x: hidden;
+    background-color: var(--gpe-bg-pink);
+    background-image:
+      radial-gradient(rgba(0, 0, 0, 0.18) 1.5px, transparent 1.5px),
+      linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+    background-size: 32px 32px, 100% 56px;
+    background-attachment: fixed;
   }
 
   #root {
@@ -141,11 +154,11 @@
   }
 
   .gpe-border {
-    border: 3px solid #000;
+    border: 4px solid #000;
   }
 
   .gpe-shadow {
-    box-shadow: 4px 4px 0 0 #000;
+    box-shadow: 6px 6px 0 0 #000;
   }
 
   .gpe-shadow-sm {
@@ -153,7 +166,7 @@
   }
 
   .gpe-card {
-    @apply gpe-border gpe-shadow min-w-0 max-w-full rounded-[1.5rem] bg-white md:rounded-[2rem];
+    @apply gpe-border gpe-shadow min-w-0 max-w-full rounded-[2rem] bg-white md:rounded-[2.5rem];
   }
 
   .gpe-card-sm {
@@ -161,7 +174,7 @@
   }
 
   .gpe-pill {
-    @apply gpe-border min-w-0 max-w-full rounded-full bg-white px-3 py-2 text-center font-bold uppercase leading-tight tracking-wide sm:px-5 sm:py-3;
+    @apply gpe-border gpe-shadow-sm min-w-0 max-w-full rounded-full bg-white px-3 py-2 text-center font-bold uppercase leading-tight sm:px-5 sm:py-3;
   }
 
   .gpe-input {
@@ -169,7 +182,13 @@
   }
 
   .gpe-page {
-    @apply min-h-screen w-full max-w-full overflow-x-hidden bg-[#fbd3d3] md:pl-[304px];
+    @apply min-h-screen w-full max-w-full overflow-x-hidden md:pl-[304px];
+    background-color: var(--gpe-bg-pink);
+    background-image:
+      radial-gradient(rgba(0, 0, 0, 0.18) 1.5px, transparent 1.5px),
+      linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+    background-size: 32px 32px, 100% 56px;
+    background-attachment: fixed;
   }
 
   .gpe-page-main {
@@ -181,8 +200,31 @@
   }
 
   .gpe-pattern {
-    background-image: radial-gradient(#d53f8c 2px, transparent 2px);
+    background-image: radial-gradient(#000 1.5px, transparent 1.5px);
     background-size: 30px 30px;
+  }
+
+  .gpe-paper {
+    background-color: #fff;
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+      radial-gradient(rgba(213, 63, 140, 0.25) 1px, transparent 1px);
+    background-size: 100% 34px, 24px 24px;
+  }
+
+  .gpe-sticker {
+    @apply gpe-border gpe-shadow-sm inline-flex items-center justify-center rounded-[1.25rem] bg-white px-4 py-2 font-black uppercase;
+  }
+
+  .gpe-tape {
+    @apply inline-flex items-center border border-black/10 bg-white/70 px-4 py-1 font-header text-xs uppercase text-black shadow-sm;
+    transform: rotate(-2deg);
+  }
+
+  .gpe-marquee {
+    display: inline-flex;
+    min-width: max-content;
+    animation: gpe-marquee 28s linear infinite;
   }
 
   .gpe-hover-lift {
@@ -194,6 +236,11 @@
     transform: translate(-4px, -4px);
   }
 
+  .gpe-press:active {
+    box-shadow: 2px 2px 0 0 #000;
+    transform: translate(2px, 2px);
+  }
+
   @media (min-width: 768px) {
     .gpe-shadow {
       box-shadow: 8px 8px 0 0 #000;
@@ -202,6 +249,71 @@
 }
 
 @layer utilities {
+  @keyframes gpe-marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes gpe-wobble {
+    0%, 100% {
+      transform: rotate(-2deg);
+    }
+    50% {
+      transform: rotate(2deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .animate-gpe-wobble {
+    animation: gpe-wobble 1.8s ease-in-out infinite;
+  }
+
+  .bg-gpe-pink {
+    background-color: #d53f8c;
+  }
+
+  .bg-gpe-bg-pink {
+    background-color: #fbd3d3;
+  }
+
+  .bg-gpe-yellow {
+    background-color: #facc15;
+  }
+
+  .bg-gpe-cyan {
+    background-color: #22d3ee;
+  }
+
+  .bg-gpe-orange {
+    background-color: #fb923c;
+  }
+
+  .text-gpe-pink {
+    color: #d53f8c;
+  }
+
+  .shadow-gpe {
+    box-shadow: 8px 8px 0 0 #000;
+  }
+
+  .shadow-gpe-sm {
+    box-shadow: 4px 4px 0 0 #000;
+  }
+
   .text-stroke-black {
     -webkit-text-stroke: 1.5px #000;
   }

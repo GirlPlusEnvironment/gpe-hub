@@ -14,23 +14,33 @@ import {
   type CampSubmission,
   addManualCampPoints,
   associateCampSubmissionMember,
-  approveCampSubmissionAction,
   getActiveCampSeason,
   getPendingCampSubmissions,
-  markCampSubmissionAction,
-  reopenCampSubmissionAction,
   searchSeasonMembers,
   updateCampSubmissionActionReview,
 } from "@/lib/camp";
+import { normalizeReviewStatus, reviewStatusClassName, reviewStatusLabel } from "@/lib/review-status";
+import { approveSubmission, reopenSubmission, updateSubmissionStatus } from "@/lib/submission-review";
 
-type ReviewFilter = "pending" | "approved" | "needs_information" | "rejected" | "all";
+type ReviewFilter = "pending" | "approved" | "needs_information" | "rejected" | "duplicate" | "all";
+type ReviewTab = "camp" | "petitions" | "events" | "listings" | "funding" | "resources";
 
 const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "pending", label: "Pending" },
   { value: "approved", label: "Approved" },
   { value: "needs_information", label: "Needs follow-up" },
   { value: "rejected", label: "Rejected" },
+  { value: "duplicate", label: "Duplicate" },
   { value: "all", label: "All submissions" },
+];
+
+const reviewTabs: Array<{ value: ReviewTab; label: string; description: string }> = [
+  { value: "camp", label: "Camp", description: "Camp GPE challenge and action review." },
+  { value: "petitions", label: "Petitions", description: "Action Network completion claims after unified review migration." },
+  { value: "events", label: "Events", description: "Event attendance and registration review after unified review migration." },
+  { value: "listings", label: "Listings", description: "Job-board style listing moderation currently uses pending_review." },
+  { value: "funding", label: "Funding", description: "Funding listing submissions currently use listing moderation." },
+  { value: "resources", label: "Resources", description: "Resource listing submissions currently use listing moderation." },
 ];
 
 function submissionSource(submission: CampSubmission, fields: Record<string, unknown>) {
@@ -41,6 +51,7 @@ function submissionSource(submission: CampSubmission, fields: Record<string, unk
 export default function CampAdmin() {
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
+  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("camp");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<CampSeasonMember[]>([]);
@@ -71,14 +82,16 @@ export default function CampAdmin() {
   async function handleApproveAction(actionId: string, defaultPoints: number | null) {
     const points = Number(prompt("Points to award?", String(defaultPoints ?? 0)));
     if (!Number.isFinite(points)) return;
-    const notes = prompt("Reviewer notes?", "") || "";
+    const notes = prompt("Internal reviewer notes?", "") || "";
     setBusyId(actionId);
     setError(null);
     try {
-      await approveCampSubmissionAction({
-        actionId,
+      await approveSubmission({
+        id: actionId,
+        type: "camp",
+      }, {
         points,
-        notes,
+        reviewerNotes: notes,
       });
       await load();
     } catch (err) {
@@ -93,7 +106,7 @@ export default function CampAdmin() {
     setBusyId(actionId);
     setError(null);
     try {
-      await markCampSubmissionAction({ actionId, status, notes });
+      await updateSubmissionStatus({ id: actionId, type: "camp" }, { status, reviewerNotes: notes });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update submission action.");
@@ -148,7 +161,7 @@ export default function CampAdmin() {
     setBusyId(actionId);
     setError(null);
     try {
-      await reopenCampSubmissionAction({ actionId, notes });
+      await reopenSubmission({ id: actionId, type: "camp" }, { reviewerNotes: notes });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reopen submission action.");
@@ -194,8 +207,8 @@ export default function CampAdmin() {
   const visibleSubmissions = submissions.filter((submission) => {
     if (reviewFilter === "all") return true;
     const actions = submission.gpe_camp_submission_actions || [];
-    if (actions.length === 0) return reviewFilter === "pending" && submission.review_status === "pending";
-    return actions.some((action) => action.review_status === reviewFilter);
+    if (actions.length === 0) return reviewFilter === "pending" && normalizeReviewStatus(submission.review_status) === "pending";
+    return actions.some((action) => normalizeReviewStatus(action.review_status) === reviewFilter);
   });
 
   return (
@@ -209,9 +222,9 @@ export default function CampAdmin() {
                 <Shield className="h-4 w-4" />
                 Team GPE
               </div>
-              <h1 className="gpe-heading text-4xl md:text-6xl">Camp Admin</h1>
+              <h1 className="gpe-heading text-4xl md:text-6xl">Team Review</h1>
               <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
-                Review Camp GPE submissions, assign points, and make auditable manual corrections for the active season.
+                Review member submissions, resolve identity, assign points, and keep the audit trail clean.
               </p>
             </div>
             <div className="flex gap-2">
@@ -240,7 +253,37 @@ export default function CampAdmin() {
             <>
               <Card>
                 <CardHeader>
-                  <CardTitle>Submission Review</CardTitle>
+                  <CardTitle>Moderation Center</CardTitle>
+                  <CardDescription>One review workspace for Camp, actions, listings, and future point-eligible submissions.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6" role="tablist" aria-label="Review categories">
+                    {reviewTabs.map((tab) => (
+                      <Button
+                        key={tab.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeReviewTab === tab.value}
+                        variant={activeReviewTab === tab.value ? "default" : "outline"}
+                        onClick={() => setActiveReviewTab(tab.value)}
+                      >
+                        {tab.label}
+                      </Button>
+                    ))}
+                  </div>
+                  {activeReviewTab !== "camp" && (
+                    <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-4 text-sm font-bold">
+                      {reviewTabs.find((tab) => tab.value === activeReviewTab)?.description}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {activeReviewTab === "camp" && (
+                <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Camp Submission Review</CardTitle>
                   <CardDescription>{season.name}. Points are awarded only after Team GPE approval.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -271,7 +314,9 @@ export default function CampAdmin() {
                             <div className="text-lg font-black">{submission.challenge_key.replaceAll("_", " ")}</div>
                             <div className="text-sm font-bold text-black/60">{submission.contact_email}</div>
                             <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold uppercase">
-                              <Badge variant="outline">{submission.review_status.replaceAll("_", " ")}</Badge>
+                              <Badge variant="outline" className={reviewStatusClassName(submission.review_status)}>
+                                {reviewStatusLabel(submission.review_status)}
+                              </Badge>
                               <Badge variant={submission.member_link_status === "linked" ? "default" : "outline"}>
                                 {submission.member_link_status === "linked" ? "Member linked" : "Identity pending"}
                               </Badge>
@@ -310,7 +355,7 @@ export default function CampAdmin() {
                                   <div>
                                     <div className="font-black">{title}</div>
                                     <div className="mt-1 text-xs font-bold uppercase text-black/60">
-                                      {action.review_status.replaceAll("_", " ")} · suggested {defaultPoints} point{defaultPoints === 1 ? "" : "s"}
+                                      {reviewStatusLabel(action.review_status)} · suggested {defaultPoints} point{defaultPoints === 1 ? "" : "s"}
                                       {action.approved_points !== null ? ` · awarded ${action.approved_points}` : ""}
                                     </div>
                                     {challenge && (
@@ -320,15 +365,15 @@ export default function CampAdmin() {
                                     )}
                                   </div>
                                   <div className="flex flex-wrap gap-2">
-                                    <Button size="sm" disabled={busyId === action.id || action.review_status === "approved"} onClick={() => handleApproveAction(action.id, defaultPoints)}>
+                                    <Button size="sm" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => handleApproveAction(action.id, defaultPoints)}>
                                       <Trophy className="mr-2 h-4 w-4" />
                                       Approve
                                     </Button>
-                                    <Button size="sm" variant="outline" disabled={busyId === action.id || action.review_status === "approved"} onClick={() => handleUpdateAction(action.id, defaultPoints)}>Edit</Button>
+                                    <Button size="sm" variant="outline" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => handleUpdateAction(action.id, defaultPoints)}>Edit</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "needs_information")}>Needs Info</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "duplicate")}>Duplicate</Button>
                                     <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleMarkAction(action.id, "rejected")}>Reject</Button>
-                                    {action.review_status !== "pending" && (
+                                    {normalizeReviewStatus(action.review_status) !== "pending" && (
                                       <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => handleReopenAction(action.id)}>Reopen</Button>
                                     )}
                                   </div>
@@ -403,6 +448,8 @@ export default function CampAdmin() {
                   </div>
                 </CardContent>
               </Card>
+                </>
+              )}
             </>
           )}
         </div>

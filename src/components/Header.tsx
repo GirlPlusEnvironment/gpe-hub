@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  ClipboardList,
   Shield,
   Trophy,
   User,
@@ -92,6 +93,7 @@ const Header = () => {
     { to: "/messages", label: "Messages", icon: MessageSquare, badge: unreadCount },
     { to: "/favorites", label: "Favorites", icon: Heart },
     { to: "/submit", label: "Submit New", icon: PlusCircle },
+    { to: "/submissions", label: "My Submissions", icon: ClipboardList },
     { to: "/camp-gpe/challenges", label: "Camp Challenges", icon: Trophy },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
   ];
@@ -114,9 +116,9 @@ const Header = () => {
         onClick={() => setIsMobileMenuOpen(false)}
         className={({ isActive }) =>
           cn(
-            "gpe-pill flex min-w-0 items-center justify-between gap-3 text-left transition-all",
+            "gpe-pill gpe-press flex min-w-0 items-center justify-between gap-3 text-left transition-all",
             mobile ? "w-full px-4 py-3 text-sm" : "w-full px-5 py-4 text-sm",
-            isActive ? "bg-black text-white" : "bg-white hover:bg-pink-100",
+            isActive ? "bg-black text-white" : "bg-white hover:bg-gpe-yellow",
           )
         }
       >
@@ -137,7 +139,7 @@ const Header = () => {
 
   return (
     <>
-      <div className="sticky top-0 z-40 border-b-[3px] border-black bg-white md:hidden">
+      <div className="sticky top-0 z-40 border-b-[4px] border-black bg-gpe-pink md:hidden">
         <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 sm:px-4">
           <button
             type="button"
@@ -168,7 +170,7 @@ const Header = () => {
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
-          <div className="absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[3px] border-black bg-white p-3 sm:p-4">
+          <div className="gpe-paper absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[4px] border-black p-3 sm:p-4">
             <div className="mb-6 flex items-center justify-between">
               <img
                 src="/logo.png"
@@ -191,16 +193,16 @@ const Header = () => {
               {role === "admin" &&
                 renderNavLink({ to: "/admin", label: "Admin", icon: Shield }, true)}
               {(role === "admin" || role === "team_gpe") &&
-                renderNavLink({ to: "/admin/camp", label: "Camp Admin", icon: Shield }, true)}
+                renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield }, true)}
             </nav>
 
-            <div className="mt-6 space-y-3 border-t-[3px] border-black pt-4">
+            <div className="mt-6 space-y-3 border-t-[4px] border-black pt-4">
               <InstallAppButton className="w-full" />
 
               <NavLink
                 to="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="gpe-card-sm flex items-start gap-3 p-3"
+                className="gpe-card-sm flex items-start gap-3 bg-gpe-yellow p-3"
               >
                 <Avatar className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-black">
                   <AvatarImage
@@ -232,7 +234,7 @@ const Header = () => {
         </div>
       )}
 
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r-[3px] border-black bg-white p-6 md:flex">
+      <aside className="gpe-paper fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r-[4px] border-black p-6 md:flex">
         <button
           type="button"
           onClick={() => navigate("/")}
@@ -246,14 +248,18 @@ const Header = () => {
           />
         </button>
 
+        <div className="mb-5 -rotate-2 rounded-[1.25rem] border-[4px] border-black bg-gpe-pink px-4 py-2 text-center font-header text-sm uppercase text-white shadow-gpe-sm">
+          Mission Control
+        </div>
+
         <nav className="flex flex-1 flex-col gap-4">
           {navItems.map((item) => renderNavLink(item))}
           {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
           {(role === "admin" || role === "team_gpe") &&
-            renderNavLink({ to: "/admin/camp", label: "Camp Admin", icon: Shield })}
+            renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield })}
         </nav>
 
-        <div className="mt-6 space-y-4 border-t-[3px] border-black pt-4">
+        <div className="mt-6 space-y-4 border-t-[4px] border-black pt-4">
           {user && (
             <div className="flex items-center justify-between gap-3">
               <PointsBadge />
@@ -265,7 +271,7 @@ const Header = () => {
 
           <InstallAppButton className="w-full" />
 
-          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 p-3">
+          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 bg-gpe-yellow p-3">
             <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
               <AvatarImage src={avatarUrl} alt={displayName} />
               <AvatarFallback className="bg-[#67e8f9] font-bold text-black">

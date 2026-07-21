@@ -1,12 +1,16 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { ReviewStatus } from "@/lib/review-status";
 
 export type CampSeason = {
   id: string;
   slug: string;
   name: string;
   description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
   status: "draft" | "active" | "archived";
   is_visible: boolean;
+  point_rules?: Record<string, unknown> | null;
 };
 
 export type CampLeaderboardRow = {
@@ -23,6 +27,16 @@ export type CampLeaderboardRow = {
   avatar_url: string | null;
   points: number;
   approved_challenge_count?: number;
+  rank: number;
+  updated_at?: string;
+};
+
+export type CampCabinLeaderboardRow = {
+  season_id: string;
+  cabin_id: string;
+  cabin_name: string;
+  points: number;
+  member_count: number;
   rank: number;
   updated_at?: string;
 };
@@ -64,7 +78,7 @@ export type CampSubmissionAction = {
   proof_urls: string[];
   requested_points: number | null;
   approved_points: number | null;
-  review_status: "pending" | "approved" | "rejected" | "needs_information" | "duplicate";
+  review_status: ReviewStatus;
   reviewer_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -101,7 +115,7 @@ export type CampSubmission = {
   challenge_key: string;
   submitted_payload: { fields?: Record<string, unknown> } | null;
   proof_links: string[];
-  review_status: "pending" | "approved" | "rejected" | "needs_info";
+  review_status: ReviewStatus | "needs_info";
   reviewed_by: string | null;
   reviewed_at: string | null;
   member_link_status?: string | null;
@@ -131,10 +145,22 @@ export type CampPointsLedgerRow = {
   reversal_reason: string | null;
 };
 
+export type CampRecentActivityRow = CampPointsLedgerRow & {
+  profiles?: {
+    username: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
+  gpe_challenges?: {
+    title: string | null;
+    category: string | null;
+  } | null;
+};
+
 export async function getActiveCampSeason() {
   const { data: active, error: activeError } = await supabase
     .from("gpe_seasons")
-    .select("id,slug,name,description,status,is_visible")
+    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules")
     .eq("status", "active")
     .eq("is_visible", true)
     .order("starts_at", { ascending: false, nullsFirst: false })
@@ -145,7 +171,7 @@ export async function getActiveCampSeason() {
 
   const { data: campFallback, error: fallbackError } = await supabase
     .from("gpe_seasons")
-    .select("id,slug,name,description,status,is_visible")
+    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules")
     .eq("slug", "camp-gpe-2026")
     .maybeSingle();
   if (fallbackError) throw fallbackError;
@@ -162,6 +188,17 @@ export async function getCampLeaderboard(seasonId: string, limit = 50) {
     .limit(limit);
   if (error) throw error;
   return (data || []) as CampLeaderboardRow[];
+}
+
+export async function getCampCabinLeaderboard(seasonId: string) {
+  const { data, error } = await supabase
+    .from("gpe_camp_cabin_leaderboard")
+    .select("*")
+    .eq("season_id", seasonId)
+    .order("points", { ascending: false })
+    .order("rank", { ascending: true });
+  if (error) throw error;
+  return (data || []) as CampCabinLeaderboardRow[];
 }
 
 export async function getHubCampChallenges(seasonId: string) {
@@ -236,6 +273,18 @@ export async function getMyCampHistory(seasonId: string) {
     submissions: (submissions || []) as CampSubmission[],
     ledger: (ledger || []) as CampPointsLedgerRow[],
   };
+}
+
+export async function getCampRecentActivity(seasonId: string, limit = 12) {
+  const { data, error } = await supabase
+    .from("gpe_camp_points_ledger")
+    .select("*, profiles:user_id(username,full_name,avatar_url), gpe_challenges:challenge_id(title,category)")
+    .eq("season_id", seasonId)
+    .is("reversed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []) as CampRecentActivityRow[];
 }
 
 export async function getPendingCampSubmissions(seasonId: string) {

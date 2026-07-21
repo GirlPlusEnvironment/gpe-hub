@@ -14,6 +14,7 @@ import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites.tsx";
 import Leaderboard from "./pages/Leaderboard";
 import CampChallenges from "./pages/CampChallenges";
+import MySubmissions from "./pages/MySubmissions";
 import NotFound from "./pages/NotFound";
 import ListingDetailPage from "./pages/ListingDetailPage";
 import Login from "./pages/Login";
@@ -116,6 +117,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Favorites />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/submissions"
+              element={
+                <ProtectedRoute>
+                  <MySubmissions />
                 </ProtectedRoute>
               }
             />

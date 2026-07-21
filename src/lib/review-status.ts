@@ -1,0 +1,69 @@
+export const REVIEW_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "needs_information",
+  "duplicate",
+  "archived",
+] as const;
+
+export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+
+export function normalizeReviewStatus(status: string | null | undefined): ReviewStatus {
+  const normalized = (status || "").trim().toLowerCase();
+  switch (normalized) {
+    case "approved":
+    case "rejected":
+    case "duplicate":
+    case "archived":
+      return normalized as ReviewStatus;
+    case "needs_info":
+    case "needs_information":
+    case "follow_up":
+    case "needs_follow_up":
+      return "needs_information";
+    case "pending_review":
+    case "requires_manual_review":
+    case "received":
+    case "submitted":
+    case "pending":
+    default:
+      return "pending";
+  }
+}
+
+export function reviewStatusLabel(status: string | null | undefined) {
+  switch (normalizeReviewStatus(status)) {
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Not approved";
+    case "needs_information":
+      return "Needs more information";
+    case "duplicate":
+      return "Duplicate";
+    case "archived":
+      return "Archived";
+    case "pending":
+    default:
+      return "Pending review";
+  }
+}
+
+export function reviewStatusClassName(status: string | null | undefined) {
+  switch (normalizeReviewStatus(status)) {
+    case "approved":
+      return "bg-green-100 text-green-800";
+    case "rejected":
+      return "bg-red-100 text-red-800";
+    case "needs_information":
+      return "bg-cyan-200 text-black";
+    case "duplicate":
+      return "bg-orange-200 text-black";
+    case "archived":
+      return "bg-gray-200 text-black";
+    case "pending":
+    default:
+      return "bg-gpe-yellow text-black";
+  }
+}

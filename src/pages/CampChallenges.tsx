@@ -3,10 +3,19 @@ import { Link } from "react-router-dom";
 import { ExternalLink, Loader2, Send, Trophy } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CampButton,
+  ChallengeCard,
+  MarqueeStrip,
+  SectionHeader,
+  SeasonHero,
+  StatSticker,
+  Sticker,
+  Tape,
+} from "@/components/camp/CampDesign";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -129,24 +138,24 @@ export default function CampChallenges() {
   return (
     <div className="gpe-page">
       <Header />
-      <main className="gpe-page-main">
+      <main className="gpe-page-main space-y-8">
         <div className="mx-auto max-w-6xl space-y-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border-[3px] border-black bg-cyan-200 px-4 py-2 text-xs font-black uppercase">
-                <Trophy className="h-4 w-4" />
-                Camp GPE
-              </div>
-              <h1 className="gpe-heading text-4xl md:text-6xl">Submit Challenges</h1>
-              <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
-                Submit completed Camp GPE actions for {season?.name || "the active season"}. Your Hub profile is used automatically.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={load}>Refresh</Button>
-              <Link to="/leaderboard"><Button variant="outline">Leaderboard</Button></Link>
-            </div>
-          </div>
+          <SeasonHero
+            title="Camp Mission Board"
+            seasonName={season?.name || "Camp GPE"}
+            description="Pick any missions that match what you completed, or submit an unlisted action. Team GPE reviews everything before points are awarded."
+            actionHref="/leaderboard"
+            actionLabel="View Leaderboard"
+            stats={[
+              { label: "Open missions", value: challenges.length.toLocaleString(), accent: "cyan", icon: <Trophy className="h-12 w-12" /> },
+              { label: "Selected", value: selected.length + (otherSelected ? 1 : 0), accent: "yellow", icon: <Send className="h-12 w-12" /> },
+              { label: "Camp status", value: campStatus?.status || "Pending", accent: "orange", icon: <Trophy className="h-12 w-12" /> },
+            ]}
+          />
+
+          <MarqueeStrip>
+            Proof optional - descriptions optional - submit freely - Team GPE reviews - approved actions earn points
+          </MarqueeStrip>
 
           {error && (
             <div className="rounded-[1.5rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">
@@ -171,54 +180,65 @@ export default function CampChallenges() {
             </Card>
           ) : (
             <form onSubmit={submitChallenge} className="space-y-6">
-              <Card>
+              <Card className="gpe-paper">
                 <CardHeader>
-                  <CardTitle>Active Challenges</CardTitle>
-                  <CardDescription>
-                    Select actions when they fit what you completed. Team GPE can classify or adjust submissions during review.
-                  </CardDescription>
+                  <SectionHeader
+                    eyebrow={<Sticker accent="pink">Mission tracks</Sticker>}
+                    title="Active Challenges"
+                    description="Select actions when they fit what you completed. Team GPE can classify or adjust submissions during review."
+                    action={<Button variant="outline" onClick={load} type="button">Refresh</Button>}
+                  />
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5">
                   {!campStatus && (
-                    <div className="rounded-xl border-2 border-yellow-400 bg-yellow-50 p-3 text-sm font-bold text-yellow-900">
+                    <div className="rounded-[1.5rem] border-[4px] border-black bg-gpe-yellow p-4 text-sm font-black text-black">
                       This Hub account is not linked to a Camp season registration yet. You can submit, but Team GPE may need to reconcile it.
                     </div>
                   )}
                   {challenges.length === 0 ? (
                     <p className="text-sm font-bold text-black/60">No Camp challenges are open right now.</p>
-                  ) : challenges.map((challenge) => {
-                    const completed = completionCounts[challenge.id] || 0;
-                    const limitReached = completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0);
-                    return (
-                      <label key={challenge.id} className="flex gap-3 rounded-[1.25rem] border-[3px] border-black bg-white p-4">
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(challenge.id)}
-                          disabled={limitReached}
-                          onChange={() => toggleChallenge(challenge)}
-                          className="mt-1 h-5 w-5"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-black">{challenge.title}</span>
-                          {challenge.short_description && <span className="mt-1 block text-sm font-bold text-black/70">{challenge.short_description}</span>}
-                          <span className="mt-2 flex flex-wrap gap-2">
-                            <Badge>{challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}</Badge>
-                            <Badge variant="outline">Proof optional</Badge>
-                            {limitReached && <Badge variant="outline">Completed</Badge>}
-                          </span>
-                          {challenge.action_url && (
-                            <a href={challenge.action_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-black underline">
-                              Open action <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </span>
-                      </label>
-                    );
-                  })}
-                  <label className="flex gap-3 rounded-[1.25rem] border-[3px] border-black bg-white p-4">
-                    <input type="checkbox" checked={otherSelected} onChange={(event) => setOtherSelected(event.target.checked)} className="mt-1 h-5 w-5" />
-                    <span className="font-black">Other Camp action</span>
-                  </label>
+                  ) : (
+                    <div className="grid gap-5 md:grid-cols-2">
+                      {challenges.map((challenge, index) => {
+                        const completed = completionCounts[challenge.id] || 0;
+                        const limitReached = completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0);
+                        const accent = (["cyan", "yellow", "orange", "white"] as const)[index % 4];
+                        return (
+                          <ChallengeCard
+                            key={challenge.id}
+                            title={challenge.title}
+                            description={challenge.short_description}
+                            points={challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}
+                            category={challenge.category.replaceAll("_", " ")}
+                            status={limitReached ? "Completed" : selected.includes(challenge.id) ? "Selected" : "Open"}
+                            accent={accent}
+                            selected={selected.includes(challenge.id)}
+                            disabled={limitReached}
+                            onToggle={() => toggleChallenge(challenge)}
+                            action={challenge.action_url ? (
+                              <a
+                                href={challenge.action_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-sm font-black uppercase underline"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                Open action <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : null}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOtherSelected((current) => !current)}
+                    className={`gpe-card-sm gpe-hover-lift flex w-full items-center justify-between gap-4 p-5 text-left ${otherSelected ? "bg-gpe-pink text-white" : "bg-white"}`}
+                  >
+                    <span className="font-header text-2xl uppercase">Other Camp Action</span>
+                    <Sticker accent={otherSelected ? "yellow" : "cyan"} rotate="none">{otherSelected ? "Selected" : "Optional"}</Sticker>
+                  </button>
                   {otherSelected && (
                     <Textarea value={otherAction} onChange={(event) => setOtherAction(event.target.value)} placeholder="Describe what you completed." />
                   )}
@@ -227,18 +247,25 @@ export default function CampChallenges() {
 
               <Card>
                 <CardHeader>
+                  <Tape>Optional context</Tape>
                   <CardTitle>Proof and Notes</CardTitle>
                   <CardDescription>Share whatever context you have. Missing links or details will not block review.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Textarea value={proof} onChange={(event) => setProof(event.target.value)} placeholder="https://..." />
                   <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for Team GPE." />
-                  <Button type="submit" disabled={submitting}>
+                  <CampButton type="submit" disabled={submitting} variant="secondary">
                     {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Submit Challenge
-                  </Button>
+                    Submit for Review
+                  </CampButton>
                 </CardContent>
               </Card>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatSticker label="Proof" value="Optional" accent="white" />
+                <StatSticker label="Points" value="After review" accent="yellow" />
+                <StatSticker label="Identity" value={campStatus ? "Linked" : "Reconcile"} accent="cyan" />
+              </div>
             </form>
           )}
         </div>

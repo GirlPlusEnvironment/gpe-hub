@@ -28,16 +28,16 @@ export function PointsBadge() {
   return (
     <Link 
       to="/leaderboard" 
-      className="flex min-w-0 items-center gap-1.5 transition-opacity hover:opacity-80 sm:gap-2"
+      className="flex min-w-0 items-center gap-1.5 transition-transform hover:-translate-y-0.5 sm:gap-2"
       aria-label="View leaderboard"
     >
-      <div className="flex min-w-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-1.5 transition-colors hover:border-primary/40 sm:px-3">
-        <Zap className="h-3.5 w-3.5 shrink-0 text-primary sm:h-4 sm:w-4" />
-        <span className="min-w-0 text-xs font-semibold text-primary sm:text-sm">
+      <div className="flex min-w-0 items-center gap-1 rounded-full border-[3px] border-black bg-gpe-cyan px-2 py-1.5 shadow-gpe-sm sm:px-3">
+        <Zap className="h-3.5 w-3.5 shrink-0 text-black sm:h-4 sm:w-4" />
+        <span className="min-w-0 text-xs font-black text-black sm:text-sm">
           {pointsData.totalPoints}
         </span>
       </div>
-      <Badge className={`${getLevelColor(pointsData.level)} px-2 text-[10px] font-semibold sm:px-3 sm:text-xs`}>
+      <Badge className={`${getLevelColor(pointsData.level)} border-[3px] border-black px-2 text-[10px] font-black sm:px-3 sm:text-xs`}>
         Lvl {pointsData.level}
       </Badge>
     </Link>

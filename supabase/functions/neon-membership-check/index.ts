@@ -76,7 +76,8 @@ Deno.serve(async (req) => {
       publicState: result.publicState,
       outcome: result.outcome,
       requiresManualReview: result.requiresManualReview,
-      neonAccountLinked: Boolean(result.neonAccountId)
+      neonAccountLinked: Boolean(result.neonAccountId),
+      failureReason: result.outcome === "lookup_failed" ? result.reason : undefined
     }, result.outcome === "lookup_failed" ? 502 : 200, origin);
   } catch (error) {
     console.error("neon-membership-check", safeError(error));

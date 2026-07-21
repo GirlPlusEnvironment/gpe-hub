@@ -48,6 +48,18 @@ export type MembershipLookupInput = {
 const NEON_BASE_URL = Deno.env.get("NEON_API_BASE_URL") || Deno.env.get("NEON_BASE_URL") || "https://api.neoncrm.com/v2";
 const NEON_API_VERSION = Deno.env.get("NEON_API_VERSION") || "2.11";
 
+class NeonApiError extends Error {
+  status: number;
+  operation: string;
+
+  constructor(operation: string, status: number, message: string) {
+    super(`Neon ${operation} failed (${status}): ${message}`);
+    this.name = "NeonApiError";
+    this.status = status;
+    this.operation = operation;
+  }
+}
+
 export function normalizeEmail(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
@@ -65,6 +77,13 @@ export function getEnv(name: string, required = true): string {
 export function safeError(error: unknown): string {
   if (error instanceof Error) return error.message.replace(/Basic\s+[A-Za-z0-9+/=]+/g, "Basic [redacted]").slice(0, 500);
   return "Unknown error";
+}
+
+function logDependencyFailure(operation: string, error: unknown) {
+  const detail = error instanceof NeonApiError
+    ? { operation, dependency: "neon_crm", upstreamStatus: error.status, message: safeError(error) }
+    : { operation, message: safeError(error) };
+  console.error("membership dependency failure", detail);
 }
 
 function serviceHeaders(extra: HeadersInit = {}): HeadersInit {
@@ -94,14 +113,14 @@ function neonHeaders(): HeadersInit {
   };
 }
 
-export async function neonFetch(path: string, init: RequestInit = {}) {
+export async function neonFetch(path: string, init: RequestInit = {}, operation = path) {
   const res = await fetch(`${NEON_BASE_URL}${path}`, {
     ...init,
     headers: { ...neonHeaders(), ...(init.headers || {}) }
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Neon request failed (${res.status}): ${text.slice(0, 220)}`);
+    throw new NeonApiError(operation, res.status, text.slice(0, 220));
   }
   return res.json().catch(() => ({}));
 }
@@ -125,15 +144,26 @@ function lower(value: unknown): string {
 }
 
 export async function findNeonAccountsByEmail(email: string): Promise<Json[]> {
-  const result = await neonFetch("/accounts/search", {
-    method: "POST",
-    body: JSON.stringify({
-      searchFields: [{ field: "Email", operator: "EQUAL", value: email }],
-      outputFields: ["Account ID", "First Name", "Last Name", "Email"],
-      pagination: { pageSize: 10, currentPage: 1 }
-    })
+  const searchBody = (emailField: string) => ({
+    searchFields: [{ field: emailField, operator: "EQUAL", value: email }],
+    outputFields: ["Account ID", "First Name", "Last Name", emailField],
+    pagination: { pageSize: 10, currentPage: 1 }
   });
-  return extractRows(result).filter((row) => extractAccountId(row));
+  const initFor = (emailField: string) => ({
+    method: "POST",
+    body: JSON.stringify(searchBody(emailField))
+  });
+  try {
+    const result = await neonFetch("/accounts/search", initFor("Email"), "account_search_by_email");
+    return extractRows(result).filter((row) => extractAccountId(row));
+  } catch (error) {
+    if (error instanceof NeonApiError && error.status === 400) {
+      logDependencyFailure("account_search_by_email", error);
+      const fallbackResult = await neonFetch("/accounts/search", initFor("Email 1"), "account_search_by_email_1");
+      return extractRows(fallbackResult).filter((row) => extractAccountId(row));
+    }
+    throw error;
+  }
 }
 
 export function resolveAccountMatch(accounts: Json[], firstName?: string, lastName?: string) {
@@ -154,7 +184,7 @@ export function resolveAccountMatch(accounts: Json[], firstName?: string, lastNa
 }
 
 export async function getMemberships(accountId: string): Promise<Json[]> {
-  const result = await neonFetch(`/accounts/${encodeURIComponent(accountId)}/memberships`, { method: "GET" });
+  const result = await neonFetch(`/accounts/${encodeURIComponent(accountId)}/memberships`, { method: "GET" }, "account_memberships");
   return extractRows(result);
 }
 
@@ -231,10 +261,22 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
   }
 
   try {
-    const hubProfile = await existingHubProfile(email);
+    let hubProfile = null;
+    try {
+      hubProfile = await existingHubProfile(email);
+    } catch (error) {
+      logDependencyFailure("hub_profile_lookup", error);
+      throw error;
+    }
     let neonAccountId = suppliedAccountId;
     if (!neonAccountId) {
-      const accounts = await findNeonAccountsByEmail(email);
+      let accounts: Json[] = [];
+      try {
+        accounts = await findNeonAccountsByEmail(email);
+      } catch (error) {
+        logDependencyFailure("neon_account_search", error);
+        throw error;
+      }
       const match = resolveAccountMatch(accounts, firstName, lastName);
       if (match.status === "none") {
         return {
@@ -270,7 +312,13 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
 
     if (!neonAccountId) throw new Error("Neon account could not be resolved.");
 
-    const memberships = await getMemberships(neonAccountId);
+    let memberships: Json[] = [];
+    try {
+      memberships = await getMemberships(neonAccountId);
+    } catch (error) {
+      logDependencyFailure("neon_membership_lookup", error);
+      throw error;
+    }
     const isActiveMember = hasEligibleMembership(memberships);
     const summary = pickMembershipSummary(memberships);
     if (!isActiveMember) {
@@ -288,7 +336,13 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       };
     }
 
-    const hubAccess = await existingHubAccess(email, neonAccountId);
+    let hubAccess = null;
+    try {
+      hubAccess = await existingHubAccess(email, neonAccountId);
+    } catch (error) {
+      logDependencyFailure("hub_access_lookup", error);
+      throw error;
+    }
     return {
       matched: true,
       isActiveMember: true,
@@ -303,6 +357,9 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
     };
   } catch (error) {
     console.error("neon-membership-resolver", safeError(error));
+    const reason = error instanceof NeonApiError
+      ? `Neon CRM ${error.operation} returned HTTP ${error.status}.`
+      : "Membership lookup failed.";
     return {
       matched: false,
       isActiveMember: false,
@@ -314,7 +371,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       publicState: "lookup_unavailable",
       hubUserLinked: false,
       requiresManualReview: false,
-      reason: "Membership lookup failed."
+      reason
     };
   }
 }

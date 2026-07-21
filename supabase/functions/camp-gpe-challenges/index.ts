@@ -11,6 +11,21 @@ async function activeSeasonSlug(body: Record<string, unknown>) {
   return sanitizeText(body.seasonSlug || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "camp-gpe-2026", 120);
 }
 
+function canonicalCampActionUrl(url: unknown) {
+  const value = String(url || "");
+  if (!value) return null;
+  if (/actionnetwork\.org\/letters\/tell-congress-we-need-relief-from-high-energy-bills-partner/i.test(value)) {
+    return "https://www.girlplusenvironment.org/high-energy-bills-action";
+  }
+  if (/actionnetwork\.org\/petitions\/stop-trumps-700-million-coal-slush-fund-partner/i.test(value)) {
+    return "https://www.girlplusenvironment.org/coal-slush-fund-action";
+  }
+  if (/actionnetwork\.org\/letters\/extreme-weather-puts-our-communities-at-risk-its-time-for-bold-climate-action-2/i.test(value)) {
+    return "https://www.girlplusenvironment.org/extreme-weather-action";
+  }
+  return value;
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
   try {
@@ -28,7 +43,13 @@ Deno.serve(async (req) => {
     ].join("");
     const res = await supabaseFetch(path);
     if (!res.ok) throw new Error("Could not load Camp GPE challenges.");
-    const challenges = await res.json();
+    const rows = await res.json();
+    const challenges = Array.isArray(rows)
+      ? rows.map((challenge) => ({
+          ...challenge,
+          action_url: canonicalCampActionUrl(challenge.action_url),
+        }))
+      : [];
     return jsonResponse({ ok: true, seasonSlug, challenges }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;

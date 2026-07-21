@@ -45,7 +45,7 @@ export type MembershipLookupInput = {
   neonAccountId?: string;
 };
 
-const NEON_BASE_URL = Deno.env.get("NEON_API_BASE_URL") || Deno.env.get("NEON_BASE_URL") || "https://api.neoncrm.com/v2";
+const DEFAULT_NEON_BASE_URL = "https://api.neoncrm.com/v2";
 const NEON_API_VERSION = Deno.env.get("NEON_API_VERSION") || "2.11";
 
 class NeonApiError extends Error {
@@ -95,6 +95,15 @@ function logDependencyFailure(operation: string, error: unknown) {
   console.error("membership dependency failure", detail);
 }
 
+function neonBaseUrl() {
+  const configured = Deno.env.get("NEON_API_BASE_URL") || Deno.env.get("NEON_BASE_URL") || DEFAULT_NEON_BASE_URL;
+  const trimmed = configured.trim().replace(/\/+$/, "");
+  if (/^https:\/\/api\.neoncrm\.com$/i.test(trimmed)) {
+    return `${trimmed}/v2`;
+  }
+  return trimmed;
+}
+
 function serviceHeaders(extra: HeadersInit = {}): HeadersInit {
   const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
   return {
@@ -123,7 +132,7 @@ function neonHeaders(): HeadersInit {
 }
 
 export async function neonFetch(path: string, init: RequestInit = {}, operation = path) {
-  const res = await fetch(`${NEON_BASE_URL}${path}`, {
+  const res = await fetch(`${neonBaseUrl()}${path}`, {
     ...init,
     headers: { ...neonHeaders(), ...(init.headers || {}) }
   });

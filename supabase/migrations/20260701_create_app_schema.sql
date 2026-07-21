@@ -160,6 +160,9 @@ create table if not exists public.messages (
 );
 
 alter table public.conversations
+  drop constraint if exists conversations_last_message_id_fkey;
+
+alter table public.conversations
   add constraint conversations_last_message_id_fkey
   foreign key (last_message_id)
   references public.messages(id)

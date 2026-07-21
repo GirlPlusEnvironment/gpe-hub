@@ -65,7 +65,16 @@ export function normalizeEmail(value: unknown): string {
 }
 
 export function sanitizeText(value: unknown, max = 500): string {
-  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(value ?? "")
+    .split("")
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? " " : character;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
 export function getEnv(name: string, required = true): string {

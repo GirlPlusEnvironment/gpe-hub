@@ -10,14 +10,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CampButton, EmptyState, LoadingCampCard, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 import {
+  type CampChallenge,
   type CampSeason,
   type CampSeasonMember,
   type CampSubmission,
   addManualCampPoints,
   associateCampSubmissionMember,
   getActiveCampSeason,
+  getHubCampChallenges,
   getPendingCampSubmissions,
   searchSeasonMembers,
+  updateCampChallengeContent,
   updateCampSubmissionActionReview,
 } from "@/lib/camp";
 import { normalizeReviewStatus, reviewStatusClassName, reviewStatusLabel } from "@/lib/review-status";
@@ -52,6 +55,7 @@ function submissionSource(submission: CampSubmission, fields: Record<string, unk
 export default function CampAdmin() {
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
+  const [challenges, setChallenges] = useState<CampChallenge[]>([]);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("camp");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [memberQuery, setMemberQuery] = useState("");
@@ -72,7 +76,14 @@ export default function CampAdmin() {
     try {
       const active = await getActiveCampSeason();
       setSeason(active);
-      if (active) setSubmissions(await getPendingCampSubmissions(active.id));
+      if (active) {
+        const [submissionRows, challengeRows] = await Promise.all([
+          getPendingCampSubmissions(active.id),
+          getHubCampChallenges(active.id),
+        ]);
+        setSubmissions(submissionRows);
+        setChallenges(challengeRows);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Camp admin could not be loaded.");
     } finally {
@@ -205,6 +216,68 @@ export default function CampAdmin() {
     }
   }
 
+  async function handleEditChallenge(challenge: CampChallenge) {
+    const title = prompt("Challenge title", challenge.title);
+    if (title === null) return;
+    const shortDescription = prompt("Short description", challenge.short_description || "") ?? challenge.short_description;
+    const instructions = prompt("Instructions / how to complete", challenge.instructions || "") ?? challenge.instructions;
+    const theme = prompt("Week theme", challenge.theme || "") ?? challenge.theme;
+    const weekInput = prompt("Week number", String(challenge.week_number ?? ""));
+    const pointsInput = prompt("Point value. Leave blank for pending.", String(challenge.point_value ?? ""));
+    const start = prompt("Start date/time", challenge.starts_at || "") ?? challenge.starts_at;
+    const end = prompt("End date/time", challenge.ends_at || "") ?? challenge.ends_at;
+    const ctaLabel = prompt("CTA label", challenge.cta_label || "") ?? challenge.cta_label;
+    const actionUrl = prompt("CTA/action URL", challenge.action_url || "") ?? challenge.action_url;
+    const relatedUrl = prompt("Related URL", challenge.related_url || "") ?? challenge.related_url;
+    const submissionType = prompt("Submission type", challenge.submission_type || "") ?? challenge.submission_type;
+    const verificationMethod = prompt("Verification method", challenge.verification_method || "") ?? challenge.verification_method;
+    const displayOrderInput = prompt("Display order", String(challenge.display_order));
+    const isFeatured = confirm("Feature this challenge?");
+    const isActive = confirm("Active?");
+    const isHubVisible = confirm("Visible in the Hub?");
+
+    const weekNumber = weekInput?.trim() ? Number(weekInput) : null;
+    const pointValue = pointsInput?.trim() ? Number(pointsInput) : null;
+    const displayOrder = displayOrderInput?.trim() ? Number(displayOrderInput) : challenge.display_order;
+    if (
+      (weekNumber !== null && !Number.isFinite(weekNumber)) ||
+      (pointValue !== null && !Number.isFinite(pointValue)) ||
+      !Number.isFinite(displayOrder)
+    ) {
+      setError("Challenge edit cancelled because a numeric field was invalid.");
+      return;
+    }
+
+    setBusyId(challenge.id);
+    setError(null);
+    try {
+      await updateCampChallengeContent(challenge.id, {
+        title: title.trim(),
+        short_description: shortDescription?.trim() || null,
+        instructions: instructions?.trim() || null,
+        theme: theme?.trim() || null,
+        week_number: weekNumber,
+        point_value: pointValue,
+        starts_at: start?.trim() || null,
+        ends_at: end?.trim() || null,
+        cta_label: ctaLabel?.trim() || null,
+        action_url: actionUrl?.trim() || null,
+        related_url: relatedUrl?.trim() || null,
+        submission_type: submissionType?.trim() || null,
+        verification_method: verificationMethod?.trim() || null,
+        display_order: displayOrder,
+        is_featured: isFeatured,
+        is_active: isActive,
+        is_hub_visible: isHubVisible,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update challenge.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const visibleSubmissions = submissions.filter((submission) => {
     if (reviewFilter === "all") return true;
     const actions = submission.gpe_camp_submission_actions || [];
@@ -254,6 +327,46 @@ export default function CampAdmin() {
                 <StatSticker label="Filter" value={reviewFilter.replace("_", " ")} accent="cyan" />
                 <StatSticker label="Season" value={season.name} accent="orange" />
               </div>
+              <Card>
+                <CardHeader>
+                  <Tape>Season CMS</Tape>
+                  <CardTitle>Challenge Schedule</CardTitle>
+                  <CardDescription>Edit Camp GPE weeks, themes, timing, points, CTA destinations, ordering, featured status, and Hub visibility.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {challenges.length === 0 ? (
+                    <EmptyState
+                      illustration="clipboard"
+                      title="No Challenges"
+                      description="No visible seasonal challenges are configured for this season."
+                    />
+                  ) : challenges.map((challenge) => (
+                    <div key={challenge.id} className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="font-header text-2xl uppercase">{challenge.title}</div>
+                          <div className="mt-1 text-sm font-bold text-black/65">{challenge.theme || "No theme set"}</div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs font-black uppercase">
+                            <Badge variant="outline">Week {challenge.week_number || "Season"}</Badge>
+                            <Badge variant="outline">{challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}</Badge>
+                            <Badge variant={challenge.is_featured ? "default" : "outline"}>{challenge.is_featured ? "Featured" : "Standard"}</Badge>
+                            <Badge variant={challenge.is_hub_visible ? "default" : "outline"}>{challenge.is_hub_visible ? "Hub visible" : "Hidden"}</Badge>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Link to={`/camp-gpe/challenges/${challenge.slug}`}>
+                            <Button size="sm" variant="outline">Preview</Button>
+                          </Link>
+                          <Button size="sm" disabled={busyId === challenge.id} onClick={() => handleEditChallenge(challenge)}>
+                            Edit
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <Tape>Review queue</Tape>

@@ -14,16 +14,36 @@ import {
 import {
   checkNeonMembership,
   getMembershipGateMessage,
-  GPE_MEMBERSHIP_URL,
-  MEMBERSHIP_SYNC_WARNING_MESSAGE,
   MEMBERSHIP_SYNC_WARNING_STORAGE_KEY,
   type MembershipCheckResult,
+  type MembershipOutcome,
 } from "@/lib/membership";
 import { AuthEmailNotice } from "@/components/AuthEmailNotice";
+import { MembershipRequiredPage, type MembershipRequiredVariant } from "@/components/MembershipRequiredPage";
 
 type AuthMode = "login" | "signup" | "reset";
 
 const SIGNUP_USERNAME_HELP = "3-20 characters: lowercase letters, numbers, dots, hyphens, or underscores.";
+
+const membershipVariantForOutcome = (
+  outcome: MembershipOutcome | null | undefined,
+  membership?: MembershipCheckResult | null,
+): MembershipRequiredVariant | null => {
+  switch (outcome) {
+    case "active_member_needs_hub_invite":
+      return "activation_required";
+    case "inactive_or_expired_member":
+      return "expired";
+    case "nonmember":
+      return "nonmember";
+    case "ambiguous_account":
+      return "manual_review";
+    case "lookup_failed":
+      return "service_error";
+    default:
+      return membership?.hubAccess === "membership_required" ? "nonmember" : null;
+  }
+};
 
 const splitDisplayName = (value: string) => {
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -66,6 +86,11 @@ const Login = () => {
   const [emailNoticeKind, setEmailNoticeKind] = useState<"signup" | "reset" | "resend" | null>(null);
   const [showResendConfirmation, setShowResendConfirmation] = useState(false);
   const [signupErrorKind, setSignupErrorKind] = useState<SignupErrorState | null>(null);
+  const [membershipGate, setMembershipGate] = useState<{
+    variant: MembershipRequiredVariant;
+    membership: MembershipCheckResult | null;
+    message: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!loading && user) {
@@ -83,6 +108,7 @@ const Login = () => {
     setSignupErrorKind(null);
     setShowResendConfirmation(false);
     setConfirmPassword("");
+    setMembershipGate(null);
   }, [requestedMode]);
 
   const normalizedUsername = useMemo(() => normalizeUsername(username), [username]);
@@ -105,6 +131,7 @@ const Login = () => {
     setSuccessMessage(null);
     setEmailNoticeKind(null);
     setSignupErrorKind(null);
+    setMembershipGate(null);
 
     if (mode === "signup" && confirmPassword !== password) {
       setErrorMessage("Passwords must match.");
@@ -120,7 +147,6 @@ const Login = () => {
 
     try {
       let membership: MembershipCheckResult | null = null;
-      let membershipWarning: string | null = null;
       if (mode !== "reset") {
         const nameParts = splitDisplayName(displayName);
         const membershipResult = await checkNeonMembership({
@@ -131,23 +157,40 @@ const Login = () => {
 
         if (membershipResult.error) {
           console.warn("Membership lookup failed during authentication", membershipResult.error);
-          membershipWarning = MEMBERSHIP_SYNC_WARNING_MESSAGE;
+          membership = {
+            matched: false,
+            isActiveMember: false,
+            neonAccountId: null,
+            membershipStatus: null,
+            membershipLevel: null,
+            membershipStartAt: null,
+            membershipEndAt: null,
+            hubAccess: "unknown",
+            outcome: "lookup_failed",
+            publicState: "lookup_unavailable",
+            hubUserLinked: false,
+            requiresManualReview: false,
+            reason: membershipResult.error,
+          };
+        } else {
+          membership = membershipResult.data;
         }
-
-        membership = membershipResult.data;
         if (membership?.outcome === "lookup_failed") {
           console.warn("Membership lookup returned lookup_failed during authentication", membership.reason);
-          membershipWarning = MEMBERSHIP_SYNC_WARNING_MESSAGE;
         }
         const gateMessage = getMembershipGateMessage(membership?.outcome ?? "lookup_failed");
         const loginCanContinue =
           mode === "login" &&
-          (membershipWarning ||
-            membership?.outcome === "active_member_existing_hub_user");
+          membership?.outcome === "active_member_existing_hub_user";
         const signupCanContinue = mode === "signup" && membership?.outcome === "active_member_needs_hub_invite";
 
         if (!loginCanContinue && !signupCanContinue) {
-          setErrorMessage(gateMessage || "GPE Hub access requires an active GPE membership.");
+          const variant = membershipVariantForOutcome(membership?.outcome ?? "lookup_failed", membership);
+          if (variant) {
+            setMembershipGate({ variant, membership, message: gateMessage });
+          } else {
+            setErrorMessage(gateMessage || "GPE Hub access requires an active GPE membership.");
+          }
           return;
         }
       }
@@ -158,9 +201,6 @@ const Login = () => {
 	          setErrorMessage(error);
 	          return;
 	        }
-        if (membershipWarning) {
-          window.localStorage.setItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY, membershipWarning);
-        }
 	        navigate(returnPath, { replace: true });
 	        return;
 	      }
@@ -230,6 +270,20 @@ const Login = () => {
     }
   };
 
+  const handleUseAnotherEmail = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setMembershipGate(null);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
+  const handleActivateHub = () => {
+    setMembershipGate(null);
+    setAuthMode("signup");
+  };
+
   return (
     <div className="gpe-page md:pl-0">
       <div className="grid min-h-screen md:grid-cols-2">
@@ -275,6 +329,22 @@ const Login = () => {
             </div>
 
             <div className="gpe-card gpe-paper p-8 md:p-10">
+              {membershipGate ? (
+                <MembershipRequiredPage
+                  variant={membershipGate.variant}
+                  email={email}
+                  membership={membershipGate.membership}
+                  returnPath={returnPath}
+                  onActivateHub={handleActivateHub}
+                  onResendInvitation={handleActivateHub}
+                  onUseAnotherEmail={handleUseAnotherEmail}
+                  onRetry={() => {
+                    setMembershipGate(null);
+                    setErrorMessage(null);
+                  }}
+                />
+              ) : (
+              <>
               {mode === "reset" && (
                 <button
                   type="button"
@@ -417,11 +487,6 @@ const Login = () => {
                         </a>
                       </div>
                     )}
-                    {errorMessage.includes("member benefit") && (
-                      <a href={GPE_MEMBERSHIP_URL} className="mt-3 block underline">
-                        Become a Member
-                      </a>
-                    )}
                   </div>
                 )}
 
@@ -495,6 +560,8 @@ const Login = () => {
                     </p>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           </div>

@@ -170,8 +170,8 @@ const Header = () => {
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
-          <div className="gpe-paper absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[4px] border-black p-3 sm:p-4">
-            <div className="mb-6 flex items-center justify-between">
+          <div className="gpe-paper gpe-app-sidebar absolute left-0 top-0 flex w-[min(88vw,320px)] max-w-full flex-col overflow-hidden border-r-[4px] border-black p-3 sm:p-4">
+            <div className="mb-6 flex shrink-0 items-center justify-between">
               <img
                 src="/logo.png"
                 alt="GPE Hub"
@@ -188,7 +188,7 @@ const Header = () => {
               </Button>
             </div>
 
-            <nav className="flex flex-1 flex-col gap-3">
+            <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
               {navItems.map((item) => renderNavLink(item, true))}
               {role === "admin" &&
                 renderNavLink({ to: "/admin", label: "Admin", icon: Shield }, true)}
@@ -196,7 +196,7 @@ const Header = () => {
                 renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield }, true)}
             </nav>
 
-            <div className="mt-6 space-y-3 border-t-[4px] border-black pt-4">
+            <div className="mt-6 shrink-0 space-y-3 border-t-[4px] border-black pt-4">
               <InstallAppButton className="w-full" />
 
               <NavLink
@@ -234,12 +234,16 @@ const Header = () => {
         </div>
       )}
 
-      <aside className="gpe-paper fixed left-0 top-0 z-40 hidden h-screen max-h-screen w-[280px] flex-col overflow-hidden border-r-[4px] border-black p-4 md:flex lg:p-5">
+      <aside
+        className="gpe-paper gpe-app-sidebar fixed left-0 top-0 z-40 hidden w-[280px] flex-col overflow-hidden border-r-[4px] border-black p-4 md:flex lg:p-5"
+        data-testid="authenticated-sidebar"
+      >
         <button
           type="button"
           onClick={() => navigate("/")}
           className="mb-4 flex shrink-0 items-center text-left lg:mb-5"
           aria-label="Go to dashboard"
+          data-testid="sidebar-branding"
         >
           <img
             src="/logo.png"
@@ -252,14 +256,18 @@ const Header = () => {
           Mission Control
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main navigation">
+        <nav
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Main navigation"
+          data-testid="sidebar-navigation"
+        >
           {navItems.map((item) => renderNavLink(item))}
           {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
           {(role === "admin" || role === "team_gpe") &&
             renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield })}
         </nav>
 
-        <div className="mt-4 shrink-0 space-y-3 border-t-[4px] border-black pt-3">
+        <div className="mt-4 shrink-0 space-y-3 border-t-[4px] border-black pt-3" data-testid="sidebar-account-controls">
           {user && (
             <div className="flex items-center justify-between gap-3">
               <PointsBadge />

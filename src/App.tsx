@@ -22,6 +22,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Favorites = lazy(() => import("./pages/Favorites"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const CampChallenges = lazy(() => import("./pages/CampChallenges"));
+const CampChallengeDetail = lazy(() => import("./pages/CampChallengeDetail"));
 const MySubmissions = lazy(() => import("./pages/MySubmissions"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
@@ -73,6 +74,54 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ListingDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/jobs/:jobId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage expectedCategory="jobs" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/resources/:resourceId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage expectedCategory="resources" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/funding/:fundingId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage expectedCategory="fundraisers" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/events/:eventId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage expectedCategory="events" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/toolkits/:toolkitId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage expectedCategory="resources" expectedResourceType="Toolkit" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/opportunities/:opportunityId"
+              element={
+                <ProtectedRoute>
+                  <ListingDetailPage routeLabel="Opportunity" />
                 </ProtectedRoute>
               }
             />
@@ -161,6 +210,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CampChallenges />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/challenges/:challengeSlug"
+              element={
+                <ProtectedRoute>
+                  <CampChallengeDetail />
                 </ProtectedRoute>
               }
             />

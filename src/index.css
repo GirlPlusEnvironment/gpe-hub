@@ -212,6 +212,18 @@
     background-size: 100% 34px, 24px 24px;
   }
 
+  .gpe-app-sidebar {
+    height: 100vh;
+    max-height: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    .gpe-app-sidebar {
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+  }
+
   .gpe-sticker {
     @apply gpe-border gpe-shadow-sm inline-flex items-center justify-center rounded-[1.25rem] bg-white px-4 py-2 font-black uppercase;
   }

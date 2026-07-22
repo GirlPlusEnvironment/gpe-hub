@@ -125,6 +125,7 @@ const Explore = () => {
                   setSelectedCategory(category.id);
                   setSelectedFilter("All");
                   setSortOption("most_recent");
+                  navigate(`/explore?category=${category.id}`, { replace: true });
                 }}
               >
                 {category.icon}
@@ -206,11 +207,23 @@ const Explore = () => {
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {filteredListings.map((listing) => {
                 const categoryConfig = gpeCategoryConfig[listing.category];
+                const detailPath =
+                  listing.category === "jobs"
+                    ? `/jobs/${listing.id}`
+                    : listing.category === "resources"
+                    ? (listing as ResourceListing).resourceType === "Toolkit"
+                      ? `/toolkits/${listing.id}`
+                      : `/resources/${listing.id}`
+                    : listing.category === "fundraisers"
+                    ? `/funding/${listing.id}`
+                    : listing.category === "events"
+                    ? `/events/${listing.id}`
+                    : `/listing/${listing.id}`;
                 return (
                   <article
                     key={listing.id}
                     className="gpe-card gpe-hover-lift cursor-pointer overflow-hidden"
-                    onClick={() => navigate(`/listing/${listing.id}`)}
+                    onClick={() => navigate(detailPath, { state: { from: `${location.pathname}${location.search}` } })}
                   >
                     <div className={`flex h-48 items-center justify-center border-b-[3px] border-black ${categoryConfig.surface}`}>
                       {listing.image ? (

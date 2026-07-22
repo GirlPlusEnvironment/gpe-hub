@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ExternalLink, Loader2, Send, Trophy } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Loader2, Send, Trophy } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,11 +33,13 @@ import {
 
 export default function CampChallenges() {
   const { profile, user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [campStatus, setCampStatus] = useState<CampSeasonMember | null>(null);
   const [challenges, setChallenges] = useState<CampChallenge[]>([]);
   const [ledger, setLedger] = useState<CampPointsLedgerRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [activeType, setActiveType] = useState("all");
   const [proof, setProof] = useState("");
   const [notes, setNotes] = useState("");
   const [otherSelected, setOtherSelected] = useState(false);
@@ -58,6 +60,13 @@ export default function CampChallenges() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const requestedSlug = searchParams.get("challenge");
+    if (!requestedSlug || challenges.length === 0) return;
+    const match = challenges.find((challenge) => challenge.slug === requestedSlug);
+    if (match) setSelected((current) => current.includes(match.id) ? current : [...current, match.id]);
+  }, [challenges, searchParams]);
 
   async function load() {
     setLoading(true);
@@ -137,6 +146,63 @@ export default function CampChallenges() {
     }
   }
 
+  function formatDate(value: string | null | undefined) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+  }
+
+  function challengeWindow(challenge: CampChallenge) {
+    const start = formatDate(challenge.starts_at);
+    const end = formatDate(challenge.ends_at);
+    if (start && end) return `${start} - ${end}`;
+    return start || end || "Seasonal";
+  }
+
+  function challengeStatus(challenge: CampChallenge, completed: number, selectedNow: boolean) {
+    if (completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0)) return "Completed";
+    const now = Date.now();
+    const start = challenge.starts_at ? new Date(challenge.starts_at).getTime() : null;
+    const end = challenge.ends_at ? new Date(challenge.ends_at).getTime() : null;
+    if (start && now < start) return selectedNow ? "Selected" : "Upcoming";
+    if (end && now > end) return "Closed";
+    return selectedNow ? "Selected" : "Open";
+  }
+
+  const typeFilters = useMemo(() => {
+    const categories = Array.from(new Set(challenges.map((challenge) => challenge.category).filter(Boolean))).sort();
+    return [
+      { value: "all", label: "All" },
+      { value: "featured", label: "Featured" },
+      ...categories.map((category) => ({ value: category, label: category.replaceAll("_", " ") })),
+    ];
+  }, [challenges]);
+
+  const visibleChallenges = useMemo(() => {
+    if (activeType === "featured") return challenges.filter((challenge) => challenge.is_featured);
+    if (activeType === "all") return challenges;
+    return challenges.filter((challenge) => challenge.category === activeType);
+  }, [activeType, challenges]);
+
+  const challengeWeeks = useMemo(() => {
+    const groups = visibleChallenges.reduce<Record<string, CampChallenge[]>>((acc, challenge) => {
+      const key = String(challenge.week_number || "season");
+      acc[key] = acc[key] || [];
+      acc[key].push(challenge);
+      return acc;
+    }, {});
+    return Object.entries(groups)
+      .map(([key, items]) => ({
+        key,
+        weekNumber: key === "season" ? null : Number(key),
+        theme: items.find((item) => item.theme)?.theme,
+        window: challengeWindow(items[0]),
+        items: items.sort((a, b) => a.display_order - b.display_order || a.title.localeCompare(b.title)),
+      }))
+      .sort((a, b) => (a.weekNumber ?? 999) - (b.weekNumber ?? 999));
+  }, [visibleChallenges]);
+
   return (
     <div className="gpe-page">
       <Header />
@@ -189,7 +255,7 @@ export default function CampChallenges() {
                   <SectionHeader
                     eyebrow={<Sticker accent="pink">Mission tracks</Sticker>}
                     title="Active Challenges"
-                    description="Select actions when they fit what you completed. Team GPE can classify or adjust submissions during review."
+                    description="Browse the full Camp calendar by week or challenge type. Select actions when they fit what you completed; Team GPE reviews submissions before awarding points."
                     action={<Button variant="outline" onClick={load} type="button">Refresh</Button>}
                   />
                 </CardHeader>
@@ -207,40 +273,84 @@ export default function CampChallenges() {
                       action={<CampButton variant="outline" onClick={load} type="button">Refresh</CampButton>}
                     />
                   ) : (
-                    <div className="grid gap-5 md:grid-cols-2">
-                      {challenges.map((challenge, index) => {
-                        const completed = completionCounts[challenge.id] || 0;
-                        const limitReached = completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0);
-                        const accent = (["cyan", "yellow", "orange", "white"] as const)[index % 4];
-                        return (
-                          <ChallengeCard
-                            key={challenge.id}
-                            title={challenge.title}
-                            description={challenge.short_description}
-                            points={challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}
-                            category={challenge.category.replaceAll("_", " ")}
-                            difficulty={challenge.point_value && challenge.point_value >= 50 ? "High impact" : "Quick action"}
-                            estimatedTime={challenge.action_url ? "5-10 min" : "Flexible"}
-                            status={limitReached ? "Completed" : selected.includes(challenge.id) ? "Selected" : "Open"}
-                            progress={limitReached ? 100 : selected.includes(challenge.id) ? 50 : 0}
-                            accent={accent}
-                            selected={selected.includes(challenge.id)}
-                            disabled={limitReached}
-                            onToggle={() => toggleChallenge(challenge)}
-                            action={challenge.action_url ? (
-                              <a
-                                href={challenge.action_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-sm font-black uppercase underline"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                Open action <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : null}
-                          />
-                        );
-                      })}
+                    <div className="space-y-6">
+                      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Challenge type filters">
+                        {typeFilters.map((filter) => (
+                          <Button
+                            key={filter.value}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeType === filter.value}
+                            variant={activeType === filter.value ? "default" : "outline"}
+                            onClick={() => setActiveType(filter.value)}
+                          >
+                            {filter.label}
+                          </Button>
+                        ))}
+                      </div>
+                      {challengeWeeks.length === 0 ? (
+                        <EmptyState
+                          illustration="clipboard"
+                          title="No Matching Missions"
+                          description="No Camp GPE challenges match this type yet."
+                        />
+                      ) : challengeWeeks.map((week, weekIndex) => (
+                        <section key={week.key} className="space-y-4">
+                          <div className="flex flex-col gap-2 rounded-[1.5rem] border-[3px] border-black bg-white p-4 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <div className="font-header text-3xl uppercase">
+                                {week.weekNumber ? `Weeks ${week.weekNumber}-${week.weekNumber + 1}` : "Seasonal Missions"}
+                              </div>
+                              {week.theme ? <p className="font-bold text-black/70">{week.theme}</p> : null}
+                            </div>
+                            <Sticker accent={(["cyan", "yellow", "orange", "pink"] as const)[weekIndex % 4]} rotate="none">
+                              {week.window}
+                            </Sticker>
+                          </div>
+                          <div className="grid gap-5 md:grid-cols-2">
+                            {week.items.map((challenge, index) => {
+                              const completed = completionCounts[challenge.id] || 0;
+                              const limitReached = completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0);
+                              const selectedNow = selected.includes(challenge.id);
+                              const accent = (["cyan", "yellow", "orange", "white"] as const)[(index + weekIndex) % 4];
+                              const status = challengeStatus(challenge, completed, selectedNow);
+                              return (
+                                <ChallengeCard
+                                  key={challenge.id}
+                                  title={challenge.icon ? `${challenge.icon} ${challenge.title}` : challenge.title}
+                                  description={challenge.short_description}
+                                  points={challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}
+                                  category={challenge.category.replaceAll("_", " ")}
+                                  deadline={challengeWindow(challenge)}
+                                  difficulty={challenge.is_featured ? "Featured" : challenge.submission_type?.replaceAll("_", " ")}
+                                  estimatedTime={challenge.cta_label || "Details"}
+                                  status={status}
+                                  progress={limitReached ? 100 : selectedNow ? 50 : 0}
+                                  accent={accent}
+                                  selected={selectedNow}
+                                  disabled={limitReached}
+                                  action={
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        variant={selectedNow ? "default" : "outline"}
+                                        size="sm"
+                                        disabled={limitReached}
+                                        onClick={() => toggleChallenge(challenge)}
+                                      >
+                                        {selectedNow ? "Selected" : "Select"}
+                                      </Button>
+                                      <Link to={`/camp-gpe/challenges/${challenge.slug}`}>
+                                        <Button type="button" variant="sticker" size="sm">Open Details</Button>
+                                      </Link>
+                                    </div>
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                        </section>
+                      ))}
                     </div>
                   )}
                   <button

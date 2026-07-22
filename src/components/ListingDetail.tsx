@@ -1,38 +1,25 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { CommentsSection } from "@/components/CommentsSection";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserProfileCard } from "@/components/UserProfileCard";
-import { useAuth } from "@/hooks/useAuth";
-import { useMessages } from "@/hooks/useMessages";
-import { 
-  ArrowLeft, 
-  Heart, 
-  MapPin, 
-  Clock, 
-  DollarSign, 
-  Users, 
-  Calendar,
-  ExternalLink,
-  Mail,
-  Download,
-  Tag,
-  User,
-  Building,
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
   Briefcase,
-  Globe,
-  UserCircle,
-  BellRing,
-  MessageSquare,
-  Loader2
+  Building,
+  Calendar,
+  DollarSign,
+  Download,
+  ExternalLink,
+  FileText,
+  Heart,
+  Play,
+  Share2,
+  Tag,
 } from "lucide-react";
-import { Listing, JobListing, EventListing, FundraiserListing, ResourceListing } from "@/types/listings";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ShareDialog } from "@/components/ShareDialog";
+import { CampButton, Sticker, Tape } from "@/components/camp/CampDesign";
+import { cn } from "@/lib/utils";
 import { gpeCategoryConfig } from "@/lib/gpe";
-import { CampButton, Sticker } from "@/components/camp/CampDesign";
+import type { EventListing, FundraiserListing, JobListing, Listing, ResourceListing } from "@/types/listings";
 
 interface ListingDetailProps {
   listing: Listing;
@@ -40,665 +27,383 @@ interface ListingDetailProps {
   isFavorited: boolean;
   isPending?: boolean;
   onToggleFavorite: (id: string) => void;
+  relatedListings?: Listing[];
 }
 
-const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onToggleFavorite }: ListingDetailProps) => {
-  const [showFullDescription, setShowFullDescription] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isStartingChat, setIsStartingChat] = useState(false);
-  const { user } = useAuth();
-  const { createDirectConversation } = useMessages();
-  const navigate = useNavigate();
+const categoryIcon = {
+  jobs: Briefcase,
+  events: Calendar,
+  fundraisers: Building,
+  resources: FileText,
+};
 
-  const isOwnListing = user?.id === listing.submitted_by?.id;
+const cleanText = (value?: string | null) => value?.trim() || "";
 
-  const handleMessagePoster = async () => {
-    if (!user || !listing.submitted_by?.id || isOwnListing) return;
-    
-    setIsStartingChat(true);
-    try {
-      const conversation = await createDirectConversation(user.id, listing.submitted_by.id);
-      if (conversation) {
-        navigate("/messages");
-      }
-    } catch (err) {
-      console.error("Failed to start conversation", err);
-    } finally {
-      setIsStartingChat(false);
-    }
-  };
+const normalizeExternalUrl = (value?: string | null) => {
+  const trimmed = cleanText(value);
+  if (!trimmed) return "";
+  if (/^(https?:)?\/\//i.test(trimmed)) {
+    return trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+  }
+  if (/^mailto:/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'jobs': return <Briefcase className="h-5 w-5" />;
-      case 'events': return <Calendar className="h-5 w-5" />;
-      case 'fundraisers': return <DollarSign className="h-5 w-5" />;
-      case 'resources': return <Download className="h-5 w-5" />;
-      default: return null;
-    }
-  };
+const formatDate = (value?: string | null) => {
+  const text = cleanText(value);
+  if (!text) return "";
+  const parsed = Date.parse(text);
+  if (!Number.isFinite(parsed)) return text;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
+};
 
-  const getCategoryColor = (category: string) => {
-    return gpeCategoryConfig[category as Listing["category"]]?.badge ?? "bg-white text-black";
-  };
-
-  const renderJobDetails = (job: JobListing) => (
-    <div className="space-y-6">
-      {/* Basic Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{job.location}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Building className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{job.company || 'Company not specified'}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{job.jobType}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{job.experienceLevel}</span>
-        </div>
-      </div>
-
-      {/* Salary */}
-      <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-4 shadow-gpe-sm">
-        <h4 className="mb-2 font-header text-lg uppercase text-black">Compensation</h4>
-        <p className="text-2xl font-bold">{job.salary}</p>
-      </div>
-
-      {/* Requirements */}
-      {job.requirements && job.requirements.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-lg mb-3">Requirements</h4>
-          <ul className="list-disc list-inside space-y-1">
-            {job.requirements.map((req, index) => (
-              <li key={index} className="text-muted-foreground">{req}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Benefits */}
-      {job.benefits && job.benefits.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-lg mb-3">Benefits</h4>
-          <ul className="list-disc list-inside space-y-1">
-            {job.benefits.map((benefit, index) => (
-              <li key={index} className="text-muted-foreground">{benefit}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Application Info */}
-      <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
-        <h4 className="mb-3 font-header text-lg uppercase">Application Details</h4>
-        {job.applicationDeadline && (
-          <p className="text-sm text-muted-foreground mb-2">
-            <strong>Deadline:</strong> {job.applicationDeadline}
-          </p>
-        )}
-        {job.contactEmail && (
-          <p className="text-sm text-muted-foreground mb-2">
-            <strong>Contact:</strong> {job.contactEmail}
-          </p>
-        )}
-        {job.applicationUrl && (
-          <CampButton asChild className="w-full">
-            <a href={job.applicationUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Apply Now
-            </a>
-          </CampButton>
-        )}
-      </div>
+const DetailField = ({ label, value }: { label: string; value?: string | null }) => {
+  const text = cleanText(value);
+  if (!text) return null;
+  return (
+    <div className="rounded-[1.25rem] border-[3px] border-black bg-white px-4 py-3 shadow-gpe-sm">
+      <div className="text-[10px] font-black uppercase text-black/55">{label}</div>
+      <div className="mt-1 break-words text-sm font-black text-black">{text}</div>
     </div>
   );
+};
 
-  const renderEventDetails = (event: EventListing) => (
-    <div className="space-y-6">
-      {/* Basic Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{event.date}</span>
-        </div>
-        {event.time && (
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{event.time}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{event.location}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{event.cost}</span>
-        </div>
-      </div>
-
-      {/* Organizer */}
-      {event.organizer && (
-        <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-cyan p-4 shadow-gpe-sm">
-          <h4 className="mb-2 font-header text-lg uppercase">Organized by</h4>
-          <p className="text-muted-foreground">{event.organizer}</p>
-        </div>
-      )}
-
-      {/* Attendees */}
-      {event.maxAttendees && (
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Max {event.maxAttendees} attendees</span>
-        </div>
-      )}
-
-      {/* Agenda */}
-      {event.agenda && event.agenda.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-lg mb-3">Event Agenda</h4>
-          <ul className="list-disc list-inside space-y-1">
-            {event.agenda.map((item, index) => (
-              <li key={index} className="text-muted-foreground">{item}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Registration */}
-      <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
-        <h4 className="mb-3 font-header text-lg uppercase">Registration</h4>
-        {event.contactEmail && (
-          <p className="text-sm text-muted-foreground mb-2">
-            <strong>Contact:</strong> {event.contactEmail}
-          </p>
-        )}
-        {event.registrationUrl && (
-          <CampButton asChild className="w-full">
-            <a href={event.registrationUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Register Now
-            </a>
-          </CampButton>
-        )}
-      </div>
-    </div>
+const DetailList = ({ title, items }: { title: string; items?: string[] }) => {
+  const visible = (items ?? []).map(cleanText).filter(Boolean);
+  if (visible.length === 0) return null;
+  return (
+    <section className="gpe-card bg-white p-5">
+      <Tape>{title}</Tape>
+      <ul className="mt-4 space-y-3">
+        {visible.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-3 text-sm font-bold leading-relaxed text-black/75">
+            <span className="mt-1 h-3 w-3 shrink-0 rounded-full border-[2px] border-black bg-gpe-yellow" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
+};
 
-  const renderFundraiserDetails = (fundraiser: FundraiserListing) => {
-    const progressPercentage = fundraiser.progressPercentage || 
-      (parseFloat(fundraiser.currentAmount.replace(/[$,]/g, '')) / 
-       parseFloat(fundraiser.goalAmount.replace(/[$,]/g, ''))) * 100;
+const relatedPath = (listing: Listing) => {
+  if (listing.category === "jobs") return `/jobs/${listing.id}`;
+  if (listing.category === "resources") {
+    return listing.resourceType === "Toolkit" ? `/toolkits/${listing.id}` : `/resources/${listing.id}`;
+  }
+  if (listing.category === "fundraisers") return `/funding/${listing.id}`;
+  if (listing.category === "events") return `/events/${listing.id}`;
+  return `/listing/${listing.id}`;
+};
 
-    return (
-      <div className="space-y-6">
-        {/* Progress */}
-        <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-4 shadow-gpe-sm">
-          <h4 className="mb-3 font-header text-lg uppercase">Fundraising Progress</h4>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Raised: {fundraiser.currentAmount}</span>
-              <span>Goal: {fundraiser.goalAmount}</span>
-            </div>
-            <div className="h-5 w-full overflow-hidden rounded-full border-[3px] border-black bg-white">
-              <div 
-                className="h-full rounded-full bg-gpe-pink transition-all duration-300"
-                style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground text-center">
-              {progressPercentage.toFixed(1)}% of goal reached
-            </p>
-          </div>
-        </div>
+const resourceCta = (resource: ResourceListing) => {
+  const type = resource.resourceType.toLowerCase();
+  if (type.includes("toolkit")) return { label: "Open Toolkit", icon: FileText };
+  if (type.includes("video")) return { label: "Watch Video", icon: Play };
+  if (type.includes("guide") || type.includes("handbook")) return { label: "Download Guide", icon: Download };
+  if (type.includes("article")) return { label: "Read Article", icon: FileText };
+  return { label: "Open Resource", icon: ExternalLink };
+};
 
-        {/* Organizer */}
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Organized by {fundraiser.organizer}</span>
-        </div>
+const hasClosed = (value?: string | null) => {
+  const text = cleanText(value);
+  if (!text || /ongoing|rolling/i.test(text)) return false;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) && parsed < Date.now();
+};
 
-        {/* Deadline */}
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Deadline: {fundraiser.deadline}</span>
-        </div>
+type DetailConfig = {
+  label: string;
+  backLabel: string;
+  organizationLabel: string;
+  organization?: string;
+  source?: string;
+  externalUrl?: string;
+  cta: { label: string; icon: typeof ExternalLink; closedLabel?: string; isClosed?: boolean };
+  summaryLabel: string;
+  fields: Array<{ label: string; value?: string | null }>;
+  lists: Array<{ title: string; items?: string[] }>;
+};
 
-        {/* Updates */}
-        {fundraiser.updates && fundraiser.updates.length > 0 && (
-          <div>
-            <h4 className="font-semibold text-lg mb-3">Recent Updates</h4>
-            <div className="space-y-2">
-              {fundraiser.updates.map((update, index) => (
-                <div key={index} className="rounded-[1.25rem] border-[3px] border-black bg-white p-3">
-                  <p className="text-sm text-muted-foreground">{update}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+const buildDetailConfig = (listing: Listing): DetailConfig => {
+  if (listing.category === "jobs") {
+    const job = listing as JobListing;
+    return {
+      label: "Job Detail",
+      backLabel: "jobs",
+      organizationLabel: "Organization",
+      organization: job.company,
+      source: job.source,
+      externalUrl: job.applicationUrl,
+      cta: { label: "Apply on Organization Website", icon: ExternalLink },
+      summaryLabel: "Description",
+      fields: [
+        { label: "Location", value: job.location },
+        { label: "Work style", value: job.workArrangement || job.jobType },
+        { label: "Employment type", value: job.jobType },
+        { label: "Compensation", value: job.salary },
+        { label: "Deadline", value: job.applicationDeadline },
+        { label: "Posted", value: formatDate(job.postingDate || listing.created_at) },
+        { label: "Application URL", value: normalizeExternalUrl(job.applicationUrl) },
+      ],
+      lists: [
+        { title: "Responsibilities", items: job.responsibilities },
+        { title: "Qualifications", items: job.qualifications?.length ? job.qualifications : job.requirements },
+        { title: "Benefits", items: job.benefits },
+      ],
+    };
+  }
 
-        {/* Donation */}
-        <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
-          <h4 className="mb-3 font-header text-lg uppercase">Support This Cause</h4>
-          {fundraiser.contactEmail && (
-            <p className="text-sm text-muted-foreground mb-2">
-              <strong>Contact:</strong> {fundraiser.contactEmail}
-            </p>
-          )}
-          {fundraiser.donationUrl && (
-            <CampButton asChild className="w-full">
-              <a href={fundraiser.donationUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Donate Now
-              </a>
-            </CampButton>
-          )}
-        </div>
-      </div>
-    );
+  if (listing.category === "resources") {
+    const resource = listing as ResourceListing;
+    return {
+      label: resource.resourceType === "Toolkit" ? "Toolkit Detail" : "Resource Detail",
+      backLabel: "resources",
+      organizationLabel: "Source",
+      organization: resource.author || resource.source,
+      source: resource.source,
+      externalUrl: resource.downloadUrl,
+      cta: resourceCta(resource),
+      summaryLabel: resource.resourceType === "Toolkit" ? "Toolkit overview" : "Summary",
+      fields: [
+        { label: "Resource type", value: resource.resourceType },
+        { label: "Topic", value: resource.topic },
+        { label: "Audience", value: resource.audience },
+        { label: "Published", value: formatDate(resource.publicationDate) },
+        { label: "Updated", value: formatDate(resource.lastUpdated) },
+        { label: "File size", value: resource.fileSize },
+        { label: "External source", value: normalizeExternalUrl(resource.downloadUrl) },
+      ],
+      lists: [],
+    };
+  }
+
+  if (listing.category === "fundraisers") {
+    const funding = listing as FundraiserListing;
+    const isClosed = hasClosed(funding.deadline);
+    return {
+      label: "Funding Detail",
+      backLabel: "funding",
+      organizationLabel: "Organization",
+      organization: funding.organizer,
+      source: funding.source,
+      externalUrl: funding.donationUrl,
+      cta: { label: "Apply for Funding", icon: DollarSign, closedLabel: "Applications Closed", isClosed },
+      summaryLabel: "Funding overview",
+      fields: [
+        { label: "Funding type", value: funding.fundingType },
+        { label: "Amount or award range", value: funding.awardRange || funding.goalAmount },
+        { label: "Eligibility", value: funding.eligibility },
+        { label: "Deadline", value: funding.deadline },
+        { label: "Rolling or fixed", value: funding.rollingOrFixed },
+        { label: "Geographic eligibility", value: funding.geographicEligibility },
+        { label: "Target audience", value: funding.targetAudience },
+        { label: "Climate focus", value: funding.climateFocus },
+        { label: "Source", value: funding.source },
+      ],
+      lists: [
+        { title: "Application requirements", items: funding.applicationRequirements },
+        { title: "Updates", items: funding.updates },
+      ],
+    };
+  }
+
+  const event = listing as EventListing;
+  const isClosed = hasClosed(event.registrationDeadline);
+  return {
+    label: "Event Detail",
+    backLabel: "events",
+    organizationLabel: "Host",
+    organization: event.organizer,
+    externalUrl: event.registrationUrl,
+    cta: { label: "Register for Event", icon: Calendar, closedLabel: "Registration Closed", isClosed },
+    summaryLabel: "Event overview",
+    fields: [
+      { label: "Host organization", value: event.organizer },
+      { label: "Event type", value: event.eventType },
+      { label: "Format", value: event.format },
+      { label: "Location", value: event.location },
+      { label: "Date", value: formatDate(event.date) },
+      { label: "Time", value: event.time },
+      { label: "Timezone", value: event.timezone },
+      { label: "Registration deadline", value: formatDate(event.registrationDeadline) },
+      { label: "Cost", value: event.cost },
+    ],
+    lists: [
+      { title: "Speakers", items: event.speakers },
+      { title: "Agenda", items: event.agenda },
+    ],
   };
+};
 
-  const renderResourceDetails = (resource: ResourceListing) => (
-    <div className="space-y-6">
-      {/* Basic Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex items-center gap-2">
-          <Tag className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{resource.resourceType}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">{resource.author || 'Author not specified'}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm">Topic: {resource.topic}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm">Level: {resource.difficultyLevel}</span>
-        </div>
-      </div>
-
-      {/* Tags */}
-      {resource.tags && resource.tags.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-lg mb-3">Tags</h4>
-          <div className="flex flex-wrap gap-2">
-            {resource.tags.map((tag, index) => (
-              <Badge key={index} variant="secondary" className="border-[2px] border-black font-black uppercase">{tag}</Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* File Info */}
-      <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-cyan p-4 shadow-gpe-sm">
-        <h4 className="mb-3 font-header text-lg uppercase">Resource Information</h4>
-        <div className="space-y-2">
-          {resource.lastUpdated && (
-            <p className="text-sm text-muted-foreground">
-              <strong>Last Updated:</strong> {resource.lastUpdated}
-            </p>
-          )}
-          {resource.fileSize && (
-            <p className="text-sm text-muted-foreground">
-              <strong>File Size:</strong> {resource.fileSize}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Download */}
-      {resource.downloadUrl && (
-        <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
-          <h4 className="mb-3 font-header text-lg uppercase">Access Resource</h4>
-          <CampButton asChild className="w-full">
-            <a href={resource.downloadUrl} target="_blank" rel="noopener noreferrer">
-              <Download className="h-4 w-4 mr-2" />
-              Download Resource
-            </a>
-          </CampButton>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderCategorySpecificDetails = () => {
-    switch (listing.category) {
-      case 'jobs':
-        return renderJobDetails(listing as JobListing);
-      case 'events':
-        return renderEventDetails(listing as EventListing);
-      case 'fundraisers':
-        return renderFundraiserDetails(listing as FundraiserListing);
-      case 'resources':
-        return renderResourceDetails(listing as ResourceListing);
-      default:
-        return null;
-    }
-  };
+const ListingDetail = ({
+  listing,
+  onBack,
+  isFavorited,
+  isPending = false,
+  onToggleFavorite,
+  relatedListings = [],
+}: ListingDetailProps) => {
+  const Icon = categoryIcon[listing.category];
+  const categoryConfig = gpeCategoryConfig[listing.category];
+  const tags = listing.tags ?? [];
+  const isJob = listing.category === "jobs";
+  const isResource = listing.category === "resources";
+  const job = isJob ? (listing as JobListing) : null;
+  const config = buildDetailConfig(listing);
+  const externalUrl = normalizeExternalUrl(config.externalUrl);
+  const CtaIcon = config.cta.icon;
 
   return (
-    <div>
-      <div className="mx-auto max-w-6xl">
-        {/* Back Button */}
-        <CampButton
-          variant="outline"
-          onClick={onBack}
-          className="mb-6"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Explore
+    <div className="mx-auto max-w-6xl space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CampButton variant="outline" onClick={onBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to {config.backLabel}
         </CampButton>
-
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Header */}
-            <div className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {getCategoryIcon(listing.category)}
-                    <Sticker accent="yellow" rotate="none" className={getCategoryColor(listing.category)}>
-                      {listing.category.charAt(0).toUpperCase() + listing.category.slice(1)}
-                    </Sticker>
-                  </div>
-                  <h1 className="font-header text-4xl uppercase leading-tight md:text-6xl">
-                    {listing.title}
-                  </h1>
-                </div>
-                <button
-                  onClick={() => onToggleFavorite(listing.id)}
-                  disabled={isPending}
-                  className="rounded-full border-[3px] border-black bg-white p-2 shadow-gpe-sm transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <Heart
-                    className={`h-6 w-6 ${
-                      isFavorited ? "text-red-500 fill-red-500" : "text-gray-400 hover:text-red-500"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Image */}
-              <div className="relative">
-                <img
-                  src={listing.image}
-                  alt={listing.title}
-                  className="h-64 w-full rounded-[1.5rem] border-[3px] border-black object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Description */}
-            <Card className="gpe-paper">
-              <CardHeader>
-                <CardTitle>Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
-                  {showFullDescription 
-                    ? listing.description 
-                    : `${listing.description.substring(0, 200)}${listing.description.length > 200 ? '...' : ''}`
-                  }
-                </p>
-                {listing.description.length > 200 && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowFullDescription(!showFullDescription)}
-                    className="mt-2 p-0 h-auto"
-                  >
-                    {showFullDescription ? 'Show Less' : 'Read More'}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Category-specific details */}
-            <Card className="gpe-paper">
-              <CardHeader>
-                <CardTitle>Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {renderCategorySpecificDetails()}
-              </CardContent>
-            </Card>
-            <CommentsSection listingId={listing.id} />
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <Card className="gpe-paper">
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => onToggleFavorite(listing.id)}
-                  disabled={isPending}
-                >
-                  <Heart className={`h-4 w-4 mr-2 ${isFavorited ? "text-red-500 fill-red-500" : ""}`} />
-                  {isPending ? 'Updating...' : (isFavorited ? 'Remove from Favorites' : 'Add to Favorites')}
-                </Button>
-                <ShareDialog listingId={listing.id}>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                  >
-                    <Mail className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                </ShareDialog>
-              </CardContent>
-            </Card>
-
-            {/* Contact Info */}
-            <Card className="gpe-paper">
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {listing.submitted_by ? (
-                  <div className="space-y-3">
-                    {/* Poster Info */}
-                    <div 
-                      className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 -m-2 rounded-lg transition-colors"
-                      onClick={() => setIsProfileOpen(true)}
-                    >
-                      <Avatar className="h-12 w-12 ring-2 ring-transparent hover:ring-primary/20 transition-all">
-                        <AvatarImage 
-                          src={listing.submitted_by.avatar_url || ""} 
-                          alt={listing.submitted_by.full_name || listing.submitted_by.username || "Poster"} 
-                        />
-                        <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                          {(listing.submitted_by.full_name || listing.submitted_by.username || "A").charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-lg hover:text-primary transition-colors">
-                          {listing.submitted_by.full_name || listing.submitted_by.username || "Anonymous"}
-                        </h4>
-                        <p className="text-xs text-muted-foreground">Click to view profile</p>
-                      </div>
-                    </div>
-
-                    {/* Message Poster Button */}
-                    {user && !isOwnListing && (
-                      <Button 
-                        onClick={handleMessagePoster}
-                        disabled={isStartingChat}
-                        className="w-full gap-2"
-                        variant="outline"
-                      >
-                        {isStartingChat ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <MessageSquare className="h-4 w-4" />
-                        )}
-                        Message Poster
-                      </Button>
-                    )}
-
-                    {/* Contact Details */}
-                    <div className="space-y-2">
-                      {listing.submitted_by.username && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <UserCircle className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">@{listing.submitted_by.username}</span>
-                        </div>
-                      )}
-                      
-                      {/* Category-specific contact info */}
-                      {(() => {
-                        switch (listing.category) {
-                          case "jobs": {
-                            const job = listing as JobListing;
-                            return (
-                              <>
-                                {job.contactEmail && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={`mailto:${job.contactEmail}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      {job.contactEmail}
-                                    </a>
-                                  </div>
-                                )}
-                                {job.applicationUrl && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Globe className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={job.applicationUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
-                                    >
-                                      Application Website
-                                    </a>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          }
-                          case "events": {
-                            const event = listing as EventListing;
-                            return (
-                              <>
-                                {event.contactEmail && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={`mailto:${event.contactEmail}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      {event.contactEmail}
-                                    </a>
-                                  </div>
-                                )}
-                                {event.registrationUrl && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Globe className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={event.registrationUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
-                                    >
-                                      Registration Website
-                                    </a>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          }
-                          case "fundraisers": {
-                            const fundraiser = listing as FundraiserListing;
-                            return (
-                              <>
-                                {fundraiser.contactEmail && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={`mailto:${fundraiser.contactEmail}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      {fundraiser.contactEmail}
-                                    </a>
-                                  </div>
-                                )}
-                                {fundraiser.donationUrl && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Globe className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={fundraiser.donationUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
-                                    >
-                                      Donation Website
-                                    </a>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          }
-                          case "resources": {
-                            const resource = listing as ResourceListing;
-                            return (
-                              <>
-                                {resource.downloadUrl && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Globe className="h-4 w-4 text-muted-foreground" />
-                                    <a 
-                                      href={resource.downloadUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
-                                    >
-                                      Download Website
-                                    </a>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          }
-                          default:
-                            return null;
-                        }
-                      })()}
-                    </div>
-                  </div>
-                ) : (
-                <p className="text-sm text-muted-foreground">
-                  For more information about this listing, please contact the organizer or visit their website.
-                </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onToggleFavorite(listing.id)}
+            disabled={isPending}
+          >
+            <Heart className={cn("mr-2 h-4 w-4", isFavorited && "fill-red-500 text-red-500")} />
+            {isFavorited ? "Saved" : `Save ${config.backLabel.replace(/s$/, "")}`}
+          </Button>
+          <ShareDialog listingId={listing.id}>
+            <Button variant="outline">
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
+          </ShareDialog>
         </div>
       </div>
 
-      {/* User Profile Card Modal */}
-      {listing.submitted_by && (
-        <UserProfileCard
-          userId={listing.submitted_by.id}
-          open={isProfileOpen}
-          onOpenChange={setIsProfileOpen}
-        />
+      <section className="gpe-card overflow-hidden bg-white">
+        <div className={cn("grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]", categoryConfig.surface)}>
+          <div className="border-b-[4px] border-black bg-white p-5 sm:p-7 lg:border-b-0 lg:border-r-[4px]">
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              <Sticker accent="yellow" rotate="none">
+                <Icon className="mr-2 h-4 w-4" />
+                {config.label}
+              </Sticker>
+              {config.source && <Badge className="border-[3px] border-black bg-gpe-cyan text-black">{config.source}</Badge>}
+            </div>
+            <h1 className="max-w-4xl break-words font-header text-4xl uppercase leading-none sm:text-5xl lg:text-6xl">
+              {listing.title}
+            </h1>
+            {config.organization && (
+              <p className="mt-4 max-w-3xl text-lg font-black text-black/70">
+                {config.organization}
+              </p>
+            )}
+            {cleanText(listing.summary) && (
+              <p className="mt-5 max-w-3xl text-base font-bold leading-relaxed text-black/70">
+                {listing.summary}
+              </p>
+            )}
+          </div>
+
+          <aside className="bg-gpe-yellow p-5 sm:p-7">
+            <div className="mb-5 flex items-center gap-4">
+              {job?.organizationLogo ? (
+                <img
+                  src={normalizeExternalUrl(job.organizationLogo)}
+                  alt={`${job.company || "Organization"} logo`}
+                  className="h-16 w-16 rounded-[1rem] border-[3px] border-black bg-white object-contain p-1"
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-[1rem] border-[3px] border-black bg-white">
+                  <Building className="h-8 w-8" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-[10px] font-black uppercase text-black/55">
+                  {config.organizationLabel}
+                </div>
+                <div className="break-words text-sm font-black">
+                  {config.organization || "Not specified"}
+                </div>
+              </div>
+            </div>
+
+            {config.cta.isClosed ? (
+              <div className="rounded-full border-[3px] border-black bg-white px-4 py-3 text-center text-sm font-black uppercase shadow-gpe-sm">
+                {config.cta.closedLabel}
+              </div>
+            ) : externalUrl ? (
+              <CampButton asChild className="w-full">
+                <a href={externalUrl} target="_blank" rel="noopener noreferrer">
+                  <CtaIcon className="mr-2 h-4 w-4" />
+                  {config.cta.label} ↗
+                </a>
+              </CampButton>
+            ) : null}
+          </aside>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-6">
+          <section className="gpe-card bg-white p-5 sm:p-6">
+            <Tape>{config.summaryLabel}</Tape>
+            <p className="mt-4 whitespace-pre-wrap text-sm font-bold leading-relaxed text-black/75 sm:text-base">
+              {listing.description}
+            </p>
+          </section>
+
+          {config.lists.map((list) => (
+            <DetailList key={list.title} title={list.title} items={list.items} />
+          ))}
+        </div>
+
+        <aside className="space-y-5">
+          <section className="gpe-card bg-white p-5">
+            <Tape>At a glance</Tape>
+            <div className="mt-4 grid gap-3">
+              {config.fields.map((field) => (
+                <DetailField key={field.label} label={field.label} value={field.value} />
+              ))}
+            </div>
+          </section>
+
+          {tags.length > 0 && (
+            <section className="gpe-card bg-white p-5">
+              <Tape>Tags</Tape>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <Badge key={tag} className="border-[3px] border-black bg-white text-black">
+                    <Tag className="mr-1 h-3 w-3" />
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
+
+      {relatedListings.length > 0 && (
+        <section className="space-y-4">
+          <Sticker accent="cyan" rotate="none">
+            Related {config.backLabel}
+          </Sticker>
+          <div className="grid gap-4 md:grid-cols-3">
+            {relatedListings.map((related) => (
+              <Link key={related.id} to={relatedPath(related)} className="gpe-card gpe-hover-lift bg-white p-5">
+                <div className="text-[10px] font-black uppercase text-black/55">
+                  {related.category}
+                </div>
+                <h2 className="mt-2 line-clamp-2 font-header text-xl uppercase leading-tight">
+                  {related.title}
+                </h2>
+                <p className="mt-3 line-clamp-3 text-sm font-bold text-black/65">
+                  {related.summary || related.description}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

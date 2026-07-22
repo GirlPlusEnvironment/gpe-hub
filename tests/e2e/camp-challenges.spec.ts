@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { supabaseAuthStorageKey } from "./helpers";
 
 const testUser = {
   id: "00000000-0000-0000-0000-000000000020",
@@ -264,9 +265,9 @@ const challenges = [
 ];
 
 async function installCampStubs(page: Page) {
-  await page.addInitScript((user) => {
+  await page.addInitScript(({ user, storageKey }) => {
     window.localStorage.setItem(
-      "sb-127-auth-token",
+      storageKey,
       JSON.stringify({
         access_token: "test-access-token",
         refresh_token: "test-refresh-token",
@@ -276,7 +277,7 @@ async function installCampStubs(page: Page) {
         user,
       }),
     );
-  }, testUser);
+  }, { user: testUser, storageKey: supabaseAuthStorageKey() });
 
   await page.route("**/auth/v1/user", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(testUser) });

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,47 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 import { checkNeonMembership } from "@/lib/membership";
 
+const RECOVERY_LINK_ERROR =
+  "This password reset link is invalid or has expired. Request a new one from the login page.";
+
+const SENSITIVE_RECOVERY_PARAMS = [
+  "access_token",
+  "refresh_token",
+  "token_type",
+  "expires_in",
+  "expires_at",
+  "type",
+  "code",
+  "token_hash",
+  "error",
+  "error_code",
+  "error_description",
+];
+
+const getRecoveryParams = () => {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const searchParams = new URLSearchParams(window.location.search);
+  const get = (key: string) => hashParams.get(key) || searchParams.get(key);
+
+  return {
+    accessToken: get("access_token"),
+    refreshToken: get("refresh_token"),
+    code: get("code"),
+    tokenHash: get("token_hash"),
+    type: get("type"),
+    error: get("error_description") || get("error"),
+    hasSensitiveParams: SENSITIVE_RECOVERY_PARAMS.some((key) => hashParams.has(key) || searchParams.has(key)),
+  };
+};
+
+const clearRecoveryTokensFromUrl = () => {
+  window.history.replaceState(null, document.title, "/reset-password");
+};
+
 const ResetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { refreshProfile, updatePassword } = useAuth();
-
-  const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
@@ -26,23 +61,44 @@ const ResetPassword = () => {
   useEffect(() => {
     let cancelled = false;
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY" && nextSession && !cancelled) {
+        setSessionReady(true);
+        setErrorMessage(null);
+        setIsLoadingSession(false);
+        clearRecoveryTokensFromUrl();
+      }
+    });
+
     const prepareRecoverySession = async () => {
       setIsLoadingSession(true);
       setErrorMessage(null);
 
       try {
-        const code = query.get("code");
-        const tokenHash = query.get("token_hash");
-        const type = query.get("type");
+        const recovery = getRecoveryParams();
 
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (recovery.error) {
+          throw new Error(RECOVERY_LINK_ERROR);
+        }
+
+        if (recovery.accessToken && recovery.refreshToken && recovery.type === "recovery") {
+          const { error } = await supabase.auth.setSession({
+            access_token: recovery.accessToken,
+            refresh_token: recovery.refreshToken,
+          });
           if (error) {
             throw error;
           }
-        } else if (tokenHash && type === "recovery") {
+        } else if (recovery.code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(recovery.code);
+          if (error) {
+            throw error;
+          }
+        } else if (recovery.tokenHash && recovery.type === "recovery") {
           const { error } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
+            token_hash: recovery.tokenHash,
             type: "recovery",
           });
           if (error) {
@@ -58,8 +114,12 @@ const ResetPassword = () => {
         if (!cancelled) {
           setSessionReady(Boolean(data.session));
           if (!data.session) {
-            setErrorMessage("This password reset link is invalid or has expired. Request a new one from the login page.");
+            setErrorMessage(RECOVERY_LINK_ERROR);
           }
+        }
+
+        if (recovery.hasSensitiveParams) {
+          clearRecoveryTokensFromUrl();
         }
       } catch (error) {
         if (!cancelled) {
@@ -67,8 +127,13 @@ const ResetPassword = () => {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "This password reset link is invalid or has expired. Request a new one from the login page.",
+              : RECOVERY_LINK_ERROR,
           );
+        }
+
+        const recovery = getRecoveryParams();
+        if (recovery.hasSensitiveParams) {
+          clearRecoveryTokensFromUrl();
         }
       } finally {
         if (!cancelled) {
@@ -81,8 +146,9 @@ const ResetPassword = () => {
 
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
-  }, [query]);
+  }, [location.key]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

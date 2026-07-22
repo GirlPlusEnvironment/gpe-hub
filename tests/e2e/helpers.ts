@@ -1,6 +1,17 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+export const configuredSupabaseUrl = () =>
+  new URL(process.env.VITE_SUPABASE_URL || "http://127.0.0.1:54321");
+
+export const supabaseAuthStorageKey = () => {
+  const { hostname } = configuredSupabaseUrl();
+  const projectRef = hostname === "127.0.0.1" || hostname === "localhost"
+    ? "127"
+    : hostname.split(".")[0];
+  return `sb-${projectRef}-auth-token`;
+};
+
 const allowedConsolePatterns = [
   /Failed to load resource/i,
   /Invalid API key/i,

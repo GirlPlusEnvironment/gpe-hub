@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { configuredSupabaseUrl } from "./helpers";
 
 const testUser = {
   id: "00000000-0000-0000-0000-000000000030",
@@ -28,8 +29,7 @@ const testProfile = {
   updated_at: "2026-07-22T00:00:00.000Z",
 };
 
-const expectedSupabaseUrl = () =>
-  new URL(process.env.VITE_SUPABASE_URL || "https://wisvwuysysbitxluajmv.supabase.co");
+const expectedSupabaseUrl = configuredSupabaseUrl;
 
 function membershipResponse(overrides: Record<string, unknown>) {
   return {

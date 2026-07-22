@@ -14,7 +14,11 @@ export const getAuthRedirectUrl = (path: string) => {
   }
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${window.location.origin}${normalizedPath}`;
+  const configuredOrigin =
+    import.meta.env.VITE_GPE_HUB_URL ||
+    import.meta.env.VITE_SITE_URL ||
+    (import.meta.env.PROD ? "https://members.girlplusenvironment.org" : window.location.origin);
+  return `${configuredOrigin.replace(/\/$/, "")}${normalizedPath}`;
 };
 
 export const getPreferredDisplayName = (args: {

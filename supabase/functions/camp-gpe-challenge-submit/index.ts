@@ -275,6 +275,7 @@ Deno.serve(async (req) => {
     const profile = authUser ? await profileByUserId(authUser.id) : null;
     const firstName = preferredName(fields, profile, authUser, "firstName");
     const lastName = preferredName(fields, profile, authUser, "lastName");
+    const season = await activeSeason();
     let membership: Awaited<ReturnType<typeof resolveMembership>> | null = null;
     try {
       membership = await resolveMembership({
@@ -296,7 +297,6 @@ Deno.serve(async (req) => {
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: false, errorSummary: safeError(error) });
     }
 
-    const season = await activeSeason();
     let member: { id: string; user_id: string | null } | null = null;
     const canLinkMember = Boolean(authUser?.id && membership?.isActiveMember && membership?.neonAccountId);
     if (canLinkMember && authUser) {

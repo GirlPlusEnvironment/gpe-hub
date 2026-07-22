@@ -16,7 +16,9 @@ const ALLOWED_HEADERS = [
   "x-client-info",
   "apikey",
   "content-type",
-  "idempotency-key"
+  "idempotency-key",
+  "x-action-network-webhook-secret",
+  "x-gpe-action-network-secret"
 ].join(", ");
 
 export function allowedOrigins() {

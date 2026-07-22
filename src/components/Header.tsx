@@ -92,9 +92,9 @@ const Header = () => {
     { to: "/community", label: "Community", icon: Users },
     { to: "/messages", label: "Messages", icon: MessageSquare, badge: unreadCount },
     { to: "/favorites", label: "Favorites", icon: Heart },
-    { to: "/submit", label: "Submit New", icon: PlusCircle },
-    { to: "/submissions", label: "My Submissions", icon: ClipboardList },
-    { to: "/camp-gpe/challenges", label: "Seasonal Challenges", icon: Trophy },
+    { to: "/submit", label: "Submit", icon: PlusCircle },
+    { to: "/submissions", label: "Submissions", icon: ClipboardList },
+    { to: "/camp-gpe/challenges", label: "Challenges", icon: Trophy },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
   ];
 
@@ -116,15 +116,15 @@ const Header = () => {
         onClick={() => setIsMobileMenuOpen(false)}
         className={({ isActive }) =>
           cn(
-            "gpe-pill gpe-press flex min-w-0 items-center justify-between gap-3 text-left transition-all",
-            mobile ? "w-full px-4 py-3 text-sm" : "w-full px-5 py-4 text-sm",
+            "gpe-pill gpe-press flex min-w-0 items-center justify-between gap-2.5 text-left transition-all",
+            mobile ? "w-full px-4 py-3 text-sm" : "w-full px-4 py-3 text-[13px]",
             isActive ? "bg-black text-white" : "bg-white hover:bg-gpe-yellow",
           )
         }
       >
-        <span className="flex items-center gap-3">
-          <Icon className="h-5 w-5" />
-          <span>{item.label}</span>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Icon className="h-4.5 w-4.5 shrink-0" />
+          <span className="truncate">{item.label}</span>
         </span>
         {item.badge && item.badge > 0 ? (
           <Badge className="min-w-7 justify-center bg-[#d53f8c] text-white">
@@ -234,32 +234,32 @@ const Header = () => {
         </div>
       )}
 
-      <aside className="gpe-paper fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r-[4px] border-black p-6 md:flex">
+      <aside className="gpe-paper fixed left-0 top-0 z-40 hidden h-screen max-h-screen w-[280px] flex-col overflow-hidden border-r-[4px] border-black p-4 md:flex lg:p-5">
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="mb-10 flex items-center text-left"
+          className="mb-4 flex shrink-0 items-center text-left lg:mb-5"
           aria-label="Go to dashboard"
         >
           <img
             src="/logo.png"
             alt="GPE Hub"
-            className="h-auto w-full max-w-[180px] object-contain"
+            className="h-auto w-full max-w-[150px] object-contain lg:max-w-[165px]"
           />
         </button>
 
-        <div className="mb-5 -rotate-2 rounded-[1.25rem] border-[4px] border-black bg-gpe-pink px-4 py-2 text-center font-header text-sm uppercase text-white shadow-gpe-sm">
+        <div className="mb-4 shrink-0 -rotate-2 rounded-[1rem] border-[4px] border-black bg-gpe-pink px-3 py-1.5 text-center font-header text-xs uppercase text-white shadow-gpe-sm">
           Mission Control
         </div>
 
-        <nav className="flex flex-1 flex-col gap-4">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main navigation">
           {navItems.map((item) => renderNavLink(item))}
           {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
           {(role === "admin" || role === "team_gpe") &&
             renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield })}
         </nav>
 
-        <div className="mt-6 space-y-4 border-t-[4px] border-black pt-4">
+        <div className="mt-4 shrink-0 space-y-3 border-t-[4px] border-black pt-3">
           {user && (
             <div className="flex items-center justify-between gap-3">
               <PointsBadge />
@@ -271,15 +271,15 @@ const Header = () => {
 
           <InstallAppButton className="w-full" />
 
-          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 bg-gpe-yellow p-3">
-            <Avatar className="h-12 w-12 shrink-0 border-[3px] border-black">
+          <NavLink to="/profile" className="gpe-card-sm flex items-start gap-3 bg-gpe-yellow p-2.5">
+            <Avatar className="h-10 w-10 shrink-0 border-[3px] border-black">
               <AvatarImage src={avatarUrl} alt={displayName} />
               <AvatarFallback className="bg-[#67e8f9] font-bold text-black">
                 {loading ? "…" : userInitial}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="line-clamp-2 break-words text-sm font-bold leading-tight">
+              <div className="line-clamp-2 break-words text-[13px] font-bold leading-tight">
                 {displayName}
               </div>
               <div className="break-words text-[11px] uppercase leading-tight text-black/60">
@@ -288,7 +288,7 @@ const Header = () => {
             </div>
           </NavLink>
 
-          <Button type="button" variant="ghost" className="justify-start px-0 text-red-500 hover:text-red-600" onClick={handleLogout}>
+          <Button type="button" variant="ghost" size="sm" className="h-9 justify-start px-0 text-red-500 hover:text-red-600" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
             Log Out
           </Button>

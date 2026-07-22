@@ -459,7 +459,11 @@ export const sendMessage = async (conversationId: string, senderId: string, cont
 
   // Increment user points
   try {
-    await awardPoints(senderId, 1);
+    await awardPoints(senderId, 1, 100, {
+      actionType: "hub_message",
+      source: "message_sent",
+      sourceId: newMessage.id,
+    });
   } catch (pointsError) {
     console.error("Failed to award points for message send", pointsError);
   }

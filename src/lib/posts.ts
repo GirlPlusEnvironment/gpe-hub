@@ -220,7 +220,11 @@ export async function createPost(post: { title: string; description: string; ima
 
   // Increment user points
   try {
-    await awardPoints(user.id, 10);
+    await awardPoints(user.id, 10, 100, {
+      actionType: "hub_post",
+      source: "post_created",
+      sourceId: postData.id,
+    });
     // Profile will refresh automatically via useUserPoints hook watching profile.points
   } catch (pointsError) {
     console.error("Failed to award points for post creation", pointsError);
@@ -259,7 +263,11 @@ export async function votePoll(postId: string, optionId: string) {
   
   // Award points for voting? Maybe small amount
   try {
-    await awardPoints(user.id, 1);
+    await awardPoints(user.id, 1, 100, {
+      actionType: "hub_poll_vote",
+      source: "poll_vote",
+      metadata: { post_id: postId, option_id: optionId },
+    });
   } catch (pointsError) {
     console.error("Failed to award points for voting", pointsError);
   }
@@ -296,7 +304,11 @@ export async function toggleLikePost(postId: string, hasLiked: boolean) {
 
     // Increment user points
     try {
-      await awardPoints(user.id, 1);
+      await awardPoints(user.id, 1, 100, {
+        actionType: "hub_post_like",
+        source: "post_like",
+        metadata: { post_id: postId },
+      });
     } catch (pointsError) {
       console.error("Failed to award points for post like", pointsError);
     }
@@ -370,7 +382,11 @@ export async function addComment(postId: string, content: string, parentId?: str
 
   // Increment user points
   try {
-    await awardPoints(user.id, 2);
+    await awardPoints(user.id, 2, 100, {
+      actionType: "hub_comment",
+      source: "post_comment",
+      sourceId: data.id,
+    });
   } catch (pointsError) {
     console.error("Failed to award points for comment creation", pointsError);
   }

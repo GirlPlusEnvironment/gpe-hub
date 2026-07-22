@@ -1,6 +1,18 @@
 import { supabase } from "./supabaseClient";
 
-export async function awardPoints(userId: string, points: number, dailyLimit: number = 100) {
+type AwardPointOptions = {
+  actionType?: string;
+  source?: string;
+  sourceId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export async function awardPoints(
+  userId: string,
+  points: number,
+  dailyLimit: number = 100,
+  options: AwardPointOptions = {}
+) {
     // 1. Check today's points earned from point_transactions
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -13,6 +25,8 @@ export async function awardPoints(userId: string, points: number, dailyLimit: nu
       .from("point_transactions")
       .select("points_earned")
       .eq("user_id", userId)
+      .eq("counts_for_ongoing", true)
+      .eq("approval_status", "approved")
       .gte("created_at", todayStart)
       .lt("created_at", tomorrowStart);
   
@@ -78,7 +92,16 @@ export async function awardPoints(userId: string, points: number, dailyLimit: nu
       .insert({ 
         user_id: userId, 
         points_earned: pointsToAward,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        occurred_at: new Date().toISOString(),
+        action_type: options.actionType || options.source || "hub_action",
+        source: options.source || null,
+        source_id: options.sourceId || null,
+        metadata: options.metadata || {},
+        counts_for_ongoing: true,
+        counts_for_season: false,
+        counts_for_cabin: false,
+        approval_status: "approved"
       })
       .select()
       .single();
@@ -130,7 +153,14 @@ export async function deductPoints(userId: string, points: number) {
     .insert({ 
         user_id: userId, 
         points_earned: -pointsToDeduct, // Store as negative
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        occurred_at: new Date().toISOString(),
+        action_type: "hub_point_deduction",
+        counts_for_ongoing: true,
+        counts_for_season: false,
+        counts_for_cabin: false,
+        approval_status: "approved",
+        metadata: {}
     })
     .select()
     .single();
@@ -149,18 +179,19 @@ export async function deductPoints(userId: string, points: number) {
 }
 
 export async function getUserPoints(userId: string) {
-    const { data: profile, error: fetchError } = await supabase
-        .from("profiles")
-        .select("points")
-        .eq("id", userId)
-        .single();
+    const { data: transactions, error: fetchError } = await supabase
+        .from("point_transactions")
+        .select("points_earned")
+        .eq("user_id", userId)
+        .eq("counts_for_ongoing", true)
+        .eq("approval_status", "approved");
 
     if (fetchError) {
-        console.error("Failed to fetch user profile", fetchError);
+        console.error("Failed to fetch user points", fetchError);
         throw fetchError;
     }
 
-    return profile?.points || 0;
+    return (transactions || []).reduce((sum, transaction) => sum + (transaction.points_earned || 0), 0);
 }
 
 // Helper function to calculate level from points
@@ -173,91 +204,24 @@ function calculateLevel(points: number): number {
 }
 
 export async function getLeaderboard(timeRange: 'all' | '7d' | '30d', limit: number = 10) {
-    if (timeRange === 'all') {
-        // Query profiles directly for all-time leaderboard
-        const { data: leaderboard, error: fetchError } = await supabase
-            .from("profiles")
-            .select("id, username, full_name, avatar_url, points")
-            .order("points", { ascending: false })
-            .limit(limit);
+    const days = timeRange === "all" ? null : timeRange === "7d" ? 7 : 30;
+    const { data: leaderboard, error: fetchError } = await supabase.rpc("get_ongoing_member_leaderboard", {
+        p_days: days,
+        p_limit: limit,
+    });
 
-        if (fetchError) {
-            console.error("Failed to fetch leaderboard", fetchError);
-            throw fetchError;
-        }
-
-        // Add rank and level
-        return (leaderboard || []).map((user, index) => ({
-            id: user.id,
-            username: user.username || null,
-            full_name: user.full_name || null,
-            avatar: user.avatar_url || undefined,
-            points: user.points || 0,
-            level: calculateLevel(user.points || 0),
-            rank: index + 1
-        }));
-    } else {
-        // For time-based leaderboards, aggregate transactions and join with profiles
-        const daysAgo = timeRange === '7d' ? 7 : 30;
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
-        const cutoffISO = cutoffDate.toISOString();
-
-        // Get all transactions in the time range
-        const { data: transactions, error: transError } = await supabase
-            .from("point_transactions")
-            .select("user_id, points_earned")
-            .gte("created_at", cutoffISO);
-
-        if (transError) {
-            console.error("Failed to fetch transactions", transError);
-            throw transError;
-        }
-
-        // Aggregate points by user_id
-        const userPointsMap = new Map<string, number>();
-        (transactions || []).forEach(t => {
-            const current = userPointsMap.get(t.user_id) || 0;
-            userPointsMap.set(t.user_id, current + t.points_earned);
-        });
-
-        // Get top users by points
-        const topUserIds = Array.from(userPointsMap.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, limit)
-            .map(([userId]) => userId);
-
-        if (topUserIds.length === 0) {
-            return [];
-        }
-
-        // Fetch profile data for top users
-        const { data: profiles, error: profileError } = await supabase
-            .from("profiles")
-            .select("id, username, full_name, avatar_url")
-            .in("id", topUserIds);
-
-        if (profileError) {
-            console.error("Failed to fetch profiles", profileError);
-            throw profileError;
-        }
-
-        // Combine and sort, maintaining the order from topUserIds
-        const leaderboard = topUserIds.map((userId, index) => {
-            const profile = profiles?.find(p => p.id === userId);
-            const points = userPointsMap.get(userId) || 0;
-            
-            return {
-                id: userId,
-                username: profile?.username || null,
-                full_name: profile?.full_name || null,
-                avatar: profile?.avatar_url || undefined,
-                points: points,
-                level: calculateLevel(points),
-                rank: index + 1
-            };
-        });
-
-        return leaderboard;
+    if (fetchError) {
+        console.error("Failed to fetch leaderboard", fetchError);
+        throw fetchError;
     }
+
+    return (leaderboard || []).map((user) => ({
+        id: user.user_id,
+        username: user.username || null,
+        full_name: user.full_name || null,
+        avatar: user.avatar_url || undefined,
+        points: user.points || 0,
+        level: calculateLevel(user.points || 0),
+        rank: user.rank || 0
+    }));
 }

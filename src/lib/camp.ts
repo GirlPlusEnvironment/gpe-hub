@@ -298,14 +298,42 @@ export async function getMyCampHistory(seasonId: string) {
 
 export async function getCampRecentActivity(seasonId: string, limit = 12) {
   const { data, error } = await supabase
-    .from("gpe_camp_points_ledger")
-    .select("*, profiles:user_id(username,full_name,avatar_url), gpe_challenges:challenge_id(title,category)")
+    .from("gpe_camp_recent_activity")
+    .select("*")
     .eq("season_id", seasonId)
-    .is("reversed_at", null)
-    .order("created_at", { ascending: false })
+    .order("occurred_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data || []) as CampRecentActivityRow[];
+  return (data || []).map((row) => ({
+    id: row.id,
+    season_id: row.season_id,
+    season_member_id: row.season_member_id,
+    user_id: row.user_id,
+    submission_id: null,
+    submission_action_id: row.source_id,
+    challenge_id: row.challenge_id,
+    points: row.points,
+    reason: row.challenge_title || row.reason,
+    adjustment_type: "award",
+    entry_type: "challenge_award",
+    source: row.source,
+    awarded_by: null,
+    created_at: row.created_at,
+    reversed_at: null,
+    reversed_entry_id: null,
+    reversal_reason: null,
+    profiles: {
+      username: row.username,
+      full_name: row.full_name,
+      avatar_url: row.avatar_url,
+    },
+    gpe_challenges: row.challenge_id
+      ? {
+          title: row.challenge_title,
+          category: row.challenge_category,
+        }
+      : null,
+  })) as CampRecentActivityRow[];
 }
 
 export async function getPendingCampSubmissions(seasonId: string) {

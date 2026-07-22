@@ -435,7 +435,11 @@ export const addFavoriteListing = async (profileId: string, listingId: string) =
 
   // Increment user points
   try {
-    await awardPoints(profileId, 1);
+    await awardPoints(profileId, 1, 100, {
+      actionType: "listing_favorite",
+      source: "listing_favorite",
+      metadata: { listing_id: listingId },
+    });
   } catch (pointsError) {
     console.error("Failed to award points for favorite listing", pointsError);
   }

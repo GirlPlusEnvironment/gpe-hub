@@ -440,9 +440,9 @@ function MainLeaderboardPanel({
           <Tape>Global rankings</Tape>
           <CardTitle className="text-xl">Member Rankings</CardTitle>
           <CardDescription>
-            {timeRange === "all" && "All-time points from profiles.points."}
-            {timeRange === "7d" && "Points earned from point_transactions in the last 7 days."}
-            {timeRange === "30d" && "Points earned from point_transactions in the last 30 days."}
+            {timeRange === "all" && "All-time approved ongoing point events."}
+            {timeRange === "7d" && "Approved ongoing point events from the last 7 days."}
+            {timeRange === "30d" && "Approved ongoing point events from the last 30 days."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -840,7 +840,7 @@ function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampC
       <SectionHeader
         eyebrow={<Sticker accent="cyan"><Users className="mr-2 h-4 w-4" /> Cabins</Sticker>}
         title="Cabin Leaderboard"
-        description="Current-season cabin totals update from approved Camp point ledger entries."
+        description="Current-season cabin totals include only approved point events explicitly marked for cabins."
       />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {cabinLeaderboard.map((row, index) => (
@@ -1072,7 +1072,7 @@ function CabinsPanel({
       <SectionHeader
         eyebrow={<Sticker accent="pink"><Users className="mr-2 h-4 w-4" /> Current Season</Sticker>}
         title="Cabin Competition"
-        description={`${season.name} cabin totals from approved seasonal ledger entries.`}
+        description={`${season.name} cabin totals from approved point events explicitly marked for cabins.`}
         action={<CampButton variant="cyan" onClick={onRefresh}>Refresh</CampButton>}
       />
       <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} />

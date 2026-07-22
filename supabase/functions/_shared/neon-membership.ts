@@ -38,6 +38,7 @@ export type MembershipCheckResult = {
   hubUserLinked: boolean;
   requiresManualReview: boolean;
   reason?: string;
+  databaseWriteFailed?: boolean;
 };
 
 export type MembershipLookupInput = {
@@ -47,6 +48,7 @@ export type MembershipLookupInput = {
   neonAccountId?: string;
   authenticatedUserId?: string;
   authenticatedEmail?: string;
+  suppressTrace?: boolean;
 };
 
 const DEFAULT_NEON_BASE_URL = "https://api.neoncrm.com/v2";
@@ -115,7 +117,8 @@ function logDependencyFailure(operation: string, error: unknown) {
 
 type MembershipTraceDetail = Record<string, unknown>;
 
-function membershipTrace(traceId: string, step: string, detail: MembershipTraceDetail = {}) {
+function membershipTrace(traceId: string, step: string, detail: MembershipTraceDetail = {}, suppressTrace = false) {
+  if (suppressTrace) return;
   console.info("neon-membership-check trace", {
     traceId,
     step,
@@ -484,6 +487,35 @@ async function syncHubProfileMembership(args: {
   }
 }
 
+async function syncHubProfileResolution(args: {
+  profile: HubProfileRecord;
+  accessState: "not_found" | "manual_review" | "sync_error";
+}) {
+  const currentStatus = lower(args.profile.member_status);
+  const protectedStatuses = new Set(["team", "admin", "staff", "moderator"]);
+  const now = new Date().toISOString();
+  const body: Json = {
+    membership_access_state: args.accessState,
+    membership_last_synced_at: now,
+    updated_at: now
+  };
+  if (!protectedStatuses.has(currentStatus)) {
+    body.member_status = args.accessState === "manual_review" ? "pending_review" : "inactive";
+  }
+  const res = await supabaseFetch(`profiles?id=eq.${encodeURIComponent(args.profile.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body)
+  });
+  try {
+    await assertSupabaseOk(res, "profile_membership_resolution_update");
+  } catch (error) {
+    if (error instanceof SupabaseRestError && /membership_(last_synced_at|access_state)|column/i.test(error.message)) {
+      return;
+    }
+    throw error;
+  }
+}
+
 async function upsertMembershipAccess(args: {
   email: string;
   accountId: string;
@@ -536,7 +568,8 @@ export async function existingHubAccess(
   accountId: string,
   summary?: ReturnType<typeof pickMembershipSummary>,
   traceId?: string,
-  authenticatedUserId?: string
+  authenticatedUserId?: string,
+  suppressTrace = false
 ) {
   const accountRows = await supabaseRows(
     `membership_access?select=*&neon_account_id=eq.${encodeURIComponent(accountId)}&limit=1`,
@@ -546,7 +579,7 @@ export async function existingHubAccess(
     found: Boolean(accountRows[0]),
     linkedUserId: Boolean(accountRows[0]?.user_id),
     isActive: Boolean(accountRows[0]?.is_active)
-  });
+  }, suppressTrace);
   if (
     accountRows[0]?.user_id &&
     accountRows[0]?.is_active &&
@@ -563,7 +596,7 @@ export async function existingHubAccess(
     found: Boolean(emailRows[0]),
     linkedUserId: Boolean(emailRows[0]?.user_id),
     isActive: Boolean(emailRows[0]?.is_active)
-  });
+  }, suppressTrace);
   if (
     emailRows[0]?.user_id &&
     emailRows[0]?.is_active &&
@@ -580,7 +613,7 @@ export async function existingHubAccess(
     matchedAuthenticatedUser: Boolean(authenticatedUserId && profile?.id === authenticatedUserId),
     profileHasNeonAccountId: Boolean(profile?.neon_account_id),
     memberStatus: profile?.member_status || null
-  });
+  }, suppressTrace);
   if (!profile) {
     if (summary) {
       await upsertMembershipAccess({ email, accountId, profile: null, authenticatedUserId, summary, isActive: true });
@@ -588,7 +621,7 @@ export async function existingHubAccess(
         succeeded: true,
         linkedUserId: false,
         isActive: true
-      });
+      }, suppressTrace);
     }
     return null;
   }
@@ -600,14 +633,14 @@ export async function existingHubAccess(
     succeeded: true,
     profileId: profile.id,
     neonAccountId: accountId
-  });
+  }, suppressTrace);
   if (summary) {
     await upsertMembershipAccess({ email, accountId, profile, authenticatedUserId, summary, isActive: true });
     membershipTrace(traceId || "unknown", "membership_access_upsert", {
       succeeded: true,
       linkedUserId: true,
       isActive: true
-    });
+    }, suppressTrace);
   }
   return { user_id: profile.id, is_active: true, neon_account_id: accountId, normalized_email: email };
 }
@@ -618,13 +651,15 @@ export async function existingHubProfile(email: string) {
 
 export async function resolveMembership(input: MembershipLookupInput): Promise<MembershipCheckResult> {
   const traceId = crypto.randomUUID();
+  const suppressTrace = Boolean(input.suppressTrace);
+  const trace = (step: string, detail: MembershipTraceDetail = {}) => membershipTrace(traceId, step, detail, suppressTrace);
   const email = normalizeEmail(input.authenticatedEmail || input.email);
   const firstName = sanitizeText(input.firstName, 120);
   const lastName = sanitizeText(input.lastName, 120);
   const suppliedAccountId = sanitizeText(input.neonAccountId, 80);
   const authenticatedUserId = sanitizeText(input.authenticatedUserId, 80);
 
-  membershipTrace(traceId, "email_normalization", {
+  trace("email_normalization", {
     receivedEmail: sanitizeText(input.email, 320),
     normalizedEmail: email,
     hasFirstName: Boolean(firstName),
@@ -634,7 +669,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
   });
 
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    membershipTrace(traceId, "final_decision", {
+    trace("final_decision", {
       outcome: "lookup_failed",
       hubAccess: "unknown",
       reason: "invalid_email"
@@ -662,7 +697,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       hubProfile = authenticatedUserId
         ? await profileById(authenticatedUserId) || await existingHubProfile(email)
         : await existingHubProfile(email);
-      membershipTrace(traceId, authenticatedUserId ? "hub_profile_lookup_by_auth_user_id_or_email" : "hub_profile_lookup_by_email", {
+      trace(authenticatedUserId ? "hub_profile_lookup_by_auth_user_id_or_email" : "hub_profile_lookup_by_email", {
         found: Boolean(hubProfile),
         matchedAuthenticatedUser: Boolean(authenticatedUserId && hubProfile?.id === authenticatedUserId),
         profileHasNeonAccountId: Boolean(hubProfile?.neon_account_id),
@@ -677,26 +712,36 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       let accounts: Json[] = [];
       try {
         accounts = await findNeonAccountsByEmail(email);
-        membershipTrace(traceId, "neon_constituent_lookup", {
+        trace("neon_constituent_lookup", {
           found: accounts.length > 0,
           matchCount: accounts.length,
-          accountIds: accounts.map(extractAccountId).filter(Boolean)
+          accountIds: suppressTrace ? undefined : accounts.map(extractAccountId).filter(Boolean)
         });
       } catch (error) {
         logDependencyFailure("neon_account_search", error);
         throw error;
       }
       const match = resolveAccountMatch(accounts, firstName, lastName);
-      membershipTrace(traceId, "neon_constituent_match", {
+      trace("neon_constituent_match", {
         status: match.status,
-        neonAccountId: match.neonAccountId
+        neonAccountId: suppressTrace ? undefined : match.neonAccountId
       });
       if (match.status === "none") {
-        membershipTrace(traceId, "final_decision", {
+        let databaseWriteFailed = false;
+        if (hubProfile) {
+          try {
+            await syncHubProfileResolution({ profile: hubProfile, accessState: "not_found" });
+          } catch (error) {
+            databaseWriteFailed = true;
+            logDependencyFailure("profile_membership_not_found_update", error);
+          }
+        }
+        trace("final_decision", {
           outcome: "nonmember",
           hubAccess: "membership_required",
           reason: "no_neon_constituent_found",
-          liveLookupCompleted: true
+          liveLookupCompleted: true,
+          databaseWriteFailed
         });
         return {
           matched: false,
@@ -710,15 +755,26 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           outcome: "nonmember",
           publicState: hubProfile ? "hub_user_no_active_membership" : "new_person",
           hubUserLinked: Boolean(hubProfile),
-          requiresManualReview: false
+          requiresManualReview: false,
+          databaseWriteFailed
         };
       }
       if (match.status === "ambiguous") {
-        membershipTrace(traceId, "final_decision", {
+        let databaseWriteFailed = false;
+        if (hubProfile) {
+          try {
+            await syncHubProfileResolution({ profile: hubProfile, accessState: "manual_review" });
+          } catch (error) {
+            databaseWriteFailed = true;
+            logDependencyFailure("profile_membership_manual_review_update", error);
+          }
+        }
+        trace("final_decision", {
           outcome: "ambiguous_account",
           hubAccess: "manual_review",
           reason: "multiple_neon_constituents_found",
-          liveLookupCompleted: true
+          liveLookupCompleted: true,
+          databaseWriteFailed
         });
         return {
           matched: true,
@@ -733,6 +789,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           publicState: "ambiguous_match",
           hubUserLinked: Boolean(hubProfile),
           requiresManualReview: true,
+          databaseWriteFailed,
           reason: "Multiple Neon accounts matched the submitted email."
         };
       }
@@ -744,8 +801,8 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
     let memberships: Json[] = [];
     try {
       memberships = await getMemberships(neonAccountId);
-      membershipTrace(traceId, "neon_membership_lookup", {
-        neonAccountId,
+      trace("neon_membership_lookup", {
+        neonAccountId: suppressTrace ? undefined : neonAccountId,
         membershipCount: memberships.length,
         rawMembershipStatuses: memberships.map(membershipStatus),
         rawMembershipLevels: memberships.map(membershipLevel)
@@ -756,7 +813,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
     }
     const isActiveMember = hasEligibleMembership(memberships);
     const summary = pickMembershipSummary(memberships);
-    membershipTrace(traceId, "eligibility_evaluation", {
+    trace("eligibility_evaluation", {
       isActiveMember,
       membershipStatus: summary.membershipStatus,
       membershipLevel: summary.membershipLevel,
@@ -765,33 +822,36 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       eligibleMembershipCount: memberships.filter(isEligibleMembership).length
     });
     if (!isActiveMember) {
+      let databaseWriteFailed = false;
       try {
         if (hubProfile) {
           await syncHubProfileMembership({ profile: hubProfile, accountId: neonAccountId, summary, isActive: false });
-          membershipTrace(traceId, "profile_membership_sync_update", {
+          trace("profile_membership_sync_update", {
             succeeded: true,
             profileId: hubProfile.id,
             isActive: false
           });
         }
         await upsertMembershipAccess({ email, accountId: neonAccountId, profile: hubProfile, authenticatedUserId: authenticatedUserId || undefined, summary, isActive: false });
-        membershipTrace(traceId, "membership_access_upsert", {
+        trace("membership_access_upsert", {
           succeeded: true,
           linkedUserId: Boolean(hubProfile),
           isActive: false
         });
       } catch (error) {
+        databaseWriteFailed = true;
         logDependencyFailure("membership_access_cache_update", error);
-        membershipTrace(traceId, "membership_access_upsert", {
+        trace("membership_access_upsert", {
           succeeded: false,
           isActive: false,
           error: safeError(error)
         });
       }
-      membershipTrace(traceId, "final_decision", {
+      trace("final_decision", {
         outcome: memberships.length > 0 ? "inactive_or_expired_member" : "nonmember",
         hubAccess: "membership_required",
-        liveLookupCompleted: true
+        liveLookupCompleted: true,
+        databaseWriteFailed
       });
       return {
         matched: true,
@@ -805,18 +865,19 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
         outcome: memberships.length > 0 ? "inactive_or_expired_member" : "nonmember",
         publicState: memberships.length > 0 ? "expired_member" : hubProfile ? "hub_user_no_active_membership" : "existing_constituent_no_membership",
         hubUserLinked: Boolean(hubProfile),
-        requiresManualReview: false
+        requiresManualReview: false,
+        databaseWriteFailed
       };
     }
 
     let hubAccess = null;
     try {
-      hubAccess = await existingHubAccess(email, neonAccountId, summary, traceId, authenticatedUserId || undefined);
+      hubAccess = await existingHubAccess(email, neonAccountId, summary, traceId, authenticatedUserId || undefined, suppressTrace);
     } catch (error) {
       logDependencyFailure("hub_access_lookup", error);
       throw error;
     }
-    membershipTrace(traceId, "final_decision", {
+    trace("final_decision", {
       outcome: hubAccess ? "active_member_existing_hub_user" : "active_member_needs_hub_invite",
       hubAccess: hubAccess ? "allowed" : "invite_required",
       liveLookupCompleted: true,
@@ -843,7 +904,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       : error instanceof SupabaseRestError
       ? `Supabase ${error.operation} returned HTTP ${error.status}.`
       : "Membership lookup failed.";
-    membershipTrace(traceId, "final_decision", {
+    trace("final_decision", {
       outcome: "lookup_failed",
       hubAccess: "unknown",
       error: safeError(error)

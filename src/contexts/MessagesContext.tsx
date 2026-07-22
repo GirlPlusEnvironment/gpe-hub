@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode, useCallback } from "react";
+import { useEffect, useState, useRef, ReactNode, useCallback } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   fetchConversations,
@@ -18,42 +18,13 @@ import {
   fetchProfilesByIds,
   decryptMessage,
 } from "@/lib/messages";
-import type { Conversation, Message, Profile, ConversationParticipant } from "@/types/messages";
-import { useAuth } from "@/contexts/AuthContext";
+import type { Conversation, Profile } from "@/types/messages";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 import { supabase } from "@/lib/supabaseClient";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-
-interface MessagesContextType {
-  conversations: Conversation[];
-  currentConversation: Conversation | null;
-  messages: Message[];
-  unreadCount: number;
-  isLoadingConversations: boolean;
-  isLoadingMessages: boolean;
-  isLoadingUnread: boolean;
-  setCurrentConversationId: (conversationId: string | null) => void;
-  setIsMessagesPageActive: (isActive: boolean) => void;
-  sendMessage: (conversationId: string, content: string, listingId?: string, postId?: string) => Promise<void>;
-  createDirectConversation: (profileId1: string, profileId2: string) => Promise<Conversation>;
-  createGroupConversation: (name: string, participantIds: string[]) => Promise<Conversation>;
-  updateConversationName: (conversationId: string, name: string) => Promise<Conversation>;
-  updateMessage: (messageId: string, content: string) => Promise<void>;
-  addParticipantToGroup: (conversationId: string, profileId: string) => Promise<any>;
-  removeParticipantFromGroup: (conversationId: string, profileId: string) => Promise<any>;
-  markAsRead: (conversationId: string) => Promise<void>;
-  searchUsers: (query: string, excludeIds?: string[]) => Promise<Profile[]>;
-  fetchProfileById: (profileId: string) => Promise<Profile | null>;
-  fetchProfilesByIds: (profileIds: string[]) => Promise<Profile[]>;
-  loadMoreMessages: (conversationId: string) => Promise<void>;
-  hasMoreMessages: boolean;
-  isLoadingMoreMessages: boolean;
-  refreshConversations: () => Promise<void>;
-  refreshMessages: () => Promise<void>;
-}
-
-export const MessagesContext = createContext<MessagesContextType | undefined>(undefined);
+import { MessagesContext, type MessagesContextType } from "@/contexts/messages-context";
 
 interface MessagesProviderProps {
   children: ReactNode;
@@ -337,7 +308,7 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
     if (currentConversationId && profile?.id) {
       markAsReadMutation.mutate(currentConversationId);
     }
-  }, [currentConversationId, profile?.id]);
+  }, [currentConversationId, profile?.id, markAsReadMutation]);
 
   // Mark current conversation as read when Messages page becomes active
   useEffect(() => {
@@ -713,7 +684,7 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
 
       return await removeParticipantMutation.mutateAsync({ conversationId, profileId });
     },
-    [profile?.id, removeParticipantMutation, toast, setCurrentConversationId]
+    [profile?.id, removeParticipantMutation, toast]
   );
 
   const handleMarkAsRead = useCallback(
@@ -827,12 +798,4 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
       {children}
     </MessagesContext.Provider>
   );
-};
-
-export const useMessages = (): MessagesContextType => {
-  const context = useContext(MessagesContext);
-  if (context === undefined) {
-    throw new Error("useMessages must be used within a MessagesProvider");
-  }
-  return context;
 };

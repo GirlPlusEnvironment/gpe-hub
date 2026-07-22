@@ -1,18 +1,10 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from "react";
+import { useEffect, useState, useCallback, useMemo, ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchFavoriteListingIds, addFavoriteListing, removeFavoriteListing } from "@/lib/listings";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import useDeepCompareEffect from "use-deep-compare-effect";
-
-interface FavoriteContextType {
-  favoritedListings: Set<string>;
-  isFavorited: (listingId: string) => boolean;
-  toggleFavorite: (listingId: string) => Promise<void>;
-  isPending: (listingId: string) => boolean;
-}
-
-const FavoriteContext = createContext<FavoriteContextType | undefined>(undefined);
+import { FavoriteContext, type FavoriteContextType } from "@/contexts/favorite-context";
 
 interface FavoriteProviderProps {
   children: ReactNode;
@@ -138,12 +130,4 @@ export const FavoriteProvider = ({ children }: FavoriteProviderProps) => {
       {children}
     </FavoriteContext.Provider>
   );
-};
-
-export const useFavorites = (): FavoriteContextType => {
-  const context = useContext(FavoriteContext);
-  if (context === undefined) {
-    throw new Error("useFavorites must be used within a FavoriteProvider");
-  }
-  return context;
 };

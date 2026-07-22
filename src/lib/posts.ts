@@ -3,6 +3,61 @@ import type { Post, PostComment } from "@/types/posts";
 import { awardPoints, deductPoints } from "./points";
 import { validateContent } from "./profanityFilter";
 
+type JoinedUser = {
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+};
+
+type JoinedCount = { count: number };
+type JoinedLike = { user_id: string };
+type JoinedVote = { user_id: string };
+type JoinedPollOption = {
+  id: string;
+  option_text: string;
+  poll_votes?: JoinedVote[] | null;
+};
+
+type PostRow = Omit<Post, "likes_count" | "comments_count" | "has_liked" | "poll_options" | "user_vote_option_id"> & {
+  user?: JoinedUser | null;
+  post_likes?: JoinedLike[] | null;
+  post_comments?: JoinedCount[] | null;
+  poll_options?: JoinedPollOption[] | null;
+};
+
+function transformPostRow(post: PostRow, currentUserId?: string): Post {
+  let pollOptions = undefined;
+  let userVoteOptionId: string | null = null;
+
+  if (post.type === "poll" && post.poll_options) {
+    pollOptions = post.poll_options.map((option) => ({
+      id: option.id,
+      post_id: post.id,
+      option_text: option.option_text,
+      votes_count: option.poll_votes ? option.poll_votes.length : 0,
+    }));
+
+    if (currentUserId) {
+      for (const option of post.poll_options) {
+        if (option.poll_votes?.some((vote) => vote.user_id === currentUserId)) {
+          userVoteOptionId = option.id;
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    ...post,
+    user: post.user ?? undefined,
+    likes_count: post.post_likes ? post.post_likes.length : 0,
+    comments_count: post.post_comments?.[0]?.count ?? 0,
+    has_liked: currentUserId ? Boolean(post.post_likes?.some((like) => like.user_id === currentUserId)) : false,
+    poll_options: pollOptions,
+    user_vote_option_id: userVoteOptionId,
+  };
+}
+
 export async function fetchPosts() {
   // First try with poll data, fall back to without if tables don't exist
   let data;
@@ -57,39 +112,7 @@ export async function fetchPosts() {
   const { data: { user } } = await supabase.auth.getUser();
   const currentUserId = user?.id;
 
-  return data.map((post: any) => {
-    // Process poll data if it exists
-    let pollOptions = undefined;
-    let userVoteOptionId = null;
-
-    if (post.type === 'poll' && post.poll_options) {
-      pollOptions = post.poll_options.map((option: any) => ({
-        id: option.id,
-        post_id: post.id,
-        option_text: option.option_text,
-        votes_count: option.poll_votes ? option.poll_votes.length : 0
-      }));
-
-      // Find if user voted
-      if (currentUserId) {
-        for (const option of post.poll_options) {
-          if (option.poll_votes && option.poll_votes.some((vote: any) => vote.user_id === currentUserId)) {
-            userVoteOptionId = option.id;
-            break;
-          }
-        }
-      }
-    }
-
-    return {
-      ...post,
-      likes_count: post.post_likes ? post.post_likes.length : 0,
-      comments_count: post.post_comments && post.post_comments[0] ? post.post_comments[0].count : 0,
-      has_liked: currentUserId ? post.post_likes.some((like: any) => like.user_id === currentUserId) : false,
-      poll_options: pollOptions,
-      user_vote_option_id: userVoteOptionId
-    };
-  }) as Post[];
+  return ((data ?? []) as PostRow[]).map((post) => transformPostRow(post, currentUserId));
 }
 
 export async function fetchPostById(postId: string) {
@@ -146,36 +169,7 @@ export async function fetchPostById(postId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   const currentUserId = user?.id;
 
-  // Process poll data
-  let pollOptions = undefined;
-  let userVoteOptionId = null;
-
-  if (data.type === 'poll' && data.poll_options) {
-    pollOptions = data.poll_options.map((option: any) => ({
-      id: option.id,
-      post_id: data.id,
-      option_text: option.option_text,
-      votes_count: option.poll_votes ? option.poll_votes.length : 0
-    }));
-
-    if (currentUserId) {
-      for (const option of data.poll_options) {
-        if (option.poll_votes && option.poll_votes.some((vote: any) => vote.user_id === currentUserId)) {
-          userVoteOptionId = option.id;
-          break;
-        }
-      }
-    }
-  }
-
-  return {
-    ...data,
-    likes_count: data.post_likes ? data.post_likes.length : 0,
-    comments_count: data.post_comments && data.post_comments[0] ? data.post_comments[0].count : 0,
-    has_liked: currentUserId ? data.post_likes.some((like: any) => like.user_id === currentUserId) : false,
-    poll_options: pollOptions,
-    user_vote_option_id: userVoteOptionId
-  } as Post;
+  return transformPostRow(data as PostRow, currentUserId);
 }
 
 export async function createPost(post: { title: string; description: string; image_url?: string; type?: 'text' | 'poll'; poll_options?: string[] }) {
@@ -329,11 +323,11 @@ export async function fetchComments(postId: string) {
   const commentsMap = new Map<string, PostComment>();
   const rootComments: PostComment[] = [];
 
-  data.forEach((comment: any) => {
+  (data as PostComment[]).forEach((comment) => {
     commentsMap.set(comment.id, { ...comment, replies: [] });
   });
 
-  data.forEach((comment: any) => {
+  (data as PostComment[]).forEach((comment) => {
     if (comment.parent_id) {
       const parent = commentsMap.get(comment.parent_id);
       if (parent) {

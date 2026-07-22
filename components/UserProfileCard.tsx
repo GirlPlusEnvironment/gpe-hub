@@ -1,0 +1,216 @@
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { MessageSquare, Calendar, Trophy, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import { useMessages } from "@/hooks/useMessages";
+import { CampButton, EmptyState, LoadingCampCard, StatSticker } from "@/components/camp/CampDesign";
+
+interface UserProfile {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  created_at: string;
+  points: number;
+}
+
+interface UserProfileCardProps {
+  userId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const LEVELS = [
+  { level: 1, threshold: 0, name: "Newcomer", color: "bg-gray-200 text-gray-700" },
+  { level: 2, threshold: 100, name: "Contributor", color: "bg-blue-200 text-blue-700" },
+  { level: 3, threshold: 500, name: "Active Member", color: "bg-green-200 text-green-700" },
+  { level: 4, threshold: 1000, name: "Champion", color: "bg-purple-200 text-purple-700" },
+  { level: 5, threshold: 2000, name: "Legend", color: "bg-amber-300 text-amber-800" },
+];
+
+function calculateLevel(points: number) {
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (points >= LEVELS[i].threshold) {
+      return LEVELS[i];
+    }
+  }
+  return LEVELS[0];
+}
+
+export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardProps) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { createDirectConversation } = useMessages();
+
+  const isOwnProfile = user?.id === userId;
+
+  useEffect(() => {
+    if (!open || !userId) return;
+    
+    let cancelled = false;
+    
+    const fetchProfile = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, username, full_name, avatar_url, bio, created_at, points")
+          .eq("id", userId)
+          .single();
+
+        if (!cancelled) {
+          if (error) throw error;
+          setProfile(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to fetch profile", err);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    fetchProfile();
+    return () => { cancelled = true; };
+  }, [open, userId]);
+
+  const handleSendMessage = async () => {
+    if (!user || isOwnProfile) return;
+    
+    setIsStartingChat(true);
+    try {
+      // createDirectConversation automatically sets currentConversationId in context
+      const conversation = await createDirectConversation(user.id, userId);
+      if (conversation) {
+        onOpenChange(false);
+        navigate("/messages");
+      }
+    } catch (err) {
+      console.error("Failed to start conversation", err);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
+
+  const levelInfo = profile ? calculateLevel(profile.points) : LEVELS[0];
+  const displayName = profile?.full_name || profile?.username || "Unknown User";
+  const avatarUrl =
+    profile?.avatar_url?.trim() ||
+    (isOwnProfile ? ((user?.user_metadata?.avatar_url as string | undefined) ?? "").trim() : "") ||
+    null;
+  const initials = profile?.full_name?.charAt(0) || profile?.username?.charAt(0) || "U";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {isLoading ? (
+          <LoadingCampCard label="Loading profile" />
+        ) : profile ? (
+          <>
+            <DialogHeader className="sr-only">
+              <DialogTitle>User Profile</DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex min-w-0 flex-col items-center pt-4 text-center">
+              {/* Avatar */}
+              <Avatar className="mb-4 h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-black ring-4 ring-primary/20">
+                <AvatarImage
+                  src={avatarUrl || undefined}
+                  alt={displayName || "Profile photo"}
+                  className="h-full w-full object-cover"
+                  loading="eager"
+                />
+                <AvatarFallback className="text-2xl bg-primary/10">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+
+              {/* Name and Username */}
+              <div className="min-w-0 max-w-full">
+                <h2 className="break-words font-header text-2xl uppercase leading-tight [overflow-wrap:anywhere]">
+                  {displayName}
+                </h2>
+                {profile.username && profile.username !== profile.full_name && (
+                  <p className="mt-1 max-w-full break-words text-sm text-muted-foreground">
+                    @{profile.username}
+                  </p>
+                )}
+              </div>
+
+              {/* Level Badge */}
+              <Badge className={`mt-3 border-[2px] border-black font-black uppercase ${levelInfo.color}`}>
+                <Trophy className="h-3 w-3 mr-1" />
+                {levelInfo.name} • Level {levelInfo.level}
+              </Badge>
+
+              {/* Bio */}
+              {profile.bio && (
+                <p className="mt-4 max-w-xs break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                  {profile.bio}
+                </p>
+              )}
+
+              {/* Stats */}
+              <div className="mt-6 grid w-full max-w-xs grid-cols-2 gap-4">
+                <StatSticker label="Points" value={profile.points} accent="cyan" icon={<Trophy className="h-14 w-14" />} />
+                <StatSticker
+                  label={`Since ${format(new Date(profile.created_at), "MMM yyyy")}`}
+                  value={<Calendar className="h-8 w-8" />}
+                  accent="yellow"
+                  icon={<Calendar className="h-14 w-14" />}
+                />
+              </div>
+
+              {/* Actions */}
+              {!isOwnProfile && user && (
+                <CampButton
+                  className="mt-6 w-full max-w-xs gap-2" 
+                  onClick={handleSendMessage}
+                  disabled={isStartingChat}
+                >
+                  {isStartingChat ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageSquare className="h-4 w-4" />
+                  )}
+                  Send Message
+                </CampButton>
+              )}
+
+              {isOwnProfile && (
+                <CampButton
+                  variant="outline"
+                  className="mt-6 w-full max-w-xs" 
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate("/profile");
+                  }}
+                >
+                  Edit Profile
+                </CampButton>
+              )}
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            illustration="badge"
+            title="User not found"
+            description="This profile is unavailable or has been removed."
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -49,6 +49,7 @@ export type MembershipLookupInput = {
   authenticatedUserId?: string;
   authenticatedEmail?: string;
   suppressTrace?: boolean;
+  traceCollector?: (step: string, detail: MembershipTraceDetail) => void;
 };
 
 const DEFAULT_NEON_BASE_URL = "https://api.neoncrm.com/v2";
@@ -205,36 +206,253 @@ export function extractRows(result: unknown): Json[] {
   return [];
 }
 
+function nestedString(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Json;
+    return String(record.name || record.value || record.label || record.status || "").trim();
+  }
+  return "";
+}
+
 export function extractAccountId(record: Json): string {
   const account = (record.account || {}) as Json;
-  return String(record.accountId || record.id || account.id || account.accountId || "");
+  return nestedString(record.accountId)
+    || nestedString(record.accountID)
+    || nestedString(record.id)
+    || nestedString(record["Account ID"])
+    || nestedString(record["Account Id"])
+    || nestedString(record["Account Number"])
+    || nestedString(account.id)
+    || nestedString(account.accountId)
+    || nestedString(account.accountID);
 }
 
 function lower(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
 
-export async function findNeonAccountsByEmail(email: string): Promise<Json[]> {
-  const searchBody = (emailField: string) => ({
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function isLikelyEmailValueField(name: string): boolean {
+  return /email/i.test(name) && !/block|opt[\s-]*out|consent|date|time|click|reminder/i.test(name);
+}
+
+function redactForTrace(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactForTrace);
+  if (!value || typeof value !== "object") {
+    if (typeof value === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim())) return "[redacted-email]";
+    return value;
+  }
+  const record = value as Json;
+  const redacted: Json = {};
+  for (const [key, item] of Object.entries(record)) {
+    if (/email|first\s*name|last\s*name|name|address|phone/i.test(key)) {
+      redacted[key] = item ? "[redacted]" : item;
+    } else {
+      redacted[key] = redactForTrace(item);
+    }
+  }
+  return redacted;
+}
+
+function redactedJson(value: unknown, max = 2400): string {
+  return JSON.stringify(redactForTrace(value)).slice(0, max);
+}
+
+function redactEmail(value: string): string {
+  const [local, domain = ""] = value.split("@");
+  const [domainFirst = ""] = domain.split(".");
+  return `${local.slice(0, 1) || "*"}***@${domainFirst.slice(0, 1) || "*"}***`;
+}
+
+function fieldName(field: unknown): string {
+  if (typeof field === "string") return field.trim();
+  if (!field || typeof field !== "object") return "";
+  const record = field as Json;
+  return nestedString(record.name)
+    || nestedString(record.label)
+    || nestedString(record.field)
+    || nestedString(record.fieldName)
+    || nestedString(record.key)
+    || nestedString(record.value);
+}
+
+async function neonFetchTraceable(path: string, init: RequestInit, operation: string) {
+  const result = await neonFetch(path, init, operation);
+  return result;
+}
+
+async function accountSearchFields(): Promise<string[]> {
+  try {
+    const result = await neonFetchTraceable("/accounts/search/searchFields?searchKey=email", { method: "GET" }, "account_search_fields_email");
+    const data = result as Json;
+    return uniqueStrings([
+      ...(((data.standardFields || []) as unknown[]).map(fieldName)),
+      ...(((data.customFields || []) as unknown[]).map(fieldName))
+    ]).filter(isLikelyEmailValueField);
+  } catch (error) {
+    logDependencyFailure("account_search_fields_email", error);
+    return [];
+  }
+}
+
+async function accountOutputFields(): Promise<string[]> {
+  try {
+    const result = await neonFetchTraceable("/accounts/search/outputFields?searchKey=email", { method: "GET" }, "account_output_fields_email");
+    const data = result as Json;
+    const fields = uniqueStrings([
+      ...(((data.standardFields || []) as unknown[]).map(fieldName)),
+      ...(((data.customFields || []) as unknown[]).map(fieldName))
+    ]);
+    const preferred = fields.filter((name) =>
+      /account\s*id|first\s*name|last\s*name/i.test(name) || isLikelyEmailValueField(name)
+    );
+    return preferred.length > 0 ? preferred : fields.slice(0, 12);
+  } catch (error) {
+    logDependencyFailure("account_output_fields_email", error);
+    return [];
+  }
+}
+
+type NeonLookupTrace = (step: string, detail?: MembershipTraceDetail) => void;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function listNeonAccountsByEmail(email: string, trace?: NeonLookupTrace): Promise<Json[]> {
+  const rowsWithIds: Json[] = [];
+  for (const userType of ["INDIVIDUAL", "COMPANY", ""] as const) {
+    const params = new URLSearchParams({
+      email,
+      pageSize: "10",
+      currentPage: "0"
+    });
+    if (userType) params.set("userType", userType);
+    const endpoint = `/accounts?${params.toString()}`;
+    trace?.("neon_account_list_request", {
+      endpoint: endpoint.replace(/email=[^&]+/i, "email=[redacted-email]"),
+      method: "GET",
+      query: {
+        email: "[redacted-email]",
+        pageSize: 10,
+        currentPage: 0,
+        userType: userType || undefined
+      }
+    });
+    try {
+      const result = await neonFetch(endpoint, { method: "GET" }, `account_list_by_email_${userType || "ANY"}`);
+      const rows = extractRows(result);
+      const matches = rows.filter((row) => extractAccountId(row));
+      trace?.("neon_account_list_response", {
+        endpoint: endpoint.replace(/email=[^&]+/i, "email=[redacted-email]"),
+        userType: userType || undefined,
+        rawJsonRedacted: redactedJson(result),
+        rowCount: rows.length,
+        rowsWithAccountIds: matches.length,
+        accountIds: matches.map(extractAccountId)
+      });
+      rowsWithIds.push(...matches);
+      if (matches.length > 0) break;
+    } catch (error) {
+      logDependencyFailure(`account_list_by_email_${userType || "ANY"}`, error);
+      trace?.("neon_account_list_error", {
+        endpoint: endpoint.replace(/email=[^&]+/i, "email=[redacted-email]"),
+        userType: userType || undefined,
+        message: safeError(error)
+      });
+      if (!(error instanceof NeonApiError) || ![400, 404].includes(error.status)) throw error;
+    }
+    await sleep(250);
+  }
+  return rowsWithIds;
+}
+
+export async function findNeonAccountsByEmail(email: string, trace?: NeonLookupTrace): Promise<Json[]> {
+  const listMatches = await listNeonAccountsByEmail(email, trace);
+  if (listMatches.length > 0) return listMatches;
+
+  const discoveredSearchFields = await accountSearchFields();
+  const discoveredOutputFields = await accountOutputFields();
+  const searchFields = uniqueStrings([
+    "Email",
+    "Email 1",
+    "Email Address",
+    "Primary Email",
+    "Individual Email",
+    "Company Email",
+    ...discoveredSearchFields
+  ]).slice(0, 16);
+  const outputFields = uniqueStrings([
+    ...discoveredOutputFields,
+    "Account ID",
+    "First Name",
+    "Last Name",
+    "Email 1"
+  ]).slice(0, 12);
+  const searchBody = (emailField: string, operator: "EQUAL" | "CONTAIN") => ({
     searchFields: [{ field: emailField, operator: "EQUAL", value: email }],
-    outputFields: ["Account ID", "First Name", "Last Name", emailField],
+    outputFields,
     pagination: { pageSize: 10, currentPage: 1 }
   });
-  const initFor = (emailField: string) => ({
+  const initFor = (emailField: string, operator: "EQUAL" | "CONTAIN") => ({
     method: "POST",
-    body: JSON.stringify(searchBody(emailField))
+    body: JSON.stringify({
+      ...searchBody(emailField, operator),
+      searchFields: [{ field: emailField, operator, value: email }]
+    })
   });
-  try {
-    const result = await neonFetch("/accounts/search", initFor("Email"), "account_search_by_email");
-    return extractRows(result).filter((row) => extractAccountId(row));
-  } catch (error) {
-    if (error instanceof NeonApiError && error.status === 400) {
-      logDependencyFailure("account_search_by_email", error);
-      const fallbackResult = await neonFetch("/accounts/search", initFor("Email 1"), "account_search_by_email_1");
-      return extractRows(fallbackResult).filter((row) => extractAccountId(row));
+
+  trace?.("neon_account_search_strategy_catalog", {
+    endpoint: "/accounts/search/searchFields?searchKey=email",
+    discoveredSearchFields: searchFields,
+    discoveredOutputFields: outputFields
+  });
+
+  let lastError: unknown = null;
+  for (const operator of ["EQUAL", "CONTAIN"] as const) {
+    for (const field of searchFields) {
+      const init = initFor(field, operator);
+      const payload = JSON.parse(String(init.body));
+      trace?.("neon_account_search_request", {
+        endpoint: "/accounts/search",
+        method: "POST",
+        payload: redactForTrace(payload)
+      });
+      try {
+        const result = await neonFetch("/accounts/search", init, `account_search_by_${field}_${operator}`);
+        const rows = extractRows(result);
+        const rowsWithIds = rows.filter((row) => extractAccountId(row));
+        trace?.("neon_account_search_response", {
+          endpoint: "/accounts/search",
+          field,
+          operator,
+          rawJsonRedacted: redactedJson(result),
+          rowCount: rows.length,
+          rowsWithAccountIds: rowsWithIds.length,
+          accountIds: rowsWithIds.map(extractAccountId)
+        });
+        if (rowsWithIds.length > 0) return rowsWithIds;
+      } catch (error) {
+        lastError = error;
+        logDependencyFailure(`account_search_by_${field}_${operator}`, error);
+        trace?.("neon_account_search_error", {
+          endpoint: "/accounts/search",
+          field,
+          operator,
+          message: safeError(error)
+        });
+        if (!(error instanceof NeonApiError) || ![400, 404].includes(error.status)) throw error;
+      }
     }
-    throw error;
   }
+  if (lastError) {
+    trace?.("neon_account_search_exhausted", { lastError: safeError(lastError) });
+  }
+  return [];
 }
 
 export function resolveAccountMatch(accounts: Json[], firstName?: string, lastName?: string) {
@@ -254,18 +472,18 @@ export function resolveAccountMatch(accounts: Json[], firstName?: string, lastNa
   return { status: "ambiguous" as const, neonAccountId: null };
 }
 
-export async function getMemberships(accountId: string): Promise<Json[]> {
+export async function getMemberships(accountId: string, trace?: NeonLookupTrace): Promise<Json[]> {
   const result = await neonFetch(`/accounts/${encodeURIComponent(accountId)}/memberships`, { method: "GET" }, "account_memberships");
-  return extractRows(result);
-}
-
-function nestedString(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value).trim();
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const record = value as Json;
-    return String(record.name || record.value || record.label || record.status || "").trim();
-  }
-  return "";
+  const rows = extractRows(result);
+  trace?.("neon_membership_lookup_response", {
+    endpoint: `/accounts/${encodeURIComponent(accountId)}/memberships`,
+    method: "GET",
+    rawJsonRedacted: redactedJson(result),
+    membershipCount: rows.length,
+    rawMembershipStatuses: rows.map(membershipStatus),
+    rawMembershipLevels: rows.map(membershipLevel)
+  });
+  return rows;
 }
 
 function firstString(record: Json, keys: string[]): string {
@@ -375,8 +593,10 @@ export function isEligibleMembership(membership: Json): boolean {
   const endMillis = parseDateMillis(membershipEndAt(membership));
   const now = Date.now();
   const levelOk = eligibleLevels.length === 0 || eligibleLevels.includes(level);
-  const statusOk = !inactiveStatus && (active || eligibleStatuses.some((item) => status.includes(item)));
   const dateOk = (startMillis === null || startMillis <= now) && (endMillis === null || endMillis >= now);
+  if (active) return !inactiveStatus && dateOk;
+
+  const statusOk = !inactiveStatus && eligibleStatuses.some((item) => status.includes(item));
   return levelOk && statusOk && dateOk;
 }
 
@@ -433,7 +653,7 @@ async function syncHubProfileMembership(args: {
   summary: ReturnType<typeof pickMembershipSummary>;
   isActive: boolean;
 }) {
-  const currentStatus = lower(profile.member_status);
+  const currentStatus = lower(args.profile.member_status);
   const protectedStatuses = new Set(["team", "admin", "staff", "moderator"]);
   const now = new Date().toISOString();
   const legacyBody: Json = {
@@ -652,7 +872,10 @@ export async function existingHubProfile(email: string) {
 export async function resolveMembership(input: MembershipLookupInput): Promise<MembershipCheckResult> {
   const traceId = crypto.randomUUID();
   const suppressTrace = Boolean(input.suppressTrace);
-  const trace = (step: string, detail: MembershipTraceDetail = {}) => membershipTrace(traceId, step, detail, suppressTrace);
+  const trace = (step: string, detail: MembershipTraceDetail = {}) => {
+    membershipTrace(traceId, step, detail, suppressTrace);
+    input.traceCollector?.(step, { traceId, ...detail });
+  };
   const email = normalizeEmail(input.authenticatedEmail || input.email);
   const firstName = sanitizeText(input.firstName, 120);
   const lastName = sanitizeText(input.lastName, 120);
@@ -660,8 +883,8 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
   const authenticatedUserId = sanitizeText(input.authenticatedUserId, 80);
 
   trace("email_normalization", {
-    receivedEmail: sanitizeText(input.email, 320),
-    normalizedEmail: email,
+    receivedEmail: redactEmail(sanitizeText(input.email, 320)),
+    normalizedEmail: redactEmail(email),
     hasFirstName: Boolean(firstName),
     hasLastName: Boolean(lastName),
     hasSuppliedNeonAccountId: Boolean(suppliedAccountId),
@@ -711,7 +934,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
     if (!neonAccountId) {
       let accounts: Json[] = [];
       try {
-        accounts = await findNeonAccountsByEmail(email);
+        accounts = await findNeonAccountsByEmail(email, trace);
         trace("neon_constituent_lookup", {
           found: accounts.length > 0,
           matchCount: accounts.length,
@@ -800,7 +1023,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
 
     let memberships: Json[] = [];
     try {
-      memberships = await getMemberships(neonAccountId);
+      memberships = await getMemberships(neonAccountId, suppressTrace ? undefined : trace);
       trace("neon_membership_lookup", {
         neonAccountId: suppressTrace ? undefined : neonAccountId,
         membershipCount: memberships.length,

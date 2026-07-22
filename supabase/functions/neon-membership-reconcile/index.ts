@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
   const body = await readBody(req) as Json;
   const dryRun = body.dryRun === true;
   const includeSynced = body.includeSynced === true;
+  const debugProfileId = sanitizeText(body.debugProfileId, 80);
   const limit = Math.max(1, Math.min(MAX_LIMIT, Number(body.limit || MAX_LIMIT)));
   const staleDays = Math.max(0, Math.min(366, Number(body.staleDays || STALE_DAYS_DEFAULT)));
   const staleBefore = Date.now() - staleDays * 24 * 60 * 60 * 1000;
@@ -202,6 +203,7 @@ Deno.serve(async (req) => {
     databaseWriteFailures: 0,
     dryRunCandidates: 0,
   };
+  const debugTrace: Array<{ step: string; detail: Json }> = [];
 
   try {
     const [authUsers, profiles] = await Promise.all([listAuthUsers(limit), listProfiles(limit)]);
@@ -241,6 +243,11 @@ Deno.serve(async (req) => {
       counts.totalUsersChecked += 1;
       if (dryRun) continue;
       try {
+        const collectTrace = debugProfileId && candidate.id === debugProfileId
+          ? (step: string, detail: Json) => {
+              debugTrace.push({ step, detail });
+            }
+          : undefined;
         const result = await resolveMembership({
           email: candidate.email,
           firstName: candidate.firstName,
@@ -248,7 +255,8 @@ Deno.serve(async (req) => {
           neonAccountId: candidate.neonAccountId,
           authenticatedUserId: candidate.id,
           authenticatedEmail: candidate.email,
-          suppressTrace: true,
+          suppressTrace: debugProfileId ? candidate.id !== debugProfileId : true,
+          traceCollector: collectTrace,
         });
 
         if (result.databaseWriteFailed) counts.databaseWriteFailures += 1;
@@ -287,6 +295,7 @@ Deno.serve(async (req) => {
       includeSynced,
       staleDays,
       counts,
+      debugTrace: debugTrace.length > 0 ? debugTrace : undefined,
     }, 200, origin);
   } catch (error) {
     console.error("membership reconciliation failed", { message: safeError(error) });

@@ -143,8 +143,7 @@ const Login = () => {
         const loginCanContinue =
           mode === "login" &&
           (membershipWarning ||
-            membership?.outcome === "active_member_existing_hub_user" ||
-            membership?.outcome === "active_member_needs_hub_invite");
+            membership?.outcome === "active_member_existing_hub_user");
         const signupCanContinue = mode === "signup" && membership?.outcome === "active_member_needs_hub_invite";
 
         if (!loginCanContinue && !signupCanContinue) {
@@ -397,7 +396,28 @@ const Login = () => {
                     role="alert"
                   >
                     {errorMessage}
-                    {(errorMessage.includes("member benefit") || errorMessage.includes("inactive or expired")) && (
+                    {errorMessage.includes("already a GPE member") && (
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => setAuthMode("signup")}
+                        >
+                          Activate Hub account
+                        </button>
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => setEmail("")}
+                        >
+                          Use another email
+                        </button>
+                        <a href="mailto:hello@girlplusenvironment.org" className="underline">
+                          Contact support
+                        </a>
+                      </div>
+                    )}
+                    {errorMessage.includes("member benefit") && (
                       <a href={GPE_MEMBERSHIP_URL} className="mt-3 block underline">
                         Become a Member
                       </a>

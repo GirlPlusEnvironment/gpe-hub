@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -42,6 +42,7 @@ import {
 } from "@/lib/camp";
 import { normalizeReviewStatus } from "@/lib/review-status";
 import { getEncouragementMessage, getTimeOfDayGreeting, seasonalThemes } from "@/lib/delight";
+import { MEMBERSHIP_SYNC_WARNING_STORAGE_KEY } from "@/lib/membership";
 import type { Listing } from "@/types/listings";
 
 const quickLinks = [
@@ -68,6 +69,14 @@ const categoryRoutes = {
 
 const Index = () => {
   const { profile, user } = useAuth();
+  const [membershipWarning, setMembershipWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    const warning = window.localStorage.getItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY);
+    if (!warning) return;
+    setMembershipWarning(warning);
+    window.localStorage.removeItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY);
+  }, []);
 
   const { data: listings = [], isLoading: listingsLoading, isError: listingsError } = useQuery({
     queryKey: ["dashboard-listings"],
@@ -165,6 +174,12 @@ const Index = () => {
         <MarqueeStrip>
           Seasonal missions - community wins - climate justice - member rankings - submit freely - Team GPE reviews
         </MarqueeStrip>
+
+        {membershipWarning && (
+          <div className="gpe-card border-[4px] border-black bg-gpe-yellow p-5 text-sm font-black text-black shadow-gpe">
+            {membershipWarning}
+          </div>
+        )}
 
         <section className="grid gap-5 md:grid-cols-[1fr_1fr_0.8fr]">
           <div className="gpe-delight-card">

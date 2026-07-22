@@ -23,6 +23,11 @@ export type MembershipCheckResult = {
 export const GPE_MEMBERSHIP_URL =
   import.meta.env.VITE_GPE_MEMBERSHIP_URL || "https://www.girlplusenvironment.org/become-a-member";
 
+export const MEMBERSHIP_SYNC_WARNING_STORAGE_KEY = "gpe-membership-sync-warning";
+
+export const MEMBERSHIP_SYNC_WARNING_MESSAGE =
+  "Unable to verify your GPE membership right now. You can still enter the Hub; we will retry membership sync later.";
+
 export const checkNeonMembership = async (args: {
   email: string;
   firstName?: string;

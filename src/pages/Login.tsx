@@ -15,6 +15,8 @@ import {
   checkNeonMembership,
   getMembershipGateMessage,
   GPE_MEMBERSHIP_URL,
+  MEMBERSHIP_SYNC_WARNING_MESSAGE,
+  MEMBERSHIP_SYNC_WARNING_STORAGE_KEY,
   type MembershipCheckResult,
 } from "@/lib/membership";
 import { AuthEmailNotice } from "@/components/AuthEmailNotice";
@@ -118,6 +120,7 @@ const Login = () => {
 
     try {
       let membership: MembershipCheckResult | null = null;
+      let membershipWarning: string | null = null;
       if (mode !== "reset") {
         const nameParts = splitDisplayName(displayName);
         const membershipResult = await checkNeonMembership({
@@ -127,13 +130,21 @@ const Login = () => {
         });
 
         if (membershipResult.error) {
-          setErrorMessage(membershipResult.error);
-          return;
+          console.warn("Membership lookup failed during authentication", membershipResult.error);
+          membershipWarning = MEMBERSHIP_SYNC_WARNING_MESSAGE;
         }
 
         membership = membershipResult.data;
+        if (membership?.outcome === "lookup_failed") {
+          console.warn("Membership lookup returned lookup_failed during authentication", membership.reason);
+          membershipWarning = MEMBERSHIP_SYNC_WARNING_MESSAGE;
+        }
         const gateMessage = getMembershipGateMessage(membership?.outcome ?? "lookup_failed");
-        const loginCanContinue = mode === "login" && membership?.outcome === "active_member_existing_hub_user";
+        const loginCanContinue =
+          mode === "login" &&
+          (membershipWarning ||
+            membership?.outcome === "active_member_existing_hub_user" ||
+            membership?.outcome === "active_member_needs_hub_invite");
         const signupCanContinue = mode === "signup" && membership?.outcome === "active_member_needs_hub_invite";
 
         if (!loginCanContinue && !signupCanContinue) {
@@ -145,12 +156,15 @@ const Login = () => {
       if (mode === "login") {
         const { error } = await signIn({ email, password });
         if (error) {
-          setErrorMessage(error);
-          return;
+	          setErrorMessage(error);
+	          return;
+	        }
+        if (membershipWarning) {
+          window.localStorage.setItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY, membershipWarning);
         }
-        navigate(returnPath, { replace: true });
-        return;
-      }
+	        navigate(returnPath, { replace: true });
+	        return;
+	      }
 
       if (mode === "reset") {
         const { error } = await requestPasswordReset(email);

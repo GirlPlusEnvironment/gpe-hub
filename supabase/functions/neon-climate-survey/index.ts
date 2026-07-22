@@ -10,6 +10,7 @@ import {
   sanitizeText,
   supabaseFetch
 } from "../_shared/neon-membership.ts";
+import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -81,24 +82,6 @@ const FIELD_DEFS: FieldDef[] = [
   { key: "planUpdates", label: "Would you like to be informed about the process of creating a Mobile Climate Adaptation Plan?", type: "radio", required: true, neonSurveyFieldId: 34, neonName: "surveyFields[23].value", allowed: ["34","159"] },
   { key: "gpeUpdates", label: "Would you like to stay up to date on GPE happenings, events, and actions?", type: "radio", required: true, neonSurveyFieldId: 36, neonName: "surveyFields[24].value", allowed: ["36","161"] }
 ];
-
-function corsHeaders(origin: string | null): HeadersInit {
-  const allowed = (Deno.env.get("ALLOWED_FORM_ORIGINS") || "").split(",").map((item) => item.trim()).filter(Boolean);
-  const allowOrigin = origin && allowed.includes(origin) ? origin : allowed[0] || "";
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Idempotency-Key",
-    "Vary": "Origin"
-  };
-}
-
-function jsonResponse(body: Json, status = 200, origin: string | null = null): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(origin) }
-  });
-}
 
 async function readBody(req: Request): Promise<Json> {
   const contentType = req.headers.get("content-type") || "";

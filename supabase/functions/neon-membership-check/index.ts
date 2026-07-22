@@ -4,6 +4,7 @@ import {
   safeError,
   sanitizeText
 } from "../_shared/neon-membership.ts";
+import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -11,38 +12,6 @@ declare const Deno: {
 };
 
 const MAX_BODY_BYTES = 20_000;
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://www.girlplusenvironment.org",
-  "https://girlplusenvironment.org",
-  "https://www-girlplusenvironment-org.filesusr.com"
-];
-
-function allowedOrigins(): string[] {
-  const configured = (Deno.env.get("ALLOWED_HUB_ORIGINS") || Deno.env.get("ALLOWED_FORM_ORIGINS") || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return Array.from(new Set([...configured, ...DEFAULT_ALLOWED_ORIGINS]));
-}
-
-function corsHeaders(origin: string | null): HeadersInit {
-  const allowed = allowedOrigins();
-  const allowOrigin = origin && allowed.includes(origin) ? origin : allowed[0] || "";
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Vary": "Origin"
-  };
-}
-
-function jsonResponse(body: Json, status = 200, origin: string | null = null): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(origin) }
-  });
-}
-
 async function readBody(req: Request): Promise<Json> {
   const contentType = req.headers.get("content-type") || "";
   if (!contentType.toLowerCase().includes("application/json")) throw new Error("Content-Type must be application/json.");
@@ -53,9 +22,8 @@ async function readBody(req: Request): Promise<Json> {
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
-  const allowed = allowedOrigins();
-  if (origin && !allowed.includes(origin)) return jsonResponse({ message: "Origin is not allowed." }, 403, origin);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  assertAllowedOrigin(origin);
   if (req.method !== "POST") return jsonResponse({ message: "Method not allowed." }, 405, origin);
 
   try {

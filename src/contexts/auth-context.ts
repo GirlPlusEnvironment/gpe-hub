@@ -42,7 +42,7 @@ export type AuthContextValue = {
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<Profile | null>;
+  refreshProfile: (user?: User | null) => Promise<Profile | null>;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

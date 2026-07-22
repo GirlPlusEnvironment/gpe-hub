@@ -63,6 +63,35 @@ export const checkNeonMembership = async (args: {
   return { data: data ?? null, error: null };
 };
 
+export const requestHubAccountActivation = async (args: {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}) => {
+  const { data, error } = await supabase.functions.invoke<{
+    message?: string;
+    requestAccepted?: boolean;
+  }>("hub-account-activation", {
+    body: {
+      email: args.email,
+      firstName: args.firstName || "",
+      lastName: args.lastName || "",
+    },
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: error.message || "Hub access instructions could not be sent right now.",
+    };
+  }
+
+  return {
+    data: data ?? null,
+    error: null,
+  };
+};
+
 export const getMembershipGateMessage = (outcome: MembershipOutcome | null) => {
   switch (outcome) {
     case "active_member_existing_hub_user":

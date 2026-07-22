@@ -28,6 +28,9 @@ const testProfile = {
   updated_at: "2026-07-22T00:00:00.000Z",
 };
 
+const expectedSupabaseUrl = () =>
+  new URL(process.env.VITE_SUPABASE_URL || "https://wisvwuysysbitxluajmv.supabase.co");
+
 function membershipResponse(overrides: Record<string, unknown>) {
   return {
     matched: false,
@@ -184,12 +187,54 @@ test("login invokes the deployed Supabase Edge Function path", async ({ page }) 
   const requests = (page as Page & { membershipRequests?: string[] }).membershipRequests || [];
   expect(requests).toHaveLength(1);
   const requestUrl = new URL(requests[0]);
-  const supabaseUrl = new URL(process.env.VITE_SUPABASE_URL || "http://127.0.0.1:54321");
+  const supabaseUrl = expectedSupabaseUrl();
   expect(requestUrl.hostname).toBe(supabaseUrl.hostname);
   expect(requestUrl.port).toBe(supabaseUrl.port);
   expect(requestUrl.pathname).toBe("/functions/v1/neon-membership-check");
   expect(requestUrl.pathname).not.toBe("/api/neon-membership-check");
   expect(requestUrl.pathname).not.toBe("/functions/neon-membership-check");
+  expect(requestUrl.origin).not.toBe(new URL(page.url()).origin);
+});
+
+test("failed password login offers safe Hub activation without app-origin function calls", async ({ page }) => {
+  const activationRequests: string[] = [];
+
+  await page.route("**/auth/v1/user", async (route) => {
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ message: "No session" }) });
+  });
+
+  await page.route("**/auth/v1/token?grant_type=password", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "invalid_grant", error_description: "Invalid login credentials" }),
+    });
+  });
+
+  await page.route("**/functions/v1/hub-account-activation", async (route) => {
+    activationRequests.push(route.request().url());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        requestAccepted: true,
+        message: "If that email belongs to an active GPE member, we’ll send secure Hub access instructions.",
+      }),
+    });
+  });
+
+  await submitLogin(page, "activate@example.com");
+  await expect(page.getByRole("alert")).toContainText("Activate or reset Hub access");
+  await expect(page.getByRole("alert")).not.toContainText("Invalid login credentials");
+
+  await page.getByRole("button", { name: /activate or reset hub access/i }).click();
+  await expect(page.getByRole("status")).toContainText("If that email belongs to an active GPE member");
+
+  expect(activationRequests).toHaveLength(1);
+  const requestUrl = new URL(activationRequests[0]);
+  const supabaseUrl = expectedSupabaseUrl();
+  expect(requestUrl.origin).toBe(supabaseUrl.origin);
+  expect(requestUrl.pathname).toBe("/functions/v1/hub-account-activation");
   expect(requestUrl.origin).not.toBe(new URL(page.url()).origin);
 });
 

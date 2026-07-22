@@ -16,6 +16,7 @@ import {
   getMembershipGateMessage,
   MEMBERSHIP_SYNC_WARNING_MESSAGE,
   MEMBERSHIP_SYNC_WARNING_STORAGE_KEY,
+  requestHubAccountActivation,
   type MembershipCheckResult,
   type MembershipOutcome,
 } from "@/lib/membership";
@@ -25,6 +26,10 @@ import { MembershipRequiredPage, type MembershipRequiredVariant } from "@/compon
 type AuthMode = "login" | "signup" | "reset";
 
 const SIGNUP_USERNAME_HELP = "3-20 characters: lowercase letters, numbers, dots, hyphens, or underscores.";
+const ACTIVATION_SENT_MESSAGE =
+  "If that email belongs to an active GPE member, we’ll send secure Hub access instructions.";
+const LOGIN_CREDENTIALS_MESSAGE =
+  "We couldn’t sign you in with those credentials. Use Activate or reset Hub access if you need a new password or account setup link.";
 
 const membershipVariantForOutcome = (
   outcome: MembershipOutcome | null | undefined,
@@ -60,7 +65,6 @@ const Login = () => {
     signUp,
     signOut,
     resendConfirmation,
-    requestPasswordReset,
     refreshProfile,
     user,
     loading,
@@ -198,7 +202,7 @@ const Login = () => {
       if (mode === "login") {
         const { error, user: signedInUser, profile: signedInProfile } = await signIn({ email, password });
         if (error) {
-	          setErrorMessage(error);
+	          setErrorMessage(LOGIN_CREDENTIALS_MESSAGE);
 	          return;
 	        }
 
@@ -267,12 +271,12 @@ const Login = () => {
 	      }
 
       if (mode === "reset") {
-        const { error } = await requestPasswordReset(email);
+        const { error, data } = await requestHubAccountActivation({ email });
         if (error) {
           setErrorMessage(error);
           return;
         }
-        setSuccessMessage("Password reset email sent.");
+        setSuccessMessage(data?.message || ACTIVATION_SENT_MESSAGE);
         setEmailNoticeKind("reset");
         return;
       }
@@ -342,7 +346,31 @@ const Login = () => {
 
   const handleActivateHub = () => {
     setMembershipGate(null);
-    setAuthMode("signup");
+    setAuthMode("reset");
+  };
+
+  const handleRequestActivation = async () => {
+    if (!email.trim()) {
+      setErrorMessage("Enter your email address first so we know where to send Hub access instructions.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setEmailNoticeKind(null);
+
+    try {
+      const { error, data } = await requestHubAccountActivation({ email });
+      if (error) {
+        setErrorMessage(error);
+        return;
+      }
+      setSuccessMessage(data?.message || ACTIVATION_SENT_MESSAGE);
+      setEmailNoticeKind("reset");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -430,7 +458,7 @@ const Login = () => {
               <p className="mt-3 text-sm font-bold text-black/70">
                 {mode === "login" && "Enter your real account details to access the hub."}
                 {mode === "signup" && "We’ll send a confirmation email before your account becomes active."}
-                {mode === "reset" && "Enter your email and we’ll send a real password-reset link."}
+                {mode === "reset" && "Enter your email and we’ll send secure Hub access instructions."}
               </p>
 
               <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -600,6 +628,20 @@ const Login = () => {
                   </button>
                 )}
               </div>
+
+              {mode === "login" && email.trim() && (
+                <div className="mt-5 border-t-[3px] border-black pt-5">
+                  <CampButton
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleRequestActivation}
+                    disabled={isSubmitting}
+                  >
+                    Activate or Reset Hub Access
+                  </CampButton>
+                </div>
+              )}
 
               {showResendConfirmation && email.trim() && (
                 <div className="mt-5 border-t-[3px] border-black pt-5">

@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { CampButton, LoadingCampCard, Sticker, Tape } from "@/components/camp/CampDesign";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
+import { checkNeonMembership } from "@/lib/membership";
 
 const ResetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { updatePassword } = useAuth();
+  const { refreshProfile, updatePassword } = useAuth();
 
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
@@ -107,8 +108,15 @@ const ResetPassword = () => {
         return;
       }
 
-      setSuccessMessage("Password updated. You can sign in with your new password now.");
-      setTimeout(() => navigate("/login", { replace: true }), 1500);
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email || "";
+      if (userEmail) {
+        await checkNeonMembership({ email: userEmail });
+        await refreshProfile(userData.user);
+      }
+
+      setSuccessMessage("Password updated. Your Hub access is being refreshed.");
+      setTimeout(() => navigate("/", { replace: true }), 1500);
     } finally {
       setIsSubmitting(false);
     }

@@ -110,6 +110,31 @@ async function seasonMember(seasonId: string, userId: string, email: string, neo
       return updatedRows[0] as { id: string; user_id: string | null };
     }
   }
+
+  if (neonAccountId) {
+    const byNeon = await supabaseFetch(`gpe_season_members?select=*&season_id=eq.${seasonId}&neon_account_id=eq.${encodeURIComponent(neonAccountId)}&limit=1`);
+    if (byNeon.ok) {
+      const rows = await byNeon.json();
+      if (rows[0]) {
+        if (rows[0].user_id && rows[0].user_id !== userId) {
+          throw new ValidationError("This Camp registration is linked to a different Hub account. Contact Team GPE for help.");
+        }
+        const update = await supabaseFetch(`gpe_season_members?id=eq.${encodeURIComponent(rows[0].id)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({
+            user_id: userId,
+            contact_email: rows[0].contact_email || email,
+            status: rows[0].status || "registered"
+          })
+        });
+        if (!update.ok) throw new Error("Could not link seasonal member.");
+        const updatedRows = await update.json();
+        return updatedRows[0] as { id: string; user_id: string | null };
+      }
+    }
+  }
+
   const insert = await supabaseFetch("gpe_season_members?on_conflict=season_id,contact_email", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },

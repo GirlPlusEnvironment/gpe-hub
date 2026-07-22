@@ -135,15 +135,44 @@ async function challengeForAction(seasonId: string, actionSlug: string) {
   return (rows[0] || null) as ChallengeRow | null;
 }
 
-async function profileByEmail(email: string) {
-  const res = await supabaseFetch(`profiles?select=id,email&email=eq.${encodeURIComponent(email)}&limit=1`);
-  if (!res.ok) return null;
-  const rows = await res.json();
-  return rows[0] as { id: string; email: string } | undefined || null;
+async function profileByMembership(email: string, neonAccountId: string | null) {
+  if (neonAccountId) {
+    const byNeon = await supabaseFetch(`profiles?select=id,email,neon_account_id&neon_account_id=eq.${encodeURIComponent(neonAccountId)}&limit=1`);
+    if (byNeon.ok) {
+      const rows = await byNeon.json();
+      if (rows[0]) return rows[0] as { id: string; email: string | null; neon_account_id: string | null };
+    }
+  }
+
+  const byEmail = await supabaseFetch(`profiles?select=id,email,neon_account_id&email=eq.${encodeURIComponent(email)}&limit=1`);
+  if (!byEmail.ok) return null;
+  const rows = await byEmail.json();
+  return rows[0] as { id: string; email: string | null; neon_account_id: string | null } | undefined || null;
 }
 
 async function upsertSeasonMember(params: { seasonId: string; email: string; neonAccountId: string | null }) {
-  const profile = await profileByEmail(params.email);
+  const profile = await profileByMembership(params.email, params.neonAccountId);
+  if (params.neonAccountId) {
+    const byNeon = await supabaseFetch(`gpe_season_members?select=*&season_id=eq.${encodeURIComponent(params.seasonId)}&neon_account_id=eq.${encodeURIComponent(params.neonAccountId)}&limit=1`);
+    if (byNeon.ok) {
+      const rows = await byNeon.json();
+      if (rows[0]) {
+        const update = await supabaseFetch(`gpe_season_members?id=eq.${encodeURIComponent(rows[0].id)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({
+            user_id: profile?.id || rows[0].user_id || null,
+            contact_email: rows[0].contact_email || params.email,
+            status: rows[0].status || "registered"
+          })
+        });
+        if (!update.ok) throw new Error("Could not link petition action to seasonal member record.");
+        const updatedRows = await update.json();
+        return updatedRows[0] as { id: string; user_id: string | null };
+      }
+    }
+  }
+
   const res = await supabaseFetch("gpe_season_members?on_conflict=season_id,contact_email", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },

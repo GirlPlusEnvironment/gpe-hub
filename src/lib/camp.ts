@@ -63,6 +63,17 @@ export type CampChallenge = {
   max_completions_per_member: number;
   display_order: number;
   action_url: string | null;
+  week_number?: number | null;
+  theme?: string | null;
+  icon?: string | null;
+  cta_label?: string | null;
+  submission_type?: string | null;
+  verification_method?: string | null;
+  badge_eligible?: boolean | null;
+  why_it_matters?: string | null;
+  related_kind?: string | null;
+  related_url?: string | null;
+  is_featured?: boolean | null;
   action_type_slug?: string | null;
   action_type_label?: string | null;
   season_slug?: string;
@@ -198,6 +209,7 @@ export async function getHubCampChallenges(seasonId: string) {
     .from("gpe_hub_camp_challenges")
     .select("*")
     .eq("season_id", seasonId)
+    .order("week_number", { ascending: true, nullsFirst: false })
     .order("display_order", { ascending: true })
     .order("title", { ascending: true });
   if (error) throw error;
@@ -205,6 +217,23 @@ export async function getHubCampChallenges(seasonId: string) {
     ...challenge,
     action_url: canonicalCampActionUrl(challenge.action_url),
   })) as CampChallenge[];
+}
+
+export async function getHubCampChallengeBySlug(seasonId: string, slug: string) {
+  const { data, error } = await supabase
+    .from("gpe_hub_camp_challenges")
+    .select("*")
+    .eq("season_id", seasonId)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return data
+    ? ({
+        ...data,
+        action_url: canonicalCampActionUrl(data.action_url),
+        related_url: canonicalCampActionUrl(data.related_url),
+      } as CampChallenge)
+    : null;
 }
 
 export function canonicalCampActionUrl(url: string | null | undefined) {
@@ -371,6 +400,33 @@ export async function updateCampSubmissionActionReview(params: {
     p_requested_points: params.requestedPoints ?? null,
     p_notes: params.notes ?? null,
   });
+  if (error) throw error;
+}
+
+export async function updateCampChallengeContent(challengeId: string, patch: Partial<Pick<
+  CampChallenge,
+  | "title"
+  | "short_description"
+  | "instructions"
+  | "week_number"
+  | "theme"
+  | "point_value"
+  | "starts_at"
+  | "ends_at"
+  | "action_url"
+  | "related_url"
+  | "cta_label"
+  | "submission_type"
+  | "verification_method"
+  | "display_order"
+  | "is_featured"
+  | "is_active"
+  | "is_hub_visible"
+>>) {
+  const { error } = await supabase
+    .from("gpe_challenges")
+    .update(patch)
+    .eq("id", challengeId);
   if (error) throw error;
 }
 

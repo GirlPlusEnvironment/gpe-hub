@@ -14,8 +14,20 @@ export type MembershipCheckResult = {
   neonAccountId: string | null;
   membershipStatus: string | null;
   membershipLevel: string | null;
+  membershipStartAt?: string | null;
+  membershipEndAt?: string | null;
   hubAccess: "allowed" | "invite_required" | "membership_required" | "manual_review" | "denied" | "unknown";
   outcome: MembershipOutcome;
+  publicState?:
+    | "hub_user_active_member"
+    | "hub_user_no_active_membership"
+    | "neon_member_needs_hub_activation"
+    | "expired_member"
+    | "existing_constituent_no_membership"
+    | "new_person"
+    | "ambiguous_match"
+    | "lookup_unavailable";
+  hubUserLinked?: boolean;
   requiresManualReview: boolean;
   reason?: string;
 };
@@ -56,11 +68,11 @@ export const getMembershipGateMessage = (outcome: MembershipOutcome | null) => {
     case "active_member_existing_hub_user":
       return "Your membership is already connected to the GPE Hub. Log in with your existing Hub account.";
     case "active_member_needs_hub_invite":
-      return "Your GPE membership is active, but your Hub access is not linked yet. Check your email for a secure Hub invitation or contact GPE for access support.";
+      return "You’re already a GPE member. Let’s activate your Hub account. We found an active membership connected to this email. Check your inbox for your secure GPE Hub invitation.";
     case "inactive_or_expired_member":
-      return "Your GPE membership appears inactive or expired. Renew your membership to access the Hub.";
+      return "GPE Hub access is a member benefit. Complete or renew your GPE membership below to unlock the Hub, campaigns, resources, and community.";
     case "nonmember":
-      return "GPE Hub access is a member benefit. Complete your membership to access the Hub.";
+      return "GPE Hub access is a member benefit. Complete your GPE membership below to unlock the Hub, connect with the community, and join campaigns.";
     case "ambiguous_account":
       return "We found more than one Neon account for that email. GPE needs to manually confirm your membership before Hub access can continue.";
     case "lookup_failed":

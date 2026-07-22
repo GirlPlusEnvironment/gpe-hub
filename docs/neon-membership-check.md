@@ -75,23 +75,30 @@ The shared resolver also treats Neon `isActive` or `primaryActiveMembership` as 
 
 ## Hub Login And Registration
 
-Recommended Hub flow:
+Hub login flow:
 
-1. User enters email during login or registration.
+1. User enters email and password.
+2. Supabase Auth authenticates identity.
+3. Hub calls `neon-membership-check` with the Supabase session attached.
+4. The Edge Function resolves the authenticated user from the `Authorization` header and uses that user ID as the primary Hub profile link.
+5. The resolver checks Neon CRM by normalized email and evaluates actual membership records, including status and effective/expiration dates.
+6. Active members are synced into `profiles` and `membership_access`, then the frontend refreshes the profile before navigating into the Hub.
+7. Nonmembers, expired members, ambiguous matches, and integration errors fail closed with the appropriate membership, renewal, manual-review, or retry state.
+
+Hub registration still preflights membership first:
+
+1. User enters registration details.
 2. Hub calls `neon-membership-check`.
-3. If outcome is `active_member_existing_hub_user`, continue normal login.
-4. If outcome is `active_member_needs_hub_invite`, run the Hub invitation/linking workflow.
-5. If outcome is `inactive_or_expired_member` or `nonmember`, show the configured membership URL.
-6. If outcome is `ambiguous_account`, route to manual review.
-7. If outcome is `lookup_failed`, fail closed and show a retry/support message.
+3. Signup proceeds only for `active_member_needs_hub_invite`.
+4. `nonmember`, `inactive_or_expired_member`, `ambiguous_account`, and `lookup_failed` show user-facing guidance.
 
 The Hub should continue to use `membership_access` as its local authorization record. The shared function confirms Neon membership state; it should not make survey completion a requirement for Hub access.
 
 Current Hub implementation:
 
 - `src/lib/membership.ts` invokes `neon-membership-check` through Supabase Functions.
-- `src/pages/Login.tsx` checks membership before login or signup.
-- Login continues only for `active_member_existing_hub_user`.
+- `src/pages/Login.tsx` authenticates login first, checks membership with the authenticated session, refreshes profile state, then routes.
+- Login continues only for an active member with `hubAccess: "allowed"`.
 - Signup continues only for `active_member_needs_hub_invite`.
 - `nonmember`, `inactive_or_expired_member`, `ambiguous_account`, and `lookup_failed` fail closed with user-facing guidance.
 

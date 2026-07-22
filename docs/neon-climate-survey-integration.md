@@ -134,7 +134,9 @@ For active members without Hub access:
 For existing Hub members:
 
 1. Function checks `membership_access` by Neon account ID and normalized email.
-2. It returns `GPE_HUB_LOGIN_URL`.
+2. On a cache miss, function performs a live Neon lookup before denying access.
+3. If the live lookup finds an eligible active membership and a matching Hub profile, function links `profiles.neon_account_id`, upserts `membership_access`, and allows Hub login.
+4. It returns `GPE_HUB_LOGIN_URL`.
 
 For nonmembers:
 

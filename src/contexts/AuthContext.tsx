@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import {
   classifySignupError,
@@ -19,7 +19,7 @@ type AuthProviderProps = {
 };
 
 const PROFILE_FIELDS =
-  "id, email, username, full_name, first_name, last_name, avatar_url, bio, neon_account_id, member_status, points, created_at, updated_at";
+  "id, email, username, full_name, first_name, last_name, avatar_url, bio, neon_account_id, member_status, membership_level, membership_start_date, membership_end_date, membership_last_synced_at, membership_access_state, points, created_at, updated_at";
 
 const syncProfileFieldsFromMetadata = async (
   targetUser: User,
@@ -70,6 +70,11 @@ const syncProfileFieldsFromMetadata = async (
         bio: existingProfile?.bio ?? null,
         neon_account_id: existingProfile?.neon_account_id ?? null,
         member_status: existingProfile?.member_status ?? null,
+        membership_level: existingProfile?.membership_level ?? null,
+        membership_start_date: existingProfile?.membership_start_date ?? null,
+        membership_end_date: existingProfile?.membership_end_date ?? null,
+        membership_last_synced_at: existingProfile?.membership_last_synced_at ?? null,
+        membership_access_state: existingProfile?.membership_access_state ?? null,
         points: existingProfile?.points ?? 0,
         updated_at: new Date().toISOString(),
       },
@@ -156,6 +161,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         bio: null,
         neon_account_id: null,
         member_status: null,
+        membership_level: null,
+        membership_start_date: null,
+        membership_end_date: null,
+        membership_last_synced_at: null,
+        membership_access_state: null,
         points: 0,
       })
       .select(PROFILE_FIELDS)
@@ -238,10 +248,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setUser(data.session?.user ?? null);
 
       if (data.session?.user) {
-        await loadProfile(data.session.user);
+        const nextProfile = await loadProfile(data.session.user);
+        return { error: null, user: data.session.user, profile: nextProfile };
       }
 
-      return { error: null };
+      return { error: null, user: data.user ?? null, profile: null };
     },
     [loadProfile],
   );

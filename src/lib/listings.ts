@@ -120,6 +120,10 @@ const transformJob = (row: ListingRow): JobListing => {
       jobTypeOptions,
       "Full-time",
     ),
+    workArrangement: ensureString(
+      metadata.work_arrangement ?? metadata.workArrangement ?? metadata.remote_status ?? metadata.remoteStatus ?? legacyWorkArrangements.join(", "),
+      "",
+    ),
     experienceLevel: ensureEnum(
       metadata.experience_level ?? metadata.experienceLevel,
       experienceOptions,
@@ -127,11 +131,16 @@ const transformJob = (row: ListingRow): JobListing => {
     ),
     salary: ensureString(metadata.salary ?? metadata.compensation, "Compensation shared on request"),
     company: ensureString(metadata.company ?? metadata.organisation ?? ""),
+    organizationLogo: ensureString(metadata.organization_logo ?? metadata.company_logo ?? metadata.logo_url ?? ""),
     requirements: ensureStringArray(metadata.requirements),
+    responsibilities: ensureStringArray(metadata.responsibilities),
+    qualifications: ensureStringArray(metadata.qualifications),
     benefits: ensureStringArray(metadata.benefits),
     applicationDeadline: ensureString(metadata.application_deadline ?? metadata.deadline ?? ""),
+    postingDate: ensureString(metadata.posting_date ?? metadata.date_posted ?? row.created_at ?? ""),
     contactEmail: ensureString(metadata.contact_email ?? metadata.email ?? ""),
     applicationUrl: ensureString(metadata.application_url ?? metadata.url ?? ""),
+    source: ensureString(metadata.source ?? metadata.source_name ?? ""),
   };
 };
 
@@ -163,13 +172,17 @@ const transformEvent = (row: ListingRow): EventListing => {
     created_at: row.created_at ?? undefined,
     date: ensureString(metadata.date ?? metadata.start_date ?? "Date coming soon"),
     time: ensureString(metadata.time ?? metadata.start_time ?? ""),
+    timezone: ensureString(metadata.timezone ?? metadata.time_zone ?? ""),
     location,
+    format: ensureString(metadata.format ?? metadata.event_format ?? metadata.virtual_status ?? ""),
     eventType: ensureEnum(metadata.event_type ?? metadata.type, eventTypeOptions, "Conference"),
     cost: ensureString(metadata.cost ?? metadata.price ?? "Free"),
     organizer: ensureString(metadata.organizer ?? metadata.host ?? ""),
     maxAttendees: typeof metadata.max_attendees === "number" ? metadata.max_attendees : undefined,
     registrationUrl: ensureString(metadata.registration_url ?? metadata.url ?? ""),
+    registrationDeadline: ensureString(metadata.registration_deadline ?? metadata.deadline ?? ""),
     contactEmail: ensureString(metadata.contact_email ?? metadata.email ?? ""),
+    speakers: ensureStringArray(metadata.speakers),
     agenda: ensureStringArray(metadata.agenda),
   };
 };
@@ -196,6 +209,13 @@ const transformFundraiser = (row: ListingRow): FundraiserListing => {
     tags: ensureStringArray(metadata.tags ?? row.tags),
     submitted_by: poster,
     created_at: row.created_at ?? undefined,
+    fundingType: ensureString(metadata.funding_type ?? metadata.type ?? ""),
+    awardRange: ensureString(metadata.award_range ?? metadata.amount ?? metadata.grant_amount ?? ""),
+    eligibility: ensureString(metadata.eligibility ?? ""),
+    rollingOrFixed: ensureString(metadata.rolling_or_fixed ?? metadata.deadline_type ?? ""),
+    geographicEligibility: ensureString(metadata.geographic_eligibility ?? metadata.location ?? row.location ?? ""),
+    targetAudience: ensureString(metadata.target_audience ?? metadata.audience ?? ""),
+    climateFocus: ensureString(metadata.climate_focus ?? metadata.focus ?? ""),
     goalAmount: ensureString(
       metadata.goal_amount ?? metadata.goal ?? metadata.amount ?? "Goal to be announced",
     ),
@@ -206,11 +226,13 @@ const transformFundraiser = (row: ListingRow): FundraiserListing => {
     ),
     contactEmail: ensureString(metadata.contact_email ?? metadata.email ?? ""),
     donationUrl: ensureString(metadata.donation_url ?? metadata.link ?? metadata.url ?? ""),
+    applicationRequirements: ensureStringArray(metadata.application_requirements ?? metadata.requirements),
     updates: ensureStringArray(metadata.updates),
     progressPercentage:
       typeof metadata.progress_percentage === "number"
         ? metadata.progress_percentage
         : undefined,
+    source: ensureString(metadata.source ?? metadata.source_name ?? ""),
   };
 };
 
@@ -258,9 +280,12 @@ const transformResource = (row: ListingRow): ResourceListing => {
       "Beginner",
     ),
     author: ensureString(metadata.author ?? ""),
+    audience: ensureString(metadata.audience ?? metadata.intended_audience ?? ""),
     downloadUrl: ensureString(metadata.download_url ?? metadata.url ?? ""),
     lastUpdated: ensureString(metadata.last_updated ?? metadata.updated_at ?? ""),
+    publicationDate: ensureString(metadata.publication_date ?? metadata.published_at ?? metadata.date ?? row.created_at ?? ""),
     fileSize: ensureNumberString(metadata.file_size ?? metadata.size, ""),
+    source: ensureString(metadata.source ?? metadata.source_name ?? metadata.publisher ?? ""),
   };
 };
 

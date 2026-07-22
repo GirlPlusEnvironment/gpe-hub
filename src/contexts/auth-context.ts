@@ -13,6 +13,11 @@ export type Profile = {
   bio: string | null;
   neon_account_id: string | null;
   member_status: string | null;
+  membership_level?: string | null;
+  membership_start_date?: string | null;
+  membership_end_date?: string | null;
+  membership_last_synced_at?: string | null;
+  membership_access_state?: string | null;
   points: number | null;
   created_at: string | null;
   updated_at: string | null;
@@ -23,7 +28,7 @@ export type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (args: { email: string; password: string }) => Promise<{ error: string | null }>;
+  signIn: (args: { email: string; password: string }) => Promise<{ error: string | null; user?: User | null; profile?: Profile | null }>;
   signUp: (args: {
     email: string;
     password: string;

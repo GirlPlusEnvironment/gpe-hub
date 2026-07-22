@@ -14,6 +14,7 @@ import {
 import {
   checkNeonMembership,
   getMembershipGateMessage,
+  MEMBERSHIP_SYNC_WARNING_MESSAGE,
   MEMBERSHIP_SYNC_WARNING_STORAGE_KEY,
   type MembershipCheckResult,
   type MembershipOutcome,
@@ -57,8 +58,10 @@ const Login = () => {
   const {
     signIn,
     signUp,
+    signOut,
     resendConfirmation,
     requestPasswordReset,
+    refreshProfile,
     user,
     loading,
   } = useAuth();
@@ -93,10 +96,10 @@ const Login = () => {
   } | null>(null);
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && !isSubmitting) {
       navigate(returnPath, { replace: true });
     }
-  }, [loading, user, navigate, returnPath]);
+  }, [isSubmitting, loading, user, navigate, returnPath]);
 
   useEffect(() => {
     const nextMode =
@@ -147,7 +150,7 @@ const Login = () => {
 
     try {
       let membership: MembershipCheckResult | null = null;
-      if (mode !== "reset") {
+      if (mode === "signup") {
         const nameParts = splitDisplayName(displayName);
         const membershipResult = await checkNeonMembership({
           email,
@@ -179,12 +182,9 @@ const Login = () => {
           console.warn("Membership lookup returned lookup_failed during authentication", membership.reason);
         }
         const gateMessage = getMembershipGateMessage(membership?.outcome ?? "lookup_failed");
-        const loginCanContinue =
-          mode === "login" &&
-          membership?.outcome === "active_member_existing_hub_user";
         const signupCanContinue = mode === "signup" && membership?.outcome === "active_member_needs_hub_invite";
 
-        if (!loginCanContinue && !signupCanContinue) {
+        if (!signupCanContinue) {
           const variant = membershipVariantForOutcome(membership?.outcome ?? "lookup_failed", membership);
           if (variant) {
             setMembershipGate({ variant, membership, message: gateMessage });
@@ -196,11 +196,72 @@ const Login = () => {
       }
 
       if (mode === "login") {
-        const { error } = await signIn({ email, password });
+        const { error, user: signedInUser, profile: signedInProfile } = await signIn({ email, password });
         if (error) {
 	          setErrorMessage(error);
 	          return;
 	        }
+
+        const membershipResult = await checkNeonMembership({
+          email: signedInUser?.email || email,
+          firstName: signedInProfile?.first_name || "",
+          lastName: signedInProfile?.last_name || "",
+        });
+        if (membershipResult.error) {
+          console.warn("Membership lookup failed after authentication", membershipResult.error);
+          const refreshedProfile = await refreshProfile();
+          if (refreshedProfile?.member_status === "active" || refreshedProfile?.membership_access_state === "active") {
+            window.localStorage.setItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY, MEMBERSHIP_SYNC_WARNING_MESSAGE);
+            navigate(returnPath, { replace: true });
+            return;
+          }
+          await signOut();
+          setMembershipGate({
+            variant: "service_error",
+            membership: null,
+            message: MEMBERSHIP_SYNC_WARNING_MESSAGE,
+          });
+          return;
+        }
+
+        const loginMembership = membershipResult.data;
+        if (loginMembership?.outcome === "lookup_failed") {
+          console.warn("Membership lookup returned lookup_failed after authentication", loginMembership.reason);
+          const refreshedProfile = await refreshProfile();
+          if (refreshedProfile?.member_status === "active" || refreshedProfile?.membership_access_state === "active") {
+            window.localStorage.setItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY, MEMBERSHIP_SYNC_WARNING_MESSAGE);
+            navigate(returnPath, { replace: true });
+            return;
+          }
+          await signOut();
+          setMembershipGate({
+            variant: "service_error",
+            membership: loginMembership,
+            message: getMembershipGateMessage("lookup_failed"),
+          });
+          return;
+        }
+
+        await refreshProfile();
+
+        if (
+          loginMembership?.outcome !== "active_member_existing_hub_user" &&
+          loginMembership?.hubAccess !== "allowed"
+        ) {
+          await signOut();
+          const variant = membershipVariantForOutcome(loginMembership?.outcome ?? "lookup_failed", loginMembership);
+          if (variant) {
+            setMembershipGate({
+              variant,
+              membership: loginMembership,
+              message: getMembershipGateMessage(loginMembership?.outcome ?? "lookup_failed"),
+            });
+          } else {
+            setErrorMessage("GPE Hub access requires an active GPE membership.");
+          }
+          return;
+        }
+
 	        navigate(returnPath, { replace: true });
 	        return;
 	      }

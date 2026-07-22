@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageCircle } from "lucide-react";
@@ -11,6 +10,7 @@ import {
   addComment,
   type Comment,
 } from "@/lib/comments";
+import { CampButton, EmptyState, LoadingCampCard } from "@/components/camp/CampDesign";
 
 type CommentsSectionProps = {
   listingId: string;
@@ -40,10 +40,10 @@ export const CommentsSection = ({ listingId }: CommentsSectionProps) => {
         description: "Your comment has been added.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "We couldn't post your comment. Please try again.",
+        description: error instanceof Error ? error.message : "We couldn't post your comment. Please try again.",
         variant: "destructive",
       });
     },
@@ -56,7 +56,7 @@ export const CommentsSection = ({ listingId }: CommentsSectionProps) => {
   };
 
   return (
-    <Card className="mt-6">
+    <Card className="gpe-paper mt-6">
       <CardHeader>
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-primary" />
@@ -72,49 +72,51 @@ export const CommentsSection = ({ listingId }: CommentsSectionProps) => {
             rows={3}
           />
           <div className="flex justify-end">
-            <Button
+            <CampButton
               type="submit"
               disabled={mutation.isPending || !newComment.trim()}
             >
               {mutation.isPending ? "Posting..." : "Post Comment"}
-            </Button>
+            </CampButton>
           </div>
         </form>
 
-        <div className="border-t pt-4 space-y-3">
+        <div className="space-y-3 border-t-[3px] border-black pt-4">
           {isLoading && (
-            <p className="text-sm text-muted-foreground">
-              Loading comments...
-            </p>
+            <LoadingCampCard label="Loading comments" />
           )}
 
           {isError && (
-            <p className="text-sm text-red-500">
-              We couldn&apos;t load the comments. Please try again later.
-            </p>
+            <EmptyState
+              illustration="clipboard"
+              title="Comments paused"
+              description="We could not load the discussion right now. Please try again later."
+            />
           )}
 
           {!isLoading && comments.length === 0 && !isError && (
-            <p className="text-sm text-muted-foreground">
-              No comments yet. Be the first to start a conversation!
-            </p>
+            <EmptyState
+              illustration="megaphone"
+              title="No comments yet"
+              description="Be the first to start a helpful conversation about this listing."
+            />
           )}
 
           {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-3">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+            <div key={comment.id} className="flex gap-3 rounded-[1.25rem] border-[3px] border-black bg-white p-3">
+              <Avatar className="h-9 w-9 border-[2px] border-black">
+                <AvatarFallback className="bg-gpe-cyan text-xs font-black text-black">
                   U
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">Community member</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-black">Community member</p>
+                  <p className="text-xs font-bold text-black/50">
                     {new Date(comment.created_at).toLocaleString()}
                   </p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                <p className="mt-1 whitespace-pre-wrap text-sm font-bold text-black/65">
                   {comment.content}
                 </p>
               </div>

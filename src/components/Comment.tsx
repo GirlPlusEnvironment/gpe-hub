@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDistanceToNow } from "date-fns";
 import { MessageSquare, Reply, MoreVertical, Edit, Trash2, X, Check } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { deleteComment, updateComment } from "@/lib/posts";
 import {
   DropdownMenu,

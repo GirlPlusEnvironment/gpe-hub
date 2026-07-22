@@ -391,9 +391,9 @@ export const fetchFavoriteListings = async (profileId: string): Promise<Listing[
     throw error;
   }
 
-  const rows = (data ?? []) as any[];
+  const rows = (data ?? []) as Array<{ listings: ListingRow | null }>;
   const listingRows: ListingRow[] = rows
-    .map((r) => (r as any).listings as ListingRow | null)
+    .map((r) => r.listings)
     .filter((r): r is ListingRow => Boolean(r));
   return listingRows.map(transformRow);
 };

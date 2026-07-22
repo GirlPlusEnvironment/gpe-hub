@@ -10,7 +10,13 @@ export type FieldSchema = {
 };
 
 export function sanitizeText(value: unknown, max = 2000): string {
-  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  const withoutControlChars = Array.from(String(value ?? ""))
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      return code <= 31 || code === 127 ? " " : char;
+    })
+    .join("");
+  return withoutControlChars.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 export function normalizeEmail(value: unknown): string {

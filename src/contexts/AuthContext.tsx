@@ -1,60 +1,18 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import {
   classifySignupError,
   getAuthRedirectUrl,
   normalizeUsername,
-  type SignupErrorState,
 } from "@/lib/auth";
-
-type Profile = {
-  id: string;
-  email: string | null;
-  username: string | null;
-  full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  neon_account_id: string | null;
-  member_status: string | null;
-  points: number | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
-type AuthContextValue = {
-  session: Session | null;
-  user: User | null;
-  profile: Profile | null;
-  loading: boolean;
-  signIn: (args: { email: string; password: string }) => Promise<{ error: string | null }>;
-  signUp: (args: {
-    email: string;
-    password: string;
-    displayName?: string;
-    username?: string;
-  }) => Promise<{
-    error: string | null;
-    errorKind?: SignupErrorState;
-  }>;
-  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
-  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
-  updatePassword: (password: string) => Promise<{ error: string | null }>;
-  signOut: () => Promise<void>;
-  refreshProfile: () => Promise<Profile | null>;
-};
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { AuthContext, type AuthContextValue, type Profile } from "@/contexts/auth-context";
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -400,12 +358,4 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
 };

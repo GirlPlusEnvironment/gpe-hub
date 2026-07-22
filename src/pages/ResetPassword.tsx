@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CampButton, LoadingCampCard, Sticker, Tape } from "@/components/camp/CampDesign";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 const ResetPassword = () => {
   const location = useLocation();
@@ -115,14 +115,15 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbd3d3]">
+    <div className="gpe-page md:pl-0">
       <div className="mx-auto flex min-h-screen max-w-2xl items-center justify-center px-6 py-12">
-        <div className="gpe-card w-full p-8 md:p-10">
+        <div className="gpe-card gpe-paper w-full p-8 md:p-10">
           <img
             src="/gpe-hub-icon.png"
             alt="GPE Hub"
-            className="mb-6 h-24 w-auto object-contain"
+            className="gpe-border mb-6 h-24 w-auto rounded-[1.5rem] bg-white object-contain p-2 shadow-gpe-sm"
           />
+          <Tape className="mb-5">Account recovery</Tape>
           <Link
             to="/login"
             className="mb-4 inline-flex items-center gap-2 text-xs font-bold uppercase underline"
@@ -131,15 +132,15 @@ const ResetPassword = () => {
             Back to Login
           </Link>
 
+          <Sticker accent="yellow" className="mb-5">Secure reset</Sticker>
           <h1 className="gpe-heading text-4xl">Set New Password</h1>
           <p className="mt-3 text-sm font-bold text-black/70">
             Finish the real Supabase recovery flow by choosing a new password for your account.
           </p>
 
           {isLoadingSession ? (
-            <div className="flex items-center gap-3 py-10 text-sm font-bold uppercase">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Preparing your reset session...
+            <div className="py-8">
+              <LoadingCampCard label="Preparing your reset session" />
             </div>
           ) : sessionReady ? (
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -185,9 +186,9 @@ const ResetPassword = () => {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              <CampButton type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                 {isSubmitting ? "Updating Password..." : "Save New Password"}
-              </Button>
+              </CampButton>
             </form>
           ) : (
             <div className="mt-8 space-y-4">
@@ -196,9 +197,9 @@ const ResetPassword = () => {
                   {errorMessage}
                 </div>
               )}
-              <Button className="w-full" onClick={() => navigate("/login?mode=reset")}>
+              <CampButton className="w-full" onClick={() => navigate("/login?mode=reset")}>
                 Request New Reset Email
-              </Button>
+              </CampButton>
             </div>
           )}
         </div>

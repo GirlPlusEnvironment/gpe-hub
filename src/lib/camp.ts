@@ -158,7 +158,7 @@ export type CampRecentActivityRow = CampPointsLedgerRow & {
 };
 
 export async function getActiveCampSeason() {
-  const { data: active, error: activeError } = await supabase
+  const { data, error } = await supabase
     .from("gpe_seasons")
     .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules")
     .eq("status", "active")
@@ -166,16 +166,8 @@ export async function getActiveCampSeason() {
     .order("starts_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  if (activeError) throw activeError;
-  if (active) return active as CampSeason;
-
-  const { data: campFallback, error: fallbackError } = await supabase
-    .from("gpe_seasons")
-    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules")
-    .eq("slug", "camp-gpe-2026")
-    .maybeSingle();
-  if (fallbackError) throw fallbackError;
-  return campFallback as CampSeason | null;
+  if (error) throw error;
+  return data as CampSeason | null;
 }
 
 export async function getCampLeaderboard(seasonId: string, limit = 50) {

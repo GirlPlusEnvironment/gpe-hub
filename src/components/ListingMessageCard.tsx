@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Briefcase, Calendar, DollarSign, BookOpen } from "lucide-react";
 import type { Listing } from "@/types/listings";
+import { Sticker } from "@/components/camp/CampDesign";
 
 interface ListingMessageCardProps {
   listing: Listing;
@@ -21,28 +21,28 @@ const ListingMessageCard = ({ listing }: ListingMessageCardProps) => {
       className="block max-w-full" 
       onClick={(e) => e.stopPropagation()}
     >
-      <Card className="w-full min-w-0 max-w-[400px] cursor-pointer border bg-card transition hover:shadow-lg">
+      <article className="gpe-card-sm gpe-hover-lift w-full min-w-0 max-w-[400px] cursor-pointer overflow-hidden">
         <div className="relative">
           <img
             src={listing.image}
             alt={listing.title}
-            className="h-40 w-full rounded-t-lg object-cover"
+            className="h-40 w-full object-cover"
             loading="lazy"
           />
         </div>
-        <CardHeader className="pb-2">
-          <CardTitle className="line-clamp-2 break-words text-base leading-tight">{listing.title}</CardTitle>
-          <CardDescription className="line-clamp-3 break-words text-xs">
+        <div className="p-4 pb-2">
+          <h4 className="line-clamp-2 break-words font-header text-base uppercase leading-tight">{listing.title}</h4>
+          <p className="mt-2 line-clamp-3 break-words text-xs font-bold text-black/65">
             {listing.summary || listing.description}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+          </p>
+        </div>
+        <div className="p-4 pt-0">
+          <Sticker accent="yellow" rotate="none" className="gap-1 px-2 py-1 text-[10px]">
             {categoryMeta[listing.category].icon}
             {categoryMeta[listing.category].label}
-          </span>
-        </CardContent>
-      </Card>
+          </Sticker>
+        </div>
+      </article>
     </Link>
   );
 };

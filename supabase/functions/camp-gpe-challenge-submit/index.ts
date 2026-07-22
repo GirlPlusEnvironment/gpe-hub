@@ -14,7 +14,7 @@ const CHALLENGE_FIELDS = [
   { key: "firstName", label: "First Name" },
   { key: "lastName", label: "Last Name" },
   { key: "email", label: "Email", required: true, type: "email" as const },
-  { key: "challengeIds", label: "Completed Camp challenges", type: "checkbox" as const },
+  { key: "challengeIds", label: "Completed seasonal challenges", type: "checkbox" as const },
   {
     key: "actions",
     label: "Which actions did you take?",
@@ -36,7 +36,7 @@ type AuthUser = {
   user_metadata?: Record<string, unknown>;
 };
 
-function unauthorized(origin: string | null, message = "Sign in to the GPE Hub before submitting a Camp challenge."): Response {
+function unauthorized(origin: string | null, message = "Sign in to the GPE Hub before submitting a seasonal challenge."): Response {
   return jsonResponse({ ok: false, message }, 401, origin);
 }
 
@@ -64,11 +64,14 @@ async function authenticatedUser(req: Request, origin: string | null): Promise<A
 }
 
 async function activeSeason() {
-  const slug = Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "camp-gpe-2026";
-  const res = await supabaseFetch(`gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`);
-  if (!res.ok) throw new Error("Could not load active Camp GPE season.");
+  const slug = Deno.env.get("ACTIVE_SEASON_SLUG") || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "";
+  const path = slug
+    ? `gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`
+    : "gpe_seasons?select=id,slug,name&status=eq.active&is_visible=eq.true&order=starts_at.desc&limit=1";
+  const res = await supabaseFetch(path);
+  if (!res.ok) throw new Error("Could not load active seasonal challenge.");
   const rows = await res.json();
-  if (!rows[0]) throw new Error("Active Camp GPE season is not configured.");
+  if (!rows[0]) throw new Error("No active seasonal challenge is configured.");
   return rows[0] as { id: string; slug: string; name: string };
 }
 
@@ -102,7 +105,7 @@ async function seasonMember(seasonId: string, userId: string, email: string, neo
           status: rows[0].status || "registered"
         })
       });
-      if (!update.ok) throw new Error("Could not link Camp GPE season member.");
+      if (!update.ok) throw new Error("Could not link seasonal member.");
       const updatedRows = await update.json();
       return updatedRows[0] as { id: string; user_id: string | null };
     }
@@ -118,7 +121,7 @@ async function seasonMember(seasonId: string, userId: string, email: string, neo
       status: "registered"
     })
   });
-  if (!insert.ok) throw new Error("Could not link Camp GPE season member.");
+  if (!insert.ok) throw new Error("Could not link seasonal member.");
   const rows = await insert.json();
   return rows[0] as { id: string; user_id: string | null };
 }
@@ -154,7 +157,7 @@ async function loadChallenges(seasonId: string, challengeIds: string[]) {
     `&id=in.(${cleanIds.map(encodeURIComponent).join(",")})`,
     "&is_active=eq.true"
   ].join(""));
-  if (!res.ok) throw new Error("Could not load selected Camp GPE challenges.");
+  if (!res.ok) throw new Error("Could not load selected seasonal challenges.");
   return await res.json() as ChallengeRow[];
 }
 
@@ -202,7 +205,7 @@ async function createReviewSubmission(params: {
       member_link_status: params.memberLinkStatus
     })
   });
-  if (!res.ok) throw new Error("Could not save Camp GPE challenge for review.");
+  if (!res.ok) throw new Error("Could not save seasonal challenge for review.");
   const rows = await res.json();
   return rows[0] || null;
 }
@@ -228,7 +231,7 @@ async function createSubmissionAction(params: {
       review_status: params.status
     })
   });
-  if (!res.ok) throw new Error("Could not save Camp GPE submission action.");
+  if (!res.ok) throw new Error("Could not save seasonal submission action.");
   const rows = await res.json();
   return rows[0] as { id: string; review_status: string; requested_points: number | null };
 }
@@ -283,8 +286,8 @@ Deno.serve(async (req) => {
       if (membership.neonAccountId) {
         await createActivity({
           neonAccountId: membership.neonAccountId,
-          subject: "Camp GPE Challenge Submission",
-          type: "Camp GPE",
+          subject: `${season.name} Challenge Submission`,
+          type: season.name,
           note: { formKey: FORM_KEY, fields }
         });
         await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: true });
@@ -374,6 +377,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("camp-gpe-challenge-submit", safeError(error));
-    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Camp GPE challenge submission could not be completed." }, error instanceof ValidationError ? 400 : 500, origin);
+    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Seasonal challenge submission could not be completed." }, error instanceof ValidationError ? 400 : 500, origin);
   }
 });

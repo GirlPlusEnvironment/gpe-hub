@@ -109,11 +109,14 @@ async function idempotencyKeyFor(body: Json, email: string, actionSlug: string) 
 }
 
 async function activeSeason() {
-  const slug = Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "camp-gpe-2026";
-  const res = await supabaseFetch(`gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`);
-  if (!res.ok) throw new Error("Could not load active Camp GPE season.");
+  const slug = Deno.env.get("ACTIVE_SEASON_SLUG") || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "";
+  const path = slug
+    ? `gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`
+    : "gpe_seasons?select=id,slug,name&status=eq.active&is_visible=eq.true&order=starts_at.desc&limit=1";
+  const res = await supabaseFetch(path);
+  if (!res.ok) throw new Error("Could not load active seasonal challenge.");
   const rows = await res.json();
-  if (!rows[0]) throw new Error("Active Camp GPE season is not configured.");
+  if (!rows[0]) throw new Error("No active seasonal challenge is configured.");
   return rows[0] as { id: string; slug: string; name: string };
 }
 
@@ -127,7 +130,7 @@ async function challengeForAction(seasonId: string, actionSlug: string) {
     "&is_active=eq.true",
     "&limit=1"
   ].join(""));
-  if (!res.ok) throw new Error("Could not match Action Network action to Camp challenge.");
+  if (!res.ok) throw new Error("Could not match Action Network action to seasonal challenge.");
   const rows = await res.json();
   return (rows[0] || null) as ChallengeRow | null;
 }
@@ -152,7 +155,7 @@ async function upsertSeasonMember(params: { seasonId: string; email: string; neo
       status: "registered"
     })
   });
-  if (!res.ok) throw new Error("Could not link petition action to Camp season member.");
+  if (!res.ok) throw new Error("Could not link petition action to seasonal member record.");
   const rows = await res.json();
   return rows[0] as { id: string; user_id: string | null };
 }

@@ -8,7 +8,17 @@ declare const Deno: {
 };
 
 async function activeSeasonSlug(body: Record<string, unknown>) {
-  return sanitizeText(body.seasonSlug || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "camp-gpe-2026", 120);
+  const configured = sanitizeText(
+    body.seasonSlug || Deno.env.get("ACTIVE_SEASON_SLUG") || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "",
+    120
+  );
+  if (configured) return configured;
+
+  const res = await supabaseFetch("gpe_seasons?select=slug&status=eq.active&is_visible=eq.true&order=starts_at.desc&limit=1");
+  if (!res.ok) throw new Error("Could not load active seasonal challenge.");
+  const rows = await res.json();
+  if (!rows[0]?.slug) throw new ValidationError("No active seasonal challenge is configured.");
+  return String(rows[0].slug);
 }
 
 function canonicalCampActionUrl(url: unknown) {
@@ -42,7 +52,7 @@ Deno.serve(async (req) => {
       "&order=display_order.asc,title.asc"
     ].join("");
     const res = await supabaseFetch(path);
-    if (!res.ok) throw new Error("Could not load Camp GPE challenges.");
+    if (!res.ok) throw new Error("Could not load seasonal challenges.");
     const rows = await res.json();
     const challenges = Array.isArray(rows)
       ? rows.map((challenge) => ({
@@ -54,6 +64,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("camp-gpe-challenges", safeError(error));
-    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Camp GPE challenges could not be loaded." }, error instanceof ValidationError ? 400 : 500, origin);
+    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Seasonal challenges could not be loaded." }, error instanceof ValidationError ? 400 : 500, origin);
   }
 });

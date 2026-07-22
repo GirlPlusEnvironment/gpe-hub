@@ -18,8 +18,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import { MessagesContext } from "@/contexts/MessagesContext";
+import { useAuth } from "@/hooks/useAuth";
+import { MessagesContext } from "@/contexts/messages-context";
 import { PointsBadge } from "@/components/PointsBadge";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { cn } from "@/lib/utils";
@@ -94,7 +94,7 @@ const Header = () => {
     { to: "/favorites", label: "Favorites", icon: Heart },
     { to: "/submit", label: "Submit New", icon: PlusCircle },
     { to: "/submissions", label: "My Submissions", icon: ClipboardList },
-    { to: "/camp-gpe/challenges", label: "Camp Challenges", icon: Trophy },
+    { to: "/camp-gpe/challenges", label: "Seasonal Challenges", icon: Trophy },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
   ];
 

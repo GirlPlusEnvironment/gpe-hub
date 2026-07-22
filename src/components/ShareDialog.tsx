@@ -5,8 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Share2, ArrowLeft } from "lucide-react";
 import UserSearch from "@/components/UserSearch";
-import { useAuth } from "@/contexts/AuthContext";
-import { useMessages } from "@/contexts/MessagesContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useMessages } from "@/hooks/useMessages";
 import { useToast } from "@/hooks/use-toast";
 import type { Profile } from "@/types/messages";
 

@@ -27,7 +27,7 @@ const CAMP_FIELDS = [
 
 async function existingRegistration(email: string) {
   const res = await supabaseFetch(`gpe_form_registrations?select=*&form_key=eq.${FORM_KEY}&email_normalized=eq.${encodeURIComponent(email)}&limit=1`);
-  if (!res.ok) throw new Error("Could not check Camp GPE registration.");
+  if (!res.ok) throw new Error("Could not check seasonal registration.");
   const rows = await res.json();
   return rows[0] || null;
 }
@@ -47,11 +47,14 @@ async function createRegistration(email: string, neonAccountId: string | null) {
 }
 
 async function activeSeason() {
-  const slug = Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "camp-gpe-2026";
-  const res = await supabaseFetch(`gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`);
-  if (!res.ok) throw new Error("Could not load active Camp GPE season.");
+  const slug = Deno.env.get("ACTIVE_SEASON_SLUG") || Deno.env.get("ACTIVE_CAMP_SEASON_SLUG") || "";
+  const path = slug
+    ? `gpe_seasons?select=id,slug,name&slug=eq.${encodeURIComponent(slug)}&limit=1`
+    : "gpe_seasons?select=id,slug,name&status=eq.active&is_visible=eq.true&order=starts_at.desc&limit=1";
+  const res = await supabaseFetch(path);
+  if (!res.ok) throw new Error("Could not load active seasonal challenge.");
   const rows = await res.json();
-  if (!rows[0]) throw new Error("Active Camp GPE season is not configured.");
+  if (!rows[0]) throw new Error("No active seasonal challenge is configured.");
   return rows[0] as { id: string; slug: string; name: string };
 }
 
@@ -75,7 +78,7 @@ async function upsertSeasonMember(params: { seasonId: string; email: string; neo
       status: "registered"
     })
   });
-  if (!res.ok) throw new Error("Could not save Camp GPE season membership.");
+  if (!res.ok) throw new Error("Could not save seasonal membership.");
   const rows = await res.json();
   return rows[0] || null;
 }
@@ -106,7 +109,7 @@ Deno.serve(async (req) => {
     if (existing) {
       await upsertSeasonMember({ seasonId: season.id, email, neonAccountId: existing.neon_account_id || null });
       await updateFormSubmission(String(submission.id), { submission_status: "duplicate", neon_account_id: existing.neon_account_id || null });
-      return jsonResponse({ submissionId: submission.id, registrationState: "already_registered", message: "You’re already signed up for Camp GPE with this email.", ...publicConfig() }, 200, origin);
+      return jsonResponse({ submissionId: submission.id, registrationState: "already_registered", message: `You’re already signed up for ${season.name} with this email.`, ...publicConfig() }, 200, origin);
     }
 
     let account: Awaited<ReturnType<typeof resolveOrCreateAccount>>;
@@ -141,7 +144,7 @@ Deno.serve(async (req) => {
         registrationState: "registration_saved_pending_review",
         membershipOutcome: "lookup_failed",
         partialSuccess: true,
-        message: "Your Camp GPE registration is saved. Team GPE may review membership or Hub activation details.",
+        message: `Your ${season.name} registration is saved. Team GPE may review membership or Hub activation details.`,
         ...publicConfig()
       }, 200, origin);
     }
@@ -160,7 +163,7 @@ Deno.serve(async (req) => {
         await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, source: FORM_KEY } });
         membership = { ...membership, outcome: "active_member_needs_hub_invite", neonAccountId: account.neonAccountId };
       }
-      await createActivity({ neonAccountId: account.neonAccountId || "", subject: "Camp GPE Registration", type: "Camp GPE", note: { formKey: FORM_KEY, fields } });
+      await createActivity({ neonAccountId: account.neonAccountId || "", subject: `${season.name} Registration`, type: season.name, note: { formKey: FORM_KEY, fields } });
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_activity", success: true });
     } catch (error) {
       secondaryFailure = true;
@@ -183,6 +186,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("camp-gpe-submit", safeError(error));
-    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Camp GPE submission could not be completed." }, error instanceof ValidationError ? 400 : 500, origin);
+    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Seasonal registration could not be completed." }, error instanceof ValidationError ? 400 : 500, origin);
   }
 });

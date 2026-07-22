@@ -1,17 +1,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Plus, Search, Users, User } from "lucide-react";
-import { useMessages } from "@/contexts/MessagesContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMessages } from "@/hooks/useMessages";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import ConversationView from "@/components/ConversationView";
 import UserSearch from "@/components/UserSearch";
 import type { Profile } from "@/types/messages";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker, Tape } from "@/components/camp/CampDesign";
 
 const Messages = () => {
   const navigate = useNavigate();
@@ -182,22 +182,24 @@ const Messages = () => {
   };
 
   return (
-    <div className="gpe-page h-screen overflow-hidden">
+    <div className="gpe-page min-h-screen">
       <Header />
-      <main className="gpe-page-main flex h-full max-w-7xl flex-col overflow-hidden">
-        <div className="mb-4 flex flex-shrink-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="gpe-heading text-5xl md:text-6xl">Messages</h1>
-            <p className="mt-2 font-bold text-black/70">Direct messages and group chats.</p>
-          </div>
-          <Button
+      <main className="gpe-page-main flex min-h-screen max-w-7xl flex-col">
+        <SectionHeader
+          className="mb-6"
+          eyebrow={<Sticker accent="pink"><MessageSquare className="mr-2 h-4 w-4" /> Inbox</Sticker>}
+          title="Messages"
+          description="Direct messages and group chats with the GPE community."
+          action={
+          <CampButton
             onClick={() => setShowUserSearch(true)}
-            className="flex items-center gap-2"
+            variant="secondary"
           >
             <Plus className="h-4 w-4" />
             New Message
-          </Button>
-        </div>
+          </CampButton>
+          }
+        />
 
         {showUserSearch && (
           <div className="mb-4 flex-shrink-0">
@@ -208,13 +210,12 @@ const Messages = () => {
           </div>
         )}
 
-        <div className="gpe-card flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 md:flex-row">
-          {/* Conversation List */}
-          <div className="flex w-full min-h-0 flex-col overflow-hidden border-b-[3px] border-black md:w-1/3 md:border-b-0 md:border-r-[3px] lg:w-[320px]">
+        <div className="gpe-card flex min-h-[72vh] flex-1 flex-col gap-0 overflow-hidden p-0 md:flex-row">
+          <div className="flex max-h-[42vh] w-full min-h-0 flex-col overflow-hidden border-b-[3px] border-black md:max-h-none md:w-1/3 md:border-b-0 md:border-r-[3px] lg:w-[340px]">
             <div className="border-b-[3px] border-black p-4">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="gpe-heading text-2xl">Conversations</h2>
-                <Badge className="bg-[#d53f8c] text-white">{unreadCount}</Badge>
+                <Tape>Conversations</Tape>
+                <Badge className="border-[2px] border-black bg-[#d53f8c] text-white">{unreadCount}</Badge>
               </div>
               <div className="relative flex-shrink-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -228,25 +229,18 @@ const Messages = () => {
             </div>
 
             {isLoadingConversations ? (
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
-                <div className="text-muted-foreground">Loading conversations...</div>
+              <div className="space-y-3 overflow-hidden p-3">
+                <LoadingCampCard label="Loading conversations" />
+                <LoadingCampCard label="Loading conversations" />
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 overflow-y-auto">
-                <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-2">
-                  {searchQuery ? "No conversations found" : "No conversations yet"}
-                </p>
-                {!searchQuery && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowUserSearch(true)}
-                    className="mt-4"
-                  >
-                    Start a conversation
-                  </Button>
-                )}
-              </div>
+              <EmptyState
+                illustration="megaphone"
+                title={searchQuery ? "No Matches" : "No Conversations Yet"}
+                description={searchQuery ? "Try another search." : "Start a conversation when you are ready to connect."}
+                action={!searchQuery ? <CampButton variant="outline" onClick={() => setShowUserSearch(true)}>Start Conversation</CampButton> : null}
+                className="m-3"
+              />
             ) : (
               <div className="gpe-scrollbar flex-1 space-y-2 overflow-y-auto p-3 min-h-0">
                 {filteredConversations.map((conversation) => {
@@ -268,7 +262,7 @@ const Messages = () => {
                     <button
                       key={conversation.id}
                       onClick={() => handleConversationClick(conversation.id)}
-                      className={`w-full rounded-[1.5rem] border-[3px] p-3 text-left transition-colors ${
+                      className={`gpe-hover-lift w-full rounded-[1.5rem] border-[3px] border-black p-3 text-left transition-colors ${
                         isActive
                           ? "bg-cyan-100"
                           : isUnread
@@ -277,7 +271,7 @@ const Messages = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <Avatar className="h-12 w-12 flex-shrink-0">
+                        <Avatar className="h-12 w-12 flex-shrink-0 border-[3px] border-black">
                           {conversation.is_group_chat ? (
                             <AvatarFallback className="bg-primary text-primary-foreground">
                               <Users className="h-5 w-5" />
@@ -294,8 +288,8 @@ const Messages = () => {
                           )}
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="font-medium text-sm truncate">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="font-black text-sm truncate">
                               {getConversationName(conversation)}
                             </p>
                             {isUnread && (
@@ -314,7 +308,6 @@ const Messages = () => {
             )}
           </div>
 
-          {/* Conversation View or Empty State */}
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#fdf2f8]">
             {currentConversation ? (
               <ConversationView
@@ -322,18 +315,13 @@ const Messages = () => {
                 onBack={() => setCurrentConversationId(null)}
               />
             ) : (
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
-                <div className="text-center p-8">
-                  <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h2 className="text-xl font-semibold mb-2">Select a conversation</h2>
-                  <p className="text-muted-foreground mb-4">
-                    Choose a conversation from the list or start a new one
-                  </p>
-                  <Button onClick={() => setShowUserSearch(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Message
-                  </Button>
-                </div>
+              <div className="flex h-full items-center justify-center p-6">
+                <EmptyState
+                  illustration="megaphone"
+                  title="Pick a Thread"
+                  description="Choose a conversation from the list or start a new one."
+                  action={<CampButton onClick={() => setShowUserSearch(true)}><Plus className="mr-2 h-4 w-4" />New Message</CampButton>}
+                />
               </div>
             )}
           </div>

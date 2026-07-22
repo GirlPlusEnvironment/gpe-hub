@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Send, Users, User, Edit2, Check, X, MoreVertical, UserPlus, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useMessages } from "@/contexts/MessagesContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMessages } from "@/hooks/useMessages";
+import { useAuth } from "@/hooks/useAuth";
 import type { Conversation, Profile } from "@/types/messages";
 import type { Listing } from "@/types/listings";
 import MessageInput from "./MessageInput";
@@ -60,7 +60,8 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
   const isLoadingMoreRef = useRef<boolean>(false);
 
   // Reverse messages to show oldest at top, newest at bottom
-  const reversedMessages = [...messages].reverse();
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+  const reversedMessageIds = useMemo(() => reversedMessages.map((message) => message.id).join(","), [reversedMessages]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -190,7 +191,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
         });
       });
     }
-  }, [reversedMessages.map(m => m.id).join(','), listingCache]);
+  }, [reversedMessages, reversedMessageIds, listingCache]);
 
   // Fetch profiles for all message senders
   useEffect(() => {
@@ -221,7 +222,7 @@ const ConversationView = ({ conversation, onBack }: ConversationViewProps) => {
         });
       });
     }
-  }, [reversedMessages.map(m => m.id).join(','), profile?.id, fetchProfileById]);
+  }, [reversedMessages, reversedMessageIds, profile?.id, fetchProfileById]);
 
   const getConversationName = () => {
     if (conversation.is_group_chat) {

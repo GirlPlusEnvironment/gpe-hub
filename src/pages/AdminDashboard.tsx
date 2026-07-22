@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { isAdmin } from "@/lib/roles";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 
 type Listing = {
   id: string;
@@ -121,7 +122,13 @@ export default function AdminDashboard() {
     return (
       <div className="gpe-page">
         <Header />
-        <main className="gpe-page-main text-sm font-bold uppercase text-black/70">Loading admin…</main>
+        <main className="gpe-page-main">
+          <div className="grid gap-4 md:grid-cols-3">
+            <LoadingCampCard label="Loading admin dashboard" />
+            <LoadingCampCard label="Loading admin dashboard" />
+            <LoadingCampCard label="Loading admin dashboard" />
+          </div>
+        </main>
         <Footer />
       </div>
     );
@@ -132,12 +139,12 @@ export default function AdminDashboard() {
       <div className="gpe-page">
         <Header />
         <main className="gpe-page-main">
-          <div className="gpe-card p-8">
-            <h1 className="gpe-heading text-3xl">Admin</h1>
-            <p className="mt-3 text-sm font-bold text-black/70">
-              You don’t have access to this page.
-            </p>
-          </div>
+          <EmptyState
+            illustration="badge"
+            title="Admin Access Required"
+            description="You do not have access to this moderation dashboard."
+            action={<Link to="/"><CampButton variant="outline">Back to Dashboard</CampButton></Link>}
+          />
         </main>
         <Footer />
       </div>
@@ -148,21 +155,17 @@ export default function AdminDashboard() {
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main space-y-6">
-     <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-  <div>
-    <h1 className="gpe-heading text-5xl">Admin Hub</h1>
-    <p className="text-sm font-bold text-black/70">
-      Moderate listings (flag / remove / restore).
-    </p>
-  </div>
-
-  <div className="flex gap-2">
-    <Link to="/"><Button variant="outline">Back to Home</Button></Link>
-    <Button variant="outline" onClick={loadData}>
-      Refresh
-    </Button>
-  </div>
-</div>
+      <SectionHeader
+        eyebrow={<Sticker accent="yellow">Admin</Sticker>}
+        title="Admin Hub"
+        description="Moderate listings, resolve flags, and restore removed records."
+        action={
+          <>
+            <Link to="/"><CampButton variant="outline">Back to Home</CampButton></Link>
+            <CampButton variant="cyan" onClick={loadData}>Refresh</CampButton>
+          </>
+        }
+      />
 
 
       {error && (
@@ -171,8 +174,15 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-[2rem] border-[3px] border-black bg-white shadow-[8px_8px_0_0_#000]">
-        <div className="grid grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatSticker label="Listings" value={listings.length.toLocaleString()} accent="yellow" />
+        <StatSticker label="Open flags" value={flags.filter((flag) => !flag.resolved).length.toLocaleString()} accent="cyan" />
+        <StatSticker label="Removed" value={listings.filter((listing) => listing.is_removed).length.toLocaleString()} accent="orange" />
+      </div>
+
+      <div className="gpe-card overflow-hidden p-0">
+        <Tape className="m-4">Listing queue</Tape>
+        <div className="hidden grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white md:grid">
           <div className="col-span-4">Post</div>
           <div className="col-span-3">Flags</div>
           <div className="col-span-2">Status</div>
@@ -184,9 +194,9 @@ export default function AdminDashboard() {
             const listingFlags = flagsByListing.get(l.id) ?? [];
             const openFlags = listingFlags.filter((f) => !f.resolved);
             return (
-              <div key={l.id} className="grid grid-cols-12 items-start gap-3 px-4 py-4">
-                <div className="col-span-4">
-                  <div className="font-medium">{l.title ?? "Untitled"}</div>
+              <div key={l.id} className="grid gap-4 px-4 py-4 md:grid-cols-12 md:items-start md:gap-3">
+                <div className="md:col-span-4">
+                  <div className="font-black">{l.title ?? "Untitled"}</div>
                   {l.description && (
                     <div className="text-sm text-muted-foreground line-clamp-2">
                       {l.description}
@@ -195,7 +205,7 @@ export default function AdminDashboard() {
                   <div className="mt-1 text-xs text-muted-foreground">{l.id}</div>
                 </div>
 
-                <div className="col-span-3">
+                <div className="md:col-span-3">
                   <div className="text-sm">
                     <span className="font-medium">{openFlags.length}</span>{" "}
                     <span className="text-muted-foreground">open</span>
@@ -210,19 +220,19 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div className="col-span-2">
+                <div className="md:col-span-2">
                   {l.is_removed ? (
-                    <span className="inline-flex items-center rounded-full px-2 py-1 text-xs bg-red-500/15 text-red-200 border border-red-500/20">
+                    <span className="inline-flex items-center rounded-full border-[2px] border-black bg-red-100 px-3 py-1 text-xs font-black text-red-800">
                       Removed
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full px-2 py-1 text-xs bg-emerald-500/15 text-emerald-200 border border-emerald-500/20">
+                    <span className="inline-flex items-center rounded-full border-[2px] border-black bg-green-100 px-3 py-1 text-xs font-black text-green-800">
                       Visible
                     </span>
                   )}
                 </div>
 
-                <div className="col-span-3 flex justify-end gap-2">
+                <div className="flex flex-wrap justify-start gap-2 md:col-span-3 md:justify-end">
                     <Button variant="outline" size="sm" onClick={() => flagListing(l.id)}>
                       Flag
                     </Button>
@@ -252,7 +262,13 @@ export default function AdminDashboard() {
           })}
 
           {listings.length === 0 && (
-            <div className="p-6 text-sm text-muted-foreground">No listings found.</div>
+            <div className="p-4">
+              <EmptyState
+                illustration="clipboard"
+                title="No Listings Found"
+                description="There are no listing records in this moderation view."
+              />
+            </div>
           )}
         </div>
       </div>

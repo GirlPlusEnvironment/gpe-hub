@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
+import { LoadingCampCard } from "@/components/camp/CampDesign";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -12,8 +13,11 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
-        Checking your account...
+      <div className="gpe-page flex min-h-screen items-center justify-center px-6">
+        <div className="w-full max-w-md">
+          <LoadingCampCard />
+          <p className="mt-6 text-center font-bold uppercase">Checking your account...</p>
+        </div>
       </div>
     );
   }
@@ -32,4 +36,3 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 };
 
 export default ProtectedRoute;
-

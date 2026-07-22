@@ -18,6 +18,9 @@ const workArrangements = ["In-person", "Remote", "Freelance", "Full-time", "Part
 const industries = ["Academia", "Agriculture", "Clean Energy", "Education", "Environmental/Climate Justice", "For-profit", "Health", "Nonprofit", "Other", "Outdoor/Nature-based", "Sustainability", "Tech"];
 
 const STORAGE_KEY = "job-submission-draft";
+const MINIMUM_FIELDS = ["title", "details"] as const;
+
+const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
 
 export default function JobSubmissionForm() {
   const navigate = useNavigate();
@@ -97,13 +100,17 @@ export default function JobSubmissionForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Validate required fields and show inline errors
     const newErrors: Record<string, string> = {};
 
-    // applicationDeadline: required + valid + not in past
-    if (!form.applicationDeadline) {
-      newErrors.applicationDeadline = "Application deadline is required.";
-    } else {
+    if (!hasText(form.title)) {
+      newErrors.title = "Title is required.";
+    }
+
+    if (!hasText(form.applicationUrl) && !hasText(form.image) && !hasText(form.description)) {
+      newErrors.details = "Add an application link, attachment/image, or short description so Team GPE has something to review.";
+    }
+
+    if (form.applicationDeadline) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const deadlineDate = new Date(form.applicationDeadline);
@@ -114,10 +121,7 @@ export default function JobSubmissionForm() {
       }
     }
 
-    // applicationUrl: required + valid URL
-    if (!form.applicationUrl) {
-      newErrors.applicationUrl = "Application URL is required.";
-    } else {
+    if (form.applicationUrl) {
       try {
         new URL(form.applicationUrl);
       } catch {
@@ -146,8 +150,8 @@ export default function JobSubmissionForm() {
     const jobData = {
       category: "jobs",
       title: form.title,
-      summary: form.description.slice(0, 120),
-      description: form.description,
+      summary: form.description ? form.description.slice(0, 120) : form.applicationUrl || form.company || "Submitted for Team GPE review.",
+      description: form.description || form.applicationUrl || "Details to be completed during Team GPE review.",
       image_url: form.image,
       location: form.state,
       tags: [],
@@ -235,19 +239,18 @@ export default function JobSubmissionForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculate form completion percentage
-  const requiredFields = ['title', 'company', 'state', 'industry', 'salary', 'applicationDeadline', 'contactEmail', 'applicationUrl', 'description'];
-  const completedFields = requiredFields.filter(field => {
-    if (field === 'workArrangements') return Array.isArray(form.workArrangements) && form.workArrangements.length > 0;
-    return form[field] && form[field].toString().trim() !== '';
+  const completedFields = MINIMUM_FIELDS.filter(field => {
+    if (field === "details") return hasText(form.applicationUrl) || hasText(form.image) || hasText(form.description);
+    return hasText(form[field]);
   });
-  const completionPercentage = Math.round((completedFields.length / requiredFields.length) * 100);
+  const completionPercentage = Math.round((completedFields.length / MINIMUM_FIELDS.length) * 100);
 
   return (
-    <Card className="border-0 shadow-lg">
+    <Card className="gpe-paper overflow-hidden">
       <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-xl text-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <Briefcase className="h-5 w-5 text-blue-500" />
               Job Listing Details
             </CardTitle>
@@ -255,11 +258,11 @@ export default function JobSubmissionForm() {
               Fill out the form below · Your draft is auto-saved
             </CardDescription>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-medium text-muted-foreground">{completionPercentage}% complete</div>
-            <div className="w-24 h-2 bg-muted rounded-full mt-1 overflow-hidden">
+          <div className="rounded-[1.25rem] border-[3px] border-black bg-white p-3 text-right shadow-gpe-sm">
+            <div className="text-xs font-black uppercase text-black/60">{completionPercentage}% complete</div>
+            <div className="mt-2 h-4 w-28 overflow-hidden rounded-full border-[3px] border-black bg-white">
               <div 
-                className="h-full bg-primary transition-all duration-300 rounded-full" 
+                className="h-full rounded-full bg-gpe-pink transition-all duration-300" 
                 style={{ width: `${completionPercentage}%` }}
               />
             </div>
@@ -276,13 +279,13 @@ export default function JobSubmissionForm() {
           
           {/* Section: Basic Info */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <Building className="h-4 w-4" />
               Basic Information
             </div>
             
             {/* Image Upload */}
-            <div className="bg-muted/30 rounded-lg p-4">
+            <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4">
               <Label className="text-sm font-medium">Company Logo (Optional)</Label>
               <p className="text-xs text-muted-foreground mb-3">A logo helps your listing stand out</p>
               <ImageUpload
@@ -298,25 +301,26 @@ export default function JobSubmissionForm() {
               <div>
                 <Label htmlFor="title" className="text-sm">Job Title <span className="text-red-500">*</span></Label>
                 <Input id="title" name="title" value={form.title} onChange={handleChange} required placeholder="e.g. Environmental Scientist" className="mt-1" />
+                {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title}</p>}
               </div>
               <div>
-                <Label htmlFor="company" className="text-sm">Company <span className="text-red-500">*</span></Label>
-                <Input id="company" name="company" value={form.company} onChange={handleChange} required placeholder="e.g. Green Earth Co." className="mt-1" />
+                <Label htmlFor="company" className="text-sm">Company</Label>
+                <Input id="company" name="company" value={form.company} onChange={handleChange} placeholder="e.g. Green Earth Co." className="mt-1" />
               </div>
             </div>
           </div>
 
           {/* Section: Location & Industry */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <MapPin className="h-4 w-4" />
               Location & Industry
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="state" className="text-sm">State <span className="text-red-500">*</span></Label>
-                <select id="state" name="state" value={form.state} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                <Label htmlFor="state" className="text-sm">State</Label>
+                <select id="state" name="state" value={form.state} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Select a state...</option>
                   {usStates.map((state) => (
                     <option key={state} value={state}>{state}</option>
@@ -324,8 +328,8 @@ export default function JobSubmissionForm() {
                 </select>
               </div>
               <div>
-                <Label htmlFor="industry" className="text-sm">Industry <span className="text-red-500">*</span></Label>
-                <select id="industry" name="industry" value={form.industry} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                <Label htmlFor="industry" className="text-sm">Industry</Label>
+                <select id="industry" name="industry" value={form.industry} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Select an industry...</option>
                   {industries.map((ind) => (
                     <option key={ind} value={ind}>{ind}</option>
@@ -337,15 +341,15 @@ export default function JobSubmissionForm() {
 
           {/* Section: Compensation & Experience */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <DollarSign className="h-4 w-4" />
               Compensation & Experience
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="salary" className="text-sm">Salary Range <span className="text-red-500">*</span></Label>
-                <select id="salary" name="salary" value={form.salary} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                <Label htmlFor="salary" className="text-sm">Salary Range</Label>
+                <select id="salary" name="salary" value={form.salary} onChange={handleChange} className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Select salary range...</option>
                   {salaryRanges.map((range) => (
                     <option key={range} value={range}>{range}</option>
@@ -366,40 +370,41 @@ export default function JobSubmissionForm() {
 
           {/* Section: Application Details */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <Clock className="h-4 w-4" />
               Application Details
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="applicationDeadline" className="text-sm">Application Deadline <span className="text-red-500">*</span></Label>
-                <Input id="applicationDeadline" name="applicationDeadline" type="date" value={form.applicationDeadline} onChange={handleChange} min={new Date().toISOString().split('T')[0]} required className="mt-1" />
+                <Label htmlFor="applicationDeadline" className="text-sm">Application Deadline</Label>
+                <Input id="applicationDeadline" name="applicationDeadline" type="date" value={form.applicationDeadline} onChange={handleChange} min={new Date().toISOString().split('T')[0]} className="mt-1" />
                 {errors.applicationDeadline && <p className="text-red-500 text-xs mt-1">{errors.applicationDeadline}</p>}
               </div>
               <div>
-                <Label htmlFor="contactEmail" className="text-sm">Contact Email <span className="text-red-500">*</span></Label>
-                <Input id="contactEmail" name="contactEmail" type="email" value={form.contactEmail} onChange={handleChange} required placeholder="jobs@company.com" className="mt-1" />
+                <Label htmlFor="contactEmail" className="text-sm">Contact Email</Label>
+                <Input id="contactEmail" name="contactEmail" type="email" value={form.contactEmail} onChange={handleChange} placeholder="jobs@company.com" className="mt-1" />
               </div>
             </div>
             
             <div>
-              <Label htmlFor="applicationUrl" className="text-sm">Application URL <span className="text-red-500">*</span></Label>
-              <Input id="applicationUrl" name="applicationUrl" type="url" value={form.applicationUrl} onChange={handleChange} placeholder="https://company.com/apply" required className="mt-1" />
+              <Label htmlFor="applicationUrl" className="text-sm">Application URL</Label>
+              <Input id="applicationUrl" name="applicationUrl" type="url" value={form.applicationUrl} onChange={handleChange} placeholder="https://company.com/apply" className="mt-1" />
               {errors.applicationUrl && <p className="text-red-500 text-xs mt-1">{errors.applicationUrl}</p>}
             </div>
+            {errors.details && <p className="text-red-500 text-xs mt-1">{errors.details}</p>}
           </div>
 
           {/* Section: Job Description */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <FileText className="h-4 w-4" />
               Job Description
             </div>
             
             <div>
-              <Label htmlFor="description" className="text-sm">Description <span className="text-red-500">*</span></Label>
-              <Textarea id="description" name="description" value={form.description} onChange={handleChange} required rows={5} placeholder="Describe the role, responsibilities, and what makes it great..." className="mt-1" />
+              <Label htmlFor="description" className="text-sm">Description</Label>
+              <Textarea id="description" name="description" value={form.description} onChange={handleChange} rows={5} placeholder="Describe the role, responsibilities, and what makes it great..." className="mt-1" />
               <p className="text-xs text-muted-foreground mt-1">{form.description.length} characters</p>
             </div>
 
@@ -411,9 +416,9 @@ export default function JobSubmissionForm() {
 
           {/* Work Arrangements */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <Briefcase className="h-4 w-4" />
-              Work Arrangements <span className="text-red-500">*</span>
+              Work Arrangements
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -440,7 +445,7 @@ export default function JobSubmissionForm() {
             {(!Array.isArray(form.workArrangements) || form.workArrangements.length === 0) && (
               <p className="text-amber-600 text-xs flex items-center gap-1">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                Please select at least one work arrangement
+                Optional. Team GPE can classify this during review.
               </p>
             )}
           </div>
@@ -451,7 +456,7 @@ export default function JobSubmissionForm() {
               type="submit" 
               className="flex-1 gap-2" 
               size="lg"
-              disabled={isSubmitting || completionPercentage < 100}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>

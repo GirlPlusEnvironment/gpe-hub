@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Search, Shield, Trophy } from "lucide-react";
+import { Search, Shield, Trophy } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 import {
   type CampSeason,
   type CampSeasonMember,
@@ -35,7 +36,7 @@ const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
 ];
 
 const reviewTabs: Array<{ value: ReviewTab; label: string; description: string }> = [
-  { value: "camp", label: "Camp", description: "Camp GPE challenge and action review." },
+  { value: "camp", label: "Seasonal", description: "Seasonal challenge and action review." },
   { value: "petitions", label: "Petitions", description: "Action Network completion claims after unified review migration." },
   { value: "events", label: "Events", description: "Event attendance and registration review after unified review migration." },
   { value: "listings", label: "Listings", description: "Job-board style listing moderation currently uses pending_review." },
@@ -45,7 +46,7 @@ const reviewTabs: Array<{ value: ReviewTab; label: string; description: string }
 
 function submissionSource(submission: CampSubmission, fields: Record<string, unknown>) {
   const payload = submission.submitted_payload as (CampSubmission["submitted_payload"] & { source?: unknown }) | null;
-  return String(payload?.source || fields.sourcePage || "Camp challenge form");
+  return String(payload?.source || fields.sourcePage || "Seasonal challenge form");
 }
 
 export default function CampAdmin() {
@@ -56,7 +57,7 @@ export default function CampAdmin() {
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<CampSeasonMember[]>([]);
   const [manualPoints, setManualPoints] = useState("10");
-  const [manualReason, setManualReason] = useState("Manual Camp GPE adjustment");
+  const [manualReason, setManualReason] = useState("Manual seasonal adjustment");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -216,22 +217,17 @@ export default function CampAdmin() {
       <Header />
       <main className="gpe-page-main">
         <div className="mx-auto max-w-6xl space-y-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border-[3px] border-black bg-cyan-200 px-4 py-2 text-xs font-black uppercase">
-                <Shield className="h-4 w-4" />
-                Team GPE
-              </div>
-              <h1 className="gpe-heading text-4xl md:text-6xl">Team Review</h1>
-              <p className="mt-3 max-w-2xl text-sm font-bold text-black/70">
-                Review member submissions, resolve identity, assign points, and keep the audit trail clean.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={load}>Refresh</Button>
-              <Link to="/leaderboard"><Button variant="outline">Leaderboard</Button></Link>
-            </div>
-          </div>
+          <SectionHeader
+            eyebrow={<Sticker accent="cyan"><Shield className="mr-2 h-4 w-4" /> Team GPE</Sticker>}
+            title="Team Review"
+            description="Review member submissions, resolve identity, assign points, and keep the audit trail clean."
+            action={
+              <>
+                <CampButton variant="outline" onClick={load}>Refresh</CampButton>
+                <Link to="/leaderboard"><CampButton variant="yellow">Leaderboard</CampButton></Link>
+              </>
+            }
+          />
 
           {error && (
             <div className="rounded-[1.5rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">
@@ -240,19 +236,27 @@ export default function CampAdmin() {
           )}
 
           {loading ? (
-            <Card>
-              <CardContent className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </CardContent>
-            </Card>
+            <div className="grid gap-4 md:grid-cols-3">
+              <LoadingCampCard label="Loading Team Review" />
+              <LoadingCampCard label="Loading Team Review" />
+              <LoadingCampCard label="Loading Team Review" />
+            </div>
           ) : !season ? (
-            <Card>
-              <CardContent className="py-8 text-sm font-bold text-black/70">No active Camp season is configured.</CardContent>
-            </Card>
+            <EmptyState
+              illustration="campfire"
+              title="No Active Season"
+              description="Team Review will show seasonal submissions after an active season is configured."
+            />
           ) : (
             <>
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatSticker label="Visible submissions" value={visibleSubmissions.length.toLocaleString()} accent="yellow" />
+                <StatSticker label="Filter" value={reviewFilter.replace("_", " ")} accent="cyan" />
+                <StatSticker label="Season" value={season.name} accent="orange" />
+              </div>
               <Card>
                 <CardHeader>
+                  <Tape>Review queue</Tape>
                   <CardTitle>Moderation Center</CardTitle>
                   <CardDescription>One review workspace for Camp, actions, listings, and future point-eligible submissions.</CardDescription>
                 </CardHeader>
@@ -264,7 +268,7 @@ export default function CampAdmin() {
                         type="button"
                         role="tab"
                         aria-selected={activeReviewTab === tab.value}
-                        variant={activeReviewTab === tab.value ? "default" : "outline"}
+                        variant={activeReviewTab === tab.value ? "default" : "sticker"}
                         onClick={() => setActiveReviewTab(tab.value)}
                       >
                         {tab.label}
@@ -283,7 +287,7 @@ export default function CampAdmin() {
                 <>
               <Card>
                 <CardHeader>
-                  <CardTitle>Camp Submission Review</CardTitle>
+                  <CardTitle>Seasonal Submission Review</CardTitle>
                   <CardDescription>{season.name}. Points are awarded only after Team GPE approval.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -303,7 +307,11 @@ export default function CampAdmin() {
                   </div>
 
                   {visibleSubmissions.length === 0 ? (
-                    <p className="text-sm font-bold text-black/60">No challenge submissions yet.</p>
+                    <EmptyState
+                      illustration="clipboard"
+                      title="Queue Is Clear"
+                      description="No seasonal submissions match the current review filter."
+                    />
                   ) : visibleSubmissions.map((submission) => {
                     const fields = submission.submitted_payload?.fields || {};
                     const actions = submission.gpe_camp_submission_actions || [];
@@ -346,7 +354,7 @@ export default function CampAdmin() {
                             </div>
                           ) : actions.map((action) => {
                             const challenge = action.gpe_challenges;
-                            const title = challenge?.title || action.other_description || "Other Camp action";
+                            const title = challenge?.title || action.other_description || "Other seasonal action";
                             const defaultPoints = action.requested_points ?? challenge?.point_value ?? 0;
                             const proofUrls = Array.isArray(action.proof_urls) ? action.proof_urls : [];
                             return (

@@ -31,7 +31,13 @@ export function escapeHtml(value: unknown): string {
 }
 
 export function textValue(value: unknown): string {
-  return String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return Array.from(String(value ?? ""))
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code > 31 && code !== 127;
+    })
+    .join("")
+    .trim();
 }
 
 export function escapedLines(value: unknown): string {

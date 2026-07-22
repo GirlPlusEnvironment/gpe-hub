@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader } from "@/components/camp/CampDesign";
 
 const PostDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,7 +23,7 @@ const PostDetail = () => {
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
     try {
@@ -43,11 +44,11 @@ const PostDetail = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id, navigate, toast]);
 
   useEffect(() => {
     loadData();
-  }, [id]);
+  }, [loadData]);
 
   const handleLike = async (postId: string, hasLiked: boolean) => {
     if (!post) return;
@@ -90,7 +91,7 @@ const PostDetail = () => {
       console.error(error);
       toast({
         title: "Error",
-        description: error.message || "We couldn't post your comment. Please try again.",
+        description: error instanceof Error ? error.message : "We couldn't post your comment. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -123,8 +124,9 @@ const PostDetail = () => {
     return (
       <div className="gpe-page">
         <Header />
-        <main className="gpe-page-main flex min-h-[70vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <main className="gpe-page-main max-w-5xl">
+          <LoadingCampCard />
+          <LoadingCampCard className="mt-6" />
         </main>
         <Footer />
       </div>
@@ -137,9 +139,11 @@ const PostDetail = () => {
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main max-w-5xl">
-        <Button variant="outline" className="mb-6 gap-2" onClick={() => navigate("/community")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Community
-        </Button>
+        <div className="mb-8">
+          <CampButton variant="outline" onClick={() => navigate("/community")}>
+            <ArrowLeft className="h-4 w-4" /> Back to Community
+          </CampButton>
+        </div>
 
         <PostCard 
           post={post} 
@@ -149,9 +153,12 @@ const PostDetail = () => {
         />
 
         <div className="mt-8">
-          <h3 className="gpe-heading mb-4 text-3xl">Comments ({post.comments_count})</h3>
+          <SectionHeader
+            kicker="Community thread"
+            title={`Comments (${post.comments_count})`}
+          />
           
-          <div className="gpe-card p-4 mb-6">
+          <div className="gpe-card gpe-paper mb-6 p-5">
             <Textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
@@ -167,9 +174,17 @@ const PostDetail = () => {
           </div>
 
           <div className="space-y-6">
-            {comments.map((comment) => (
-              <Comment key={comment.id} comment={comment} onReply={handleReply} onRefresh={loadData} />
-            ))}
+            {comments.length === 0 ? (
+              <EmptyState
+                illustration="clipboard"
+                title="No comments yet"
+                description="Start the conversation with a note, question, or resource."
+              />
+            ) : (
+              comments.map((comment) => (
+                <Comment key={comment.id} comment={comment} onReply={handleReply} onRefresh={loadData} />
+              ))
+            )}
           </div>
         </div>
       </main>

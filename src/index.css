@@ -241,6 +241,30 @@
     transform: translate(2px, 2px);
   }
 
+  .gpe-delight-card {
+    @apply gpe-card-sm relative overflow-hidden bg-gpe-yellow p-4;
+  }
+
+  .gpe-pop-in {
+    animation: gpe-pop-in 0.35s ease both;
+  }
+
+  .gpe-unlock {
+    animation: gpe-unlock 0.65s ease both;
+  }
+
+  .gpe-celebrate {
+    animation: gpe-celebrate 0.9s ease both;
+  }
+
+  .gpe-activity-item {
+    transition: background-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .gpe-activity-item:hover {
+    transform: translateX(3px);
+  }
+
   @media (min-width: 768px) {
     .gpe-shadow {
       box-shadow: 8px 8px 0 0 #000;
@@ -264,6 +288,44 @@
     }
     50% {
       transform: rotate(2deg);
+    }
+  }
+
+  @keyframes gpe-pop-in {
+    0% {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes gpe-unlock {
+    0% {
+      transform: rotate(-2deg) scale(0.96);
+    }
+    50% {
+      transform: rotate(2deg) scale(1.04);
+    }
+    100% {
+      transform: rotate(0deg) scale(1);
+    }
+  }
+
+  @keyframes gpe-celebrate {
+    0% {
+      opacity: 0;
+      transform: translateY(8px) scale(0.9) rotate(-4deg);
+    }
+    20%, 80% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotate(2deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.96) rotate(-2deg);
     }
   }
 

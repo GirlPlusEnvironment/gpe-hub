@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserPointsData {
   totalPoints: number;
@@ -19,7 +19,7 @@ export function useUserPoints() {
     const level = calculateLevel(totalPoints);
     
     return { totalPoints, level };
-  }, [user, profile?.points]);
+  }, [user, profile]);
 
   const isLoading = !profile && !!user;
 

@@ -19,6 +19,7 @@ import Footer from "@/components/Footer";
 import {
   ActivityItem,
   CampButton,
+  CampIllustration,
   CampProgress,
   MarqueeStrip,
   PrizeCard,
@@ -28,7 +29,7 @@ import {
   Sticker,
   Tape,
 } from "@/components/camp/CampDesign";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { fetchAllListings } from "@/lib/listings";
 import { fetchPosts } from "@/lib/posts";
 import { gpeCategoryConfig } from "@/lib/gpe";
@@ -40,10 +41,11 @@ import {
   getMyCampStatus,
 } from "@/lib/camp";
 import { normalizeReviewStatus } from "@/lib/review-status";
+import { getEncouragementMessage, getTimeOfDayGreeting, seasonalThemes } from "@/lib/delight";
 import type { Listing } from "@/types/listings";
 
 const quickLinks = [
-  { to: "/camp-gpe/challenges", label: "Camp Challenges", icon: Trophy, variant: "secondary" as const },
+  { to: "/camp-gpe/challenges", label: "Seasonal Challenges", icon: Trophy, variant: "secondary" as const },
   { to: "/leaderboard", label: "Leaderboard", icon: Zap, variant: "cyan" as const },
   { to: "/submit", label: "Submit New", icon: PlusCircle, variant: "yellow" as const },
   { to: "/messages", label: "Messages", icon: MessageSquare, variant: "outline" as const },
@@ -127,6 +129,15 @@ const Index = () => {
   const pendingSubmissions = (campHistory?.submissions || []).filter((submission) => normalizeReviewStatus(submission.review_status) === "pending").length;
   const profilePoints = profile?.points || 0;
   const xpGoal = Math.max(100, Math.ceil((profilePoints + 1) / 100) * 100);
+  const pointsToNext = Math.max(0, xpGoal - profilePoints);
+  const seasonTheme = seasonalThemes.summer_camp;
+  const greeting = getTimeOfDayGreeting();
+  const encouragement = getEncouragementMessage({
+    pointsToNext,
+    cabinName: campStatus?.gpe_cabins?.name,
+    pendingSubmissions,
+    activeChallenges: campChallenges.length,
+  });
 
   return (
     <div className="gpe-page">
@@ -152,8 +163,23 @@ const Index = () => {
         />
 
         <MarqueeStrip>
-          Camp GPE open missions - community wins - climate justice - member rankings - submit freely - Team GPE reviews
+          Seasonal missions - community wins - climate justice - member rankings - submit freely - Team GPE reviews
         </MarqueeStrip>
+
+        <section className="grid gap-5 md:grid-cols-[1fr_1fr_0.8fr]">
+          <div className="gpe-delight-card">
+            <Sticker accent={seasonTheme.heroAccent} rotate="none">{seasonTheme.sticker}</Sticker>
+            <p className="mt-4 text-lg font-black leading-snug">{greeting}</p>
+          </div>
+          <div className="gpe-delight-card bg-white">
+            <Sticker accent="cyan" rotate="none">Coach note</Sticker>
+            <p className="mt-4 text-lg font-black leading-snug">{encouragement}</p>
+          </div>
+          <div className="gpe-delight-card bg-gpe-orange">
+            <CampIllustration type={seasonTheme.illustration} className="mx-0 h-16 w-16 rounded-[1.25rem]" />
+            <p className="mt-4 text-sm font-black uppercase">{seasonTheme.label} theme-ready</p>
+          </div>
+        </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
           <div className="gpe-card gpe-paper relative p-6 md:p-8">
@@ -275,7 +301,7 @@ const Index = () => {
 
         <section className="grid gap-4 sm:grid-cols-3">
           <StatSticker label="Open challenges" value={campChallenges.length} accent="white" icon={<Trophy className="h-14 w-14" />} />
-          <StatSticker label="Camp status" value={campStatus?.status || "Not linked"} accent="cyan" icon={<Users className="h-14 w-14" />} />
+          <StatSticker label="Season status" value={campStatus?.status || "Not linked"} accent="cyan" icon={<Users className="h-14 w-14" />} />
           <StatSticker label="Profile level" value={profilePoints >= 2000 ? 5 : profilePoints >= 1000 ? 4 : profilePoints >= 500 ? 3 : profilePoints >= 100 ? 2 : 1} accent="orange" icon={<Zap className="h-14 w-14" />} />
         </section>
       </main>

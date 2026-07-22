@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, FileText, Loader2, Trophy } from "lucide-react";
+import { CalendarClock, FileText, Trophy } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SectionHeader, Sticker } from "@/components/camp/CampDesign";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker } from "@/components/camp/CampDesign";
 import { getActiveCampSeason, getMyCampHistory, type CampSubmission } from "@/lib/camp";
 import { normalizeReviewStatus, reviewStatusClassName, reviewStatusLabel } from "@/lib/review-status";
 import { supabase } from "@/lib/supabaseClient";
@@ -147,13 +147,17 @@ export default function MySubmissions() {
             </CardHeader>
             <CardContent className="space-y-3">
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin" />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <LoadingCampCard label="Loading submissions" />
+                  <LoadingCampCard label="Loading submissions" />
                 </div>
               ) : submissions.length === 0 ? (
-                <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-5 text-sm font-bold">
-                  You do not have any submissions yet.
-                </div>
+                <EmptyState
+                  illustration="clipboard"
+                  title="No Submissions Yet"
+                  description="When you submit a Camp action or community listing, its review status will appear here."
+                  action={<Link to="/camp-gpe/challenges"><CampButton variant="secondary">Open Missions</CampButton></Link>}
+                />
               ) : (
                 submissions.map((submission) => (
                   <div key={`${submission.type}-${submission.id}`} className="rounded-[1.5rem] border-[3px] border-black bg-white p-4">

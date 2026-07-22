@@ -1,34 +1,45 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
-import Explore from "./pages/Explore";
-import Community from "./pages/Community";
-import PostDetail from "./pages/PostDetail";
-import Messages from "./pages/Messages";
-import Submit from "./pages/Submit";
-import JobSubmissionForm from "./pages/JobSubmissionForm";
-import Profile from "./pages/Profile";
-import Favorites from "./pages/Favorites.tsx";
-import Leaderboard from "./pages/Leaderboard";
-import CampChallenges from "./pages/CampChallenges";
-import MySubmissions from "./pages/MySubmissions";
-import NotFound from "./pages/NotFound";
-import ListingDetailPage from "./pages/ListingDetailPage";
-import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
-import AdminDashboard from "./pages/AdminDashboard";
-import CampAdmin from "./pages/CampAdmin";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FavoriteProvider } from "@/contexts/FavoriteContext";
 import { MessagesProvider } from "@/contexts/MessagesContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminRoute from "@/components/AdminRoute";
 import TeamRoute from "@/components/TeamRoute";
+import { LoadingCampCard } from "@/components/camp/CampDesign";
+
+const Index = lazy(() => import("./pages/Index"));
+const Explore = lazy(() => import("./pages/Explore"));
+const Community = lazy(() => import("./pages/Community"));
+const PostDetail = lazy(() => import("./pages/PostDetail"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Submit = lazy(() => import("./pages/Submit"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Favorites = lazy(() => import("./pages/Favorites"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const CampChallenges = lazy(() => import("./pages/CampChallenges"));
+const MySubmissions = lazy(() => import("./pages/MySubmissions"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
+const Login = lazy(() => import("./pages/Login"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const CampAdmin = lazy(() => import("./pages/CampAdmin"));
 
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="gpe-page flex min-h-screen items-center justify-center px-6">
+    <div className="w-full max-w-md">
+      <LoadingCampCard label="Loading page" />
+      <p className="mt-6 text-center font-bold uppercase">Loading the Hub...</p>
+    </div>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -39,6 +50,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route
               path="/"
@@ -100,7 +112,7 @@ const App = () => (
               path="/submit/job"
               element={
                 <ProtectedRoute>
-                  <JobSubmissionForm />
+                  <Submit />
                 </ProtectedRoute>
               }
             />
@@ -201,6 +213,7 @@ const App = () => (
               }
             />
           </Routes>
+          </Suspense>
         </BrowserRouter>
           </MessagesProvider>
         </FavoriteProvider>

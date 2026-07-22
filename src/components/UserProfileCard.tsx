@@ -1,15 +1,14 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare, Calendar, Trophy, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { useMessages } from "@/contexts/MessagesContext";
+import { useMessages } from "@/hooks/useMessages";
+import { CampButton, EmptyState, LoadingCampCard, StatSticker } from "@/components/camp/CampDesign";
 
 interface UserProfile {
   id: string;
@@ -117,9 +116,7 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+          <LoadingCampCard label="Loading profile" />
         ) : profile ? (
           <>
             <DialogHeader className="sr-only">
@@ -153,7 +150,7 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
               </div>
 
               {/* Level Badge */}
-              <Badge className={`mt-3 ${levelInfo.color}`}>
+              <Badge className={`mt-3 border-[2px] border-black font-black uppercase ${levelInfo.color}`}>
                 <Trophy className="h-3 w-3 mr-1" />
                 {levelInfo.name} • Level {levelInfo.level}
               </Badge>
@@ -166,28 +163,19 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
               )}
 
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-4 mt-6 w-full max-w-xs">
-                <Card className="border">
-                  <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-primary">{profile.points}</div>
-                    <div className="text-xs text-muted-foreground">Points</div>
-                  </CardContent>
-                </Card>
-                <Card className="border">
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Member since {format(new Date(profile.created_at), "MMM yyyy")}
-                    </div>
-                  </CardContent>
-                </Card>
+              <div className="mt-6 grid w-full max-w-xs grid-cols-2 gap-4">
+                <StatSticker label="Points" value={profile.points} accent="cyan" icon={<Trophy className="h-14 w-14" />} />
+                <StatSticker
+                  label={`Since ${format(new Date(profile.created_at), "MMM yyyy")}`}
+                  value={<Calendar className="h-8 w-8" />}
+                  accent="yellow"
+                  icon={<Calendar className="h-14 w-14" />}
+                />
               </div>
 
               {/* Actions */}
               {!isOwnProfile && user && (
-                <Button 
+                <CampButton
                   className="mt-6 w-full max-w-xs gap-2" 
                   onClick={handleSendMessage}
                   disabled={isStartingChat}
@@ -198,11 +186,11 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
                     <MessageSquare className="h-4 w-4" />
                   )}
                   Send Message
-                </Button>
+                </CampButton>
               )}
 
               {isOwnProfile && (
-                <Button 
+                <CampButton
                   variant="outline"
                   className="mt-6 w-full max-w-xs" 
                   onClick={() => {
@@ -211,14 +199,16 @@ export function UserProfileCard({ userId, open, onOpenChange }: UserProfileCardP
                   }}
                 >
                   Edit Profile
-                </Button>
+                </CampButton>
               )}
             </div>
           </>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">User not found</p>
-          </div>
+          <EmptyState
+            illustration="badge"
+            title="User not found"
+            description="This profile is unavailable or has been removed."
+          />
         )}
       </DialogContent>
     </Dialog>

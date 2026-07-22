@@ -16,9 +16,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker } from "@/components/camp/CampDesign";
 import { fetchFavoriteListings } from "@/lib/listings";
-import { useFavorites } from "@/contexts/FavoriteContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useAuth } from "@/hooks/useAuth";
 import { getSortOptions, sortListings, type SortOption } from "@/lib/sorting";
 import type { EventListing, FundraiserListing, JobListing, Listing, ResourceListing } from "@/types/listings";
 import { gpeCategoryConfig } from "@/lib/gpe";
@@ -96,12 +97,13 @@ const Favorites = () => {
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main">
-        <div className="mb-10">
-          <h1 className="gpe-heading text-5xl md:text-7xl">My Favorites</h1>
-          <p className="mt-4 max-w-3xl text-lg font-bold">
-            Your saved jobs, events, funding, and resources in one place.
-          </p>
-        </div>
+        <SectionHeader
+          className="mb-10"
+          eyebrow={<Sticker accent="pink"><Heart className="mr-2 h-4 w-4" /> Saved</Sticker>}
+          title="My Favorites"
+          description="Your saved jobs, events, funding, and resources in one place."
+          action={<Link to="/explore"><CampButton variant="yellow">Explore More</CampButton></Link>}
+        />
 
         <section className="gpe-card mb-8 p-5">
           <div className="mb-4 flex flex-wrap gap-3">
@@ -161,22 +163,22 @@ const Favorites = () => {
         </section>
 
         {isLoading ? (
-          <div className="gpe-card p-12 text-center font-bold uppercase">Loading favorites...</div>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((item) => <LoadingCampCard key={item} label="Loading favorites" />)}
+          </div>
         ) : isError ? (
-          <div className="gpe-card p-12 text-center font-bold text-red-600">
-            We couldn&apos;t load your favorites.
-          </div>
+          <EmptyState
+            illustration="clipboard"
+            title="Favorites Are Offline"
+            description="We could not load your saved items. Try again in a moment."
+          />
         ) : favoriteItems.length === 0 ? (
-          <div className="gpe-card p-12 text-center">
-            <Heart className="mx-auto mb-6 h-16 w-16 text-black/30" />
-            <h2 className="gpe-heading text-3xl">No Favorites Yet</h2>
-            <p className="mt-3 font-bold text-black/70">
-              Start exploring and save items you want to revisit.
-            </p>
-            <Link to="/explore" className="mt-6 inline-flex">
-              <Button>Explore Listings</Button>
-            </Link>
-          </div>
+          <EmptyState
+            illustration="badge"
+            title="No Favorites Yet"
+            description="Start exploring and save items you want to revisit."
+            action={<Link to="/explore"><CampButton>Explore Listings</CampButton></Link>}
+          />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {favoriteItems.map((listing) => {

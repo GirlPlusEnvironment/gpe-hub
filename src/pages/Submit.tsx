@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BookOpen, Briefcase, Calendar, DollarSign } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
+import { CampButton, SectionHeader, Sticker } from "@/components/camp/CampDesign";
 import JobSubmissionForm from "./JobSubmissionForm";
 import EventSubmissionForm from "./EventSubmissionForm";
 import FundingSubmissionForm from "./FundingSubmissionForm";
@@ -22,13 +22,12 @@ const Submit = () => {
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main">
-        <div className="mb-10">
-          <h1 className="gpe-heading text-5xl md:text-7xl">Submit to Hub</h1>
-          <p className="mt-4 max-w-3xl text-lg font-bold">
-            Use the existing Supabase-backed forms to share jobs, events, funding,
-            and resources with the community.
-          </p>
-        </div>
+        <SectionHeader
+          kicker="Community library"
+          title="Submit to Hub"
+          description="Share jobs, events, funding, and resources with the community review queue."
+          action={<Sticker accent="yellow">Reviewed by GPE</Sticker>}
+        />
 
         <section className="mb-8 flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3">
@@ -48,6 +47,7 @@ const Submit = () => {
               key={tab.id}
               type="button"
               onClick={() => setSelectedTab(tab.id)}
+              aria-pressed={selectedTab === tab.id}
               className={`gpe-card gpe-hover-lift p-8 text-center ${selectedTab === tab.id ? "ring-2 ring-black" : ""}`}
             >
               <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border-[3px] border-black text-4xl ${tab.tone}`}>
@@ -66,9 +66,9 @@ const Submit = () => {
         </section>
 
         <div className="mt-8">
-          <Button variant="outline" onClick={() => window.history.back()}>
+          <CampButton variant="outline" onClick={() => window.history.back()}>
             Back
-          </Button>
+          </CampButton>
         </div>
       </main>
       <Footer />

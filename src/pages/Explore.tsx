@@ -16,8 +16,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker } from "@/components/camp/CampDesign";
 import { fetchAllListings } from "@/lib/listings";
-import { useFavorites } from "@/contexts/FavoriteContext";
+import { useFavorites } from "@/hooks/useFavorites";
 import { getSortOptions, sortListings, type SortOption } from "@/lib/sorting";
 import type { EventListing, FundraiserListing, JobListing, Listing, ResourceListing } from "@/types/listings";
 import { gpeCategoryConfig } from "@/lib/gpe";
@@ -106,13 +107,13 @@ const Explore = () => {
     <div className="gpe-page">
       <Header />
       <main className="gpe-page-main">
-        <div className="mb-10">
-          <h1 className="gpe-heading text-5xl md:text-7xl">Explore Hub</h1>
-          <p className="mt-4 max-w-3xl text-lg font-bold">
-            Browse jobs, events, funding opportunities, and resources using the real
-            Supabase data already powering the app.
-          </p>
-        </div>
+        <SectionHeader
+          className="mb-10"
+          eyebrow={<Sticker accent="cyan"><Search className="mr-2 h-4 w-4" /> Explore</Sticker>}
+          title="Explore Hub"
+          description="Browse jobs, events, funding opportunities, and resources using the real Supabase data already powering the app."
+          action={<CampButton variant="yellow" onClick={() => navigate("/submit")}>Submit Resource</CampButton>}
+        />
 
         <section className="gpe-card sticky top-4 z-30 mb-10 flex flex-col gap-5 bg-white/90 p-5 backdrop-blur">
           <div className="flex flex-wrap gap-3">
@@ -171,29 +172,32 @@ const Explore = () => {
         </section>
 
         {isLoading ? (
-          <div className="gpe-card p-12 text-center font-bold uppercase">Loading listings...</div>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2, 3, 4, 5].map((item) => <LoadingCampCard key={item} label="Loading listings" />)}
+          </div>
         ) : isError ? (
-          <div className="gpe-card p-12 text-center font-bold text-red-600">
-            We couldn&apos;t load the explore board.
-          </div>
+          <EmptyState
+            illustration="megaphone"
+            title="Explore Board Is Offline"
+            description="We could not load the latest listings. Try refreshing in a moment."
+          />
         ) : filteredListings.length === 0 ? (
-          <div className="gpe-card p-12 text-center">
-            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-black bg-white">
-              {listingPlaceholder[selectedCategory]}
-            </div>
-            <h2 className="gpe-heading text-3xl">No Results Found</h2>
-            <p className="mt-3 font-bold text-black/70">Try adjusting your search or filters.</p>
-            <Button
-              variant="outline"
-              className="mt-6"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedFilter("All");
-              }}
-            >
-              Clear Filters
-            </Button>
-          </div>
+          <EmptyState
+            illustration={selectedCategory === "events" ? "sun" : selectedCategory === "jobs" ? "flag" : "clipboard"}
+            title="No Results Found"
+            description="Try adjusting your search or filters."
+            action={
+              <CampButton
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedFilter("All");
+                }}
+              >
+                Clear Filters
+              </CampButton>
+            }
+          />
         ) : (
           <>
             <p className="mb-6 text-sm font-bold uppercase text-black/70">

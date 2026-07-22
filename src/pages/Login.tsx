@@ -1,10 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Megaphone } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/contexts/AuthContext";
+import { CampButton, Sticker, Tape } from "@/components/camp/CampDesign";
+import { useAuth } from "@/hooks/useAuth";
 import {
   getSignupErrorMessage,
   normalizeUsername,
@@ -218,7 +218,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbd3d3]">
+    <div className="gpe-page md:pl-0">
       <div className="grid min-h-screen md:grid-cols-2">
         <section className="relative hidden overflow-hidden bg-black p-12 text-white md:flex md:flex-col md:items-center md:justify-center">
           <div className="gpe-pattern absolute inset-0 opacity-30" />
@@ -226,8 +226,9 @@ const Login = () => {
             <img
               src="/gpe-hub-icon.png"
               alt="GPE Hub"
-              className="mx-auto mb-10 max-h-64 w-full max-w-[220px] object-contain drop-shadow-[8px_8px_0_rgba(0,0,0,0.55)]"
+              className="gpe-border mx-auto mb-10 max-h-64 w-full max-w-[220px] rounded-[2rem] bg-white object-contain p-4 shadow-gpe"
             />
+            <Tape className="mb-5">Member portal</Tape>
             <h1 className="font-header text-6xl uppercase leading-none md:text-7xl">
               Hey, GPE Community!
             </h1>
@@ -241,26 +242,26 @@ const Login = () => {
 
         <section className="flex items-center justify-center p-6 md:p-12">
           <div className="w-full max-w-md">
-            <div className="mb-8 flex gap-4">
-              <Button
+            <div className="mb-8 grid grid-cols-2 gap-4">
+              <CampButton
                 type="button"
                 variant={mode === "login" ? "default" : "outline"}
                 className="flex-1"
                 onClick={() => setAuthMode("login")}
               >
                 Log In
-              </Button>
-              <Button
+              </CampButton>
+              <CampButton
                 type="button"
                 variant={mode === "signup" ? "secondary" : "outline"}
                 className="flex-1"
                 onClick={() => setAuthMode("signup")}
               >
                 Sign Up
-              </Button>
+              </CampButton>
             </div>
 
-            <div className="gpe-card p-8 md:p-10">
+            <div className="gpe-card gpe-paper p-8 md:p-10">
               {mode === "reset" && (
                 <button
                   type="button"
@@ -272,6 +273,9 @@ const Login = () => {
                 </button>
               )}
 
+              <Sticker accent={mode === "signup" ? "cyan" : mode === "reset" ? "yellow" : "pink"} className="mb-5">
+                {mode === "login" ? "Login" : mode === "signup" ? "Join" : "Reset"}
+              </Sticker>
               <h2 className="gpe-heading text-4xl">
                 {mode === "login"
                   ? "Welcome Back!"
@@ -397,7 +401,7 @@ const Login = () => {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+                <CampButton type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                   {isSubmitting
                     ? mode === "login"
                       ? "Signing In..."
@@ -409,7 +413,7 @@ const Login = () => {
                     : mode === "signup"
                     ? "Sign Up"
                     : "Send Reset Link"}
-                </Button>
+                </CampButton>
               </form>
 
               <div className="mt-6 flex flex-col gap-3 text-sm font-bold md:flex-row md:items-center md:justify-between">
@@ -442,7 +446,7 @@ const Login = () => {
                   <p className="text-xs font-bold uppercase text-black/60">
                     Need another confirmation email?
                   </p>
-                  <Button
+                  <CampButton
                     type="button"
                     variant="outline"
                     className="mt-3 w-full"
@@ -450,7 +454,7 @@ const Login = () => {
                     disabled={isSubmitting}
                   >
                     Resend Confirmation Email
-                  </Button>
+                  </CampButton>
                   {signupErrorKind === "confirmation_email_failed" && (
                     <p className="mt-2 text-xs font-bold text-black/60">
                       Use the same email address you entered above.

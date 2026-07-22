@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { CommentsSection } from "@/components/CommentsSection";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserProfileCard } from "@/components/UserProfileCard";
-import { useAuth } from "@/contexts/AuthContext";
-import { useMessages } from "@/contexts/MessagesContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useMessages } from "@/hooks/useMessages";
 import { 
   ArrowLeft, 
   Heart, 
@@ -32,6 +32,7 @@ import {
 import { Listing, JobListing, EventListing, FundraiserListing, ResourceListing } from "@/types/listings";
 import { ShareDialog } from "@/components/ShareDialog";
 import { gpeCategoryConfig } from "@/lib/gpe";
+import { CampButton, Sticker } from "@/components/camp/CampDesign";
 
 interface ListingDetailProps {
   listing: Listing;
@@ -104,8 +105,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
       </div>
 
       {/* Salary */}
-      <div className="bg-muted p-4 rounded-lg">
-        <h4 className="font-semibold text-lg text-primary mb-2">Compensation</h4>
+      <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-4 shadow-gpe-sm">
+        <h4 className="mb-2 font-header text-lg uppercase text-black">Compensation</h4>
         <p className="text-2xl font-bold">{job.salary}</p>
       </div>
 
@@ -134,8 +135,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
       )}
 
       {/* Application Info */}
-      <div className="bg-primary/5 p-4 rounded-lg">
-        <h4 className="font-semibold text-lg mb-3">Application Details</h4>
+      <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+        <h4 className="mb-3 font-header text-lg uppercase">Application Details</h4>
         {job.applicationDeadline && (
           <p className="text-sm text-muted-foreground mb-2">
             <strong>Deadline:</strong> {job.applicationDeadline}
@@ -147,12 +148,12 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
           </p>
         )}
         {job.applicationUrl && (
-          <Button asChild className="w-full">
+          <CampButton asChild className="w-full">
             <a href={job.applicationUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4 mr-2" />
               Apply Now
             </a>
-          </Button>
+          </CampButton>
         )}
       </div>
     </div>
@@ -184,8 +185,8 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
 
       {/* Organizer */}
       {event.organizer && (
-        <div className="bg-muted p-4 rounded-lg">
-          <h4 className="font-semibold text-lg mb-2">Organized by</h4>
+        <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-cyan p-4 shadow-gpe-sm">
+          <h4 className="mb-2 font-header text-lg uppercase">Organized by</h4>
           <p className="text-muted-foreground">{event.organizer}</p>
         </div>
       )}
@@ -211,20 +212,20 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
       )}
 
       {/* Registration */}
-      <div className="bg-primary/5 p-4 rounded-lg">
-        <h4 className="font-semibold text-lg mb-3">Registration</h4>
+      <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+        <h4 className="mb-3 font-header text-lg uppercase">Registration</h4>
         {event.contactEmail && (
           <p className="text-sm text-muted-foreground mb-2">
             <strong>Contact:</strong> {event.contactEmail}
           </p>
         )}
         {event.registrationUrl && (
-          <Button asChild className="w-full">
+          <CampButton asChild className="w-full">
             <a href={event.registrationUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4 mr-2" />
               Register Now
             </a>
-          </Button>
+          </CampButton>
         )}
       </div>
     </div>
@@ -238,16 +239,16 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
     return (
       <div className="space-y-6">
         {/* Progress */}
-        <div className="bg-muted p-4 rounded-lg">
-          <h4 className="font-semibold text-lg mb-3">Fundraising Progress</h4>
+        <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-yellow p-4 shadow-gpe-sm">
+          <h4 className="mb-3 font-header text-lg uppercase">Fundraising Progress</h4>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Raised: {fundraiser.currentAmount}</span>
               <span>Goal: {fundraiser.goalAmount}</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="h-5 w-full overflow-hidden rounded-full border-[3px] border-black bg-white">
               <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300"
+                className="h-full rounded-full bg-gpe-pink transition-all duration-300"
                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
               />
             </div>
@@ -275,7 +276,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
             <h4 className="font-semibold text-lg mb-3">Recent Updates</h4>
             <div className="space-y-2">
               {fundraiser.updates.map((update, index) => (
-                <div key={index} className="bg-muted p-3 rounded-lg">
+                <div key={index} className="rounded-[1.25rem] border-[3px] border-black bg-white p-3">
                   <p className="text-sm text-muted-foreground">{update}</p>
                 </div>
               ))}
@@ -284,20 +285,20 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
         )}
 
         {/* Donation */}
-        <div className="bg-primary/5 p-4 rounded-lg">
-          <h4 className="font-semibold text-lg mb-3">Support This Cause</h4>
+        <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+          <h4 className="mb-3 font-header text-lg uppercase">Support This Cause</h4>
           {fundraiser.contactEmail && (
             <p className="text-sm text-muted-foreground mb-2">
               <strong>Contact:</strong> {fundraiser.contactEmail}
             </p>
           )}
           {fundraiser.donationUrl && (
-            <Button asChild className="w-full">
+            <CampButton asChild className="w-full">
               <a href={fundraiser.donationUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Donate Now
               </a>
-            </Button>
+            </CampButton>
           )}
         </div>
       </div>
@@ -330,15 +331,15 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
           <h4 className="font-semibold text-lg mb-3">Tags</h4>
           <div className="flex flex-wrap gap-2">
             {resource.tags.map((tag, index) => (
-              <Badge key={index} variant="secondary">{tag}</Badge>
+              <Badge key={index} variant="secondary" className="border-[2px] border-black font-black uppercase">{tag}</Badge>
             ))}
           </div>
         </div>
       )}
 
       {/* File Info */}
-      <div className="bg-muted p-4 rounded-lg">
-        <h4 className="font-semibold text-lg mb-3">Resource Information</h4>
+      <div className="rounded-[1.5rem] border-[3px] border-black bg-gpe-cyan p-4 shadow-gpe-sm">
+        <h4 className="mb-3 font-header text-lg uppercase">Resource Information</h4>
         <div className="space-y-2">
           {resource.lastUpdated && (
             <p className="text-sm text-muted-foreground">
@@ -355,14 +356,14 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
 
       {/* Download */}
       {resource.downloadUrl && (
-        <div className="bg-primary/5 p-4 rounded-lg">
-          <h4 className="font-semibold text-lg mb-3">Access Resource</h4>
-          <Button asChild className="w-full">
+        <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+          <h4 className="mb-3 font-header text-lg uppercase">Access Resource</h4>
+          <CampButton asChild className="w-full">
             <a href={resource.downloadUrl} target="_blank" rel="noopener noreferrer">
               <Download className="h-4 w-4 mr-2" />
               Download Resource
             </a>
-          </Button>
+          </CampButton>
         </div>
       )}
     </div>
@@ -387,14 +388,14 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
     <div>
       <div className="mx-auto max-w-6xl">
         {/* Back Button */}
-        <Button
+        <CampButton
           variant="outline"
           onClick={onBack}
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Explore
-        </Button>
+        </CampButton>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {/* Main Content */}
@@ -405,9 +406,9 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     {getCategoryIcon(listing.category)}
-                    <Badge className={getCategoryColor(listing.category)}>
+                    <Sticker accent="yellow" rotate="none" className={getCategoryColor(listing.category)}>
                       {listing.category.charAt(0).toUpperCase() + listing.category.slice(1)}
-                    </Badge>
+                    </Sticker>
                   </div>
                   <h1 className="font-header text-4xl uppercase leading-tight md:text-6xl">
                     {listing.title}
@@ -416,7 +417,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
                 <button
                   onClick={() => onToggleFavorite(listing.id)}
                   disabled={isPending}
-                  className="rounded-full p-2 hover:bg-pink-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-full border-[3px] border-black bg-white p-2 shadow-gpe-sm transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
                 >
                   <Heart
@@ -438,7 +439,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
             </div>
 
             {/* Description */}
-            <Card>
+            <Card className="gpe-paper">
               <CardHeader>
                 <CardTitle>Description</CardTitle>
               </CardHeader>
@@ -462,7 +463,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
             </Card>
 
             {/* Category-specific details */}
-            <Card>
+            <Card className="gpe-paper">
               <CardHeader>
                 <CardTitle>Details</CardTitle>
               </CardHeader>
@@ -476,7 +477,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Quick Actions */}
-            <Card>
+            <Card className="gpe-paper">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
@@ -503,7 +504,7 @@ const ListingDetail = ({ listing, onBack, isFavorited, isPending = false, onTogg
             </Card>
 
             {/* Contact Info */}
-            <Card>
+            <Card className="gpe-paper">
               <CardHeader>
                 <CardTitle>Contact Information</CardTitle>
               </CardHeader>

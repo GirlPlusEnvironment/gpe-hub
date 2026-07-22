@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Post } from "@/types/posts";
 import { fetchPostById } from "@/lib/posts";
 import { Loader2, MessageSquare, Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Sticker } from "@/components/camp/CampDesign";
 
 interface PostMessageCardProps {
   postId: string;
@@ -34,23 +34,23 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
 
   if (isLoading) {
     return (
-      <div className="flex h-32 w-full min-w-0 max-w-64 items-center justify-center rounded-lg border border-border bg-background/50 p-4">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex h-32 w-full min-w-0 max-w-64 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+        <Loader2 className="h-6 w-6 animate-spin text-gpe-pink" />
       </div>
     );
   }
 
   if (!post) {
     return (
-      <div className="w-full min-w-0 max-w-64 rounded-lg border border-border bg-background/50 p-4">
-        <p className="text-sm text-muted-foreground">Post unavailable</p>
+      <div className="w-full min-w-0 max-w-64 rounded-[1.5rem] border-[3px] border-black bg-white p-4 shadow-gpe-sm">
+        <p className="text-sm font-bold text-black/60">Post unavailable</p>
       </div>
     );
   }
 
   return (
-    <Card 
-      className="w-full min-w-0 max-w-64 cursor-pointer overflow-hidden bg-background text-foreground transition-shadow hover:shadow-md"
+    <article
+      className="gpe-card-sm gpe-hover-lift w-full min-w-0 max-w-64 cursor-pointer overflow-hidden text-foreground"
       onClick={() => navigate(`/community/post/${post.id}`)}
     >
       {post.image_url && (
@@ -62,7 +62,7 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
           />
         </div>
       )}
-      <CardHeader className="p-3 pb-0">
+      <div className="p-3 pb-0">
         <div className="mb-1 flex min-w-0 items-center gap-2">
           <Avatar className="h-5 w-5 shrink-0">
             <AvatarImage src={post.user?.avatar_url || ""} />
@@ -74,13 +74,13 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
             {post.user?.full_name || "Unknown"}
           </span>
         </div>
-        <h4 className="line-clamp-2 break-words text-sm font-semibold leading-tight">{post.title}</h4>
-      </CardHeader>
-      <CardContent className="p-3 pt-1">
-        <p className="mb-2 line-clamp-3 break-words text-xs text-muted-foreground">
+        <h4 className="line-clamp-2 break-words text-sm font-black leading-tight">{post.title}</h4>
+      </div>
+      <div className="p-3 pt-1">
+        <p className="mb-2 line-clamp-3 break-words text-xs font-bold text-black/60">
           {post.description}
         </p>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs font-black text-black/65">
           <div className="flex items-center gap-1">
             <Heart className="h-3 w-3" />
             <span>{post.likes_count || 0}</span>
@@ -90,8 +90,9 @@ const PostMessageCard = ({ postId }: PostMessageCardProps) => {
             <span>{post.comments_count || 0}</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        <Sticker accent="cyan" rotate="none" className="mt-3 px-2 py-1 text-[10px]">Community post</Sticker>
+      </div>
+    </article>
   );
 };
 

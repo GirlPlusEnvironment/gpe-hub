@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   CampButton,
   ChallengeCard,
+  EmptyState,
+  LoadingCampCard,
   MarqueeStrip,
   SectionHeader,
   SeasonHero,
@@ -16,7 +18,7 @@ import {
   Sticker,
   Tape,
 } from "@/components/camp/CampDesign";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
 import {
   type CampChallenge,
@@ -169,15 +171,17 @@ export default function CampChallenges() {
           )}
 
           {loading ? (
-            <Card>
-              <CardContent className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </CardContent>
-            </Card>
+            <div className="grid gap-4 md:grid-cols-2">
+              <LoadingCampCard label="Loading Camp challenges" />
+              <LoadingCampCard label="Loading Camp challenges" />
+            </div>
           ) : !season ? (
-            <Card>
-              <CardContent className="py-8 text-sm font-bold text-black/70">No active Camp season is configured.</CardContent>
-            </Card>
+            <EmptyState
+              illustration="campfire"
+              title="Camp Is Between Seasons"
+              description="There is no active Camp season configured yet. Check back when Team GPE opens the next mission board."
+              action={<Link to="/leaderboard"><CampButton variant="outline">View Leaderboard</CampButton></Link>}
+            />
           ) : (
             <form onSubmit={submitChallenge} className="space-y-6">
               <Card className="gpe-paper">
@@ -196,7 +200,12 @@ export default function CampChallenges() {
                     </div>
                   )}
                   {challenges.length === 0 ? (
-                    <p className="text-sm font-bold text-black/60">No Camp challenges are open right now.</p>
+                    <EmptyState
+                      illustration="clipboard"
+                      title="No Open Missions"
+                      description="Team GPE has not published active challenges for this season yet."
+                      action={<CampButton variant="outline" onClick={load} type="button">Refresh</CampButton>}
+                    />
                   ) : (
                     <div className="grid gap-5 md:grid-cols-2">
                       {challenges.map((challenge, index) => {
@@ -210,7 +219,10 @@ export default function CampChallenges() {
                             description={challenge.short_description}
                             points={challenge.point_value == null ? "Points pending" : `${challenge.point_value} points`}
                             category={challenge.category.replaceAll("_", " ")}
+                            difficulty={challenge.point_value && challenge.point_value >= 50 ? "High impact" : "Quick action"}
+                            estimatedTime={challenge.action_url ? "5-10 min" : "Flexible"}
                             status={limitReached ? "Completed" : selected.includes(challenge.id) ? "Selected" : "Open"}
+                            progress={limitReached ? 100 : selected.includes(challenge.id) ? 50 : 0}
                             accent={accent}
                             selected={selected.includes(challenge.id)}
                             disabled={limitReached}

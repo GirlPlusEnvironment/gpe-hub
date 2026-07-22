@@ -6,22 +6,27 @@ import Header from "@/components/Header";
 import { UserProfileCard } from "@/components/UserProfileCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ActivityItem,
+  BadgeToken,
   CabinCard,
   CampButton,
   CampProgress,
   ChallengeCard,
+  CountdownStateCard,
+  EmptyState,
+  LoadingCampCard,
   MarqueeStrip,
+  PodiumCard,
   PrizeCard,
   SectionHeader,
   StatSticker,
   Sticker,
   Tape,
 } from "@/components/camp/CampDesign";
+import { useAuth } from "@/hooks/useAuth";
 import {
   type CampCabinLeaderboardRow,
   type CampChallenge,
@@ -121,6 +126,7 @@ function rankMovementLabel(_row: CampLeaderboardRow) {
 }
 
 export default function Leaderboard() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<LeaderboardTab>("all-time");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [mainLeaderboard, setMainLeaderboard] = useState<LeaderboardUser[]>([]);
@@ -303,6 +309,7 @@ export default function Leaderboard() {
                 error={mainError}
                 isLoading={mainLoading}
                 leaderboard={mainLeaderboard}
+                currentUserId={user?.id || null}
                 onRefresh={loadMainLeaderboard}
                 onSelectUser={openProfile}
                 setTimeRange={setTimeRange}
@@ -367,6 +374,7 @@ function MainLeaderboardPanel({
   error,
   isLoading,
   leaderboard,
+  currentUserId,
   onRefresh,
   onSelectUser,
   setTimeRange,
@@ -375,6 +383,7 @@ function MainLeaderboardPanel({
   error: string | null;
   isLoading: boolean;
   leaderboard: LeaderboardUser[];
+  currentUserId: string | null;
   onRefresh: () => void;
   onSelectUser: (userId: string) => void;
   setTimeRange: (range: TimeRange) => void;
@@ -390,6 +399,7 @@ function MainLeaderboardPanel({
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [leaderboard, search]);
+  const podium = visibleLeaderboard.slice(0, 3);
 
   return (
     <>
@@ -437,27 +447,46 @@ function MainLeaderboardPanel({
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="grid gap-4 py-4 md:grid-cols-3">
+              {[0, 1, 2].map((item) => <LoadingCampCard key={item} label="Loading leaderboard" />)}
             </div>
           ) : error ? (
-            <div className="py-12 text-center">
-              <p className="mb-2 font-bold text-destructive">Failed to load leaderboard</p>
-              <p className="text-sm font-bold text-muted-foreground">{error}</p>
-            </div>
+            <EmptyState
+              illustration="clipboard"
+              title="Leaderboard is resting"
+              description={error}
+              action={<CampButton variant="outline" onClick={onRefresh}>Try Again</CampButton>}
+            />
           ) : visibleLeaderboard.length === 0 ? (
-            <div className="py-12 text-center text-sm font-bold text-black/60">
-              No general rankings are available for this time period.
-            </div>
+            <EmptyState
+              illustration="flag"
+              title="No Rankings Yet"
+              description="No members match this search or time period."
+              action={<CampButton variant="outline" onClick={() => setSearch("")}>Clear Search</CampButton>}
+            />
           ) : (
             <div className="space-y-3">
+              {podium.length > 0 ? (
+                <div className="mb-6 grid gap-4 md:grid-cols-3 md:items-end">
+                  {podium.map((user) => (
+                    <PodiumCard
+                      key={user.id}
+                      rank={user.rank}
+                      name={user.full_name || user.username || "Unknown"}
+                      detail={user.username ? `@${user.username}` : `Level ${user.level}`}
+                      points={`${user.points.toLocaleString()} pts`}
+                      accent={user.rank === 1 ? "yellow" : user.rank === 2 ? "cyan" : "pink"}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {visibleLeaderboard.map((user) => (
                 <button
                   key={user.id}
                   type="button"
                   className={`flex w-full cursor-pointer items-center justify-between gap-4 rounded-[1.75rem] border-[4px] border-black p-4 text-left shadow-gpe-sm transition-all hover:-translate-x-1 hover:-translate-y-1 hover:shadow-gpe focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     user.rank === 1 ? "bg-gpe-yellow" : user.rank === 2 ? "bg-gpe-cyan" : user.rank === 3 ? "bg-[#fbd3d3]" : "bg-white"
-                  }`}
+                  } ${currentUserId === user.id ? "ring-4 ring-gpe-pink ring-offset-4 ring-offset-[#fbd3d3]" : ""}`}
                   onClick={() => onSelectUser(user.id)}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -478,6 +507,9 @@ function MainLeaderboardPanel({
                         <Badge className={`${getLevelColor(user.level)} border-2 border-black text-xs font-black text-foreground`}>
                           Level {user.level}
                         </Badge>
+                        {currentUserId === user.id ? (
+                          <Badge className="border-2 border-black bg-gpe-pink text-white">You</Badge>
+                        ) : null}
                       </div>
                       {user.username && user.username !== user.full_name ? (
                         <div className="mt-0.5 text-sm text-muted-foreground">@{user.username}</div>
@@ -727,28 +759,23 @@ function CountdownCard({ season }: { season: CampSeason }) {
   const detail = startsIn !== null && startsIn > 0
     ? season.starts_at
     : season.ends_at;
+  const state = startsIn !== null && startsIn > 0
+    ? "starts"
+    : season.ends_at && endsIn !== null && endsIn < 0
+      ? "completed"
+      : endsIn !== null && endsIn <= 3
+        ? "ends"
+        : "live";
+  const progress = season.starts_at && season.ends_at && startsIn !== null && startsIn <= 0
+    ? Math.round((Math.max(0, Date.now() - new Date(season.starts_at).getTime()) / Math.max(1, new Date(season.ends_at).getTime() - new Date(season.starts_at).getTime())) * 100)
+    : undefined;
   return (
-    <div className="rounded-[2rem] border-[4px] border-black bg-gpe-cyan p-5 shadow-gpe-sm">
-      <div className="flex items-center gap-3">
-        <Clock className="h-8 w-8" />
-        <div>
-          <div className="font-header text-3xl uppercase leading-none">{seasonCountdownLabel(season)}</div>
-          <div className="mt-1 text-xs font-black uppercase text-black/60">
-            {detail ? new Date(detail).toLocaleString() : "Dates pending"}
-          </div>
-        </div>
-      </div>
-      {endsIn !== null && startsIn !== null && startsIn <= 0 ? (
-        <div className="mt-4">
-          <CampProgress
-            label="Season progress"
-            value={Math.max(0, Date.now() - new Date(season.starts_at || Date.now()).getTime())}
-            max={Math.max(1, new Date(season.ends_at || Date.now()).getTime() - new Date(season.starts_at || Date.now()).getTime())}
-            accent="black"
-          />
-        </div>
-      ) : null}
-    </div>
+    <CountdownStateCard
+      state={state}
+      label={state === "completed" ? "Season Complete" : seasonCountdownLabel(season)}
+      detail={detail ? new Date(detail).toLocaleString() : "Dates pending"}
+      progress={progress}
+    />
   );
 }
 
@@ -800,9 +827,11 @@ function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampC
   const maxPoints = Math.max(1, ...cabinLeaderboard.map((row) => row.points));
   if (cabinLeaderboard.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-8 text-sm font-bold text-black/60">Cabin totals are not available yet.</CardContent>
-      </Card>
+      <EmptyState
+        illustration="tent"
+        title="Cabins Are Gathering"
+        description="Cabin totals will appear after reviewed seasonal points are approved."
+      />
     );
   }
 
@@ -822,6 +851,10 @@ function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampC
             score={`${row.points.toLocaleString()} pts`}
             progress={Math.round((row.points / maxPoints) * 100)}
             accent={(["pink", "yellow", "cyan", "orange"] as const)[index % 4]}
+            description={index === 0 ? "Current cabin leader" : "Climbing with reviewed actions"}
+            leader={index === 0 ? "Top cabin" : "Open"}
+            topContributors={`${Math.max(0, row.points).toLocaleString()} pts`}
+            recentActivity={row.member_count > 0 ? "Active" : "Waiting"}
           />
         ))}
       </div>
@@ -845,9 +878,11 @@ function SeasonRankingsCard({
       </CardHeader>
       <CardContent>
         {leaderboard.length === 0 ? (
-          <div className="py-10 text-center text-sm font-bold text-black/60">
-            Season rankings are not available yet.
-          </div>
+          <EmptyState
+            illustration="campfire"
+            title="No Season Rankings Yet"
+            description="The board starts moving after Team GPE approves seasonal actions."
+          />
         ) : (
           <div className="space-y-3">
             {leaderboard.map((row) => (
@@ -892,7 +927,7 @@ function RecentActivityFeed({ activity }: { activity: CampRecentActivityRow[] })
       <CardContent className="space-y-3">
         {activity.length === 0 ? (
           <p className="text-sm font-bold text-black/60">No visible approved activity yet.</p>
-        ) : activity.map((row) => {
+        ) : activity.map((row, index) => {
           const profileName = row.profiles?.full_name || row.profiles?.username || "A member";
           const challengeTitle = row.gpe_challenges?.title || row.reason;
           return (
@@ -909,6 +944,8 @@ function RecentActivityFeed({ activity }: { activity: CampRecentActivityRow[] })
               detail={row.gpe_challenges?.category || row.entry_type || "Approved action"}
               points={<span>+{row.points} pts</span>}
               timestamp={relativeTime(row.created_at)}
+              kind={row.gpe_challenges?.category || row.entry_type}
+              fresh={index === 0}
             />
           );
         })}
@@ -945,7 +982,11 @@ function ChallengeTracks({
       </CardHeader>
       <CardContent>
         {tracks.length === 0 ? (
-          <p className="text-sm font-bold text-black/60">No active challenge tracks are configured.</p>
+          <EmptyState
+            illustration="clipboard"
+            title="No Tracks Yet"
+            description="Challenge tracks appear once active seasonal challenges are configured."
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {tracks.map((track, index) => (
@@ -956,6 +997,9 @@ function ChallengeTracks({
                 description={`${track.complete} / ${track.total} complete`}
                 points={`Up to ${track.points} pts`}
                 status={`${Math.round((track.complete / Math.max(1, track.total)) * 100)}%`}
+                difficulty={track.total > 3 ? "Medium" : "Easy"}
+                estimatedTime="5-15 min"
+                progress={Math.round((track.complete / Math.max(1, track.total)) * 100)}
                 action={<CampProgress label="Progress" value={track.complete} max={track.total} accent="black" />}
               />
             ))}
@@ -976,7 +1020,12 @@ function PrizeSection({ prizes }: { prizes: Array<{ title: string; description: 
       </CardHeader>
       <CardContent>
         {prizes.length === 0 ? (
-          <p className="text-sm font-bold text-white/70">No prize details are configured for this season yet.</p>
+          <EmptyState
+            illustration="badge"
+            title="Prize Reveal Coming"
+            description="Season rewards can be added through the active campaign point rules."
+            className="bg-white text-black"
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {prizes.map((prize, index) => (
@@ -1076,16 +1125,16 @@ function BadgesPanel({
         description="Reusable badge previews powered by available leaderboard and challenge data."
       />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {badges.map(({ title, description, icon: Icon, accent }) => (
-          <Card key={title} className="gpe-hover-lift">
-            <CardContent className="p-6">
-              <div className={`mb-5 inline-flex h-16 w-16 items-center justify-center rounded-[1.5rem] border-[4px] border-black ${accent === "yellow" ? "bg-gpe-yellow" : accent === "cyan" ? "bg-gpe-cyan" : accent === "pink" ? "bg-gpe-pink text-white" : "bg-gpe-orange"}`}>
-                <Icon className="h-8 w-8" />
-              </div>
-              <h2 className="font-header text-2xl uppercase">{title}</h2>
-              <p className="mt-3 text-sm font-bold text-black/70">{description}</p>
-            </CardContent>
-          </Card>
+        {badges.map(({ title, description, icon: Icon, accent }, index) => (
+          <BadgeToken
+            key={title}
+            title={title}
+            description={description}
+            icon={<Icon className="h-8 w-8" />}
+            accent={accent}
+            rarity={index === 0 ? "legendary" : index === 1 ? "rare" : "common"}
+            status={index === 1 ? "locked" : "earned"}
+          />
         ))}
       </div>
     </>

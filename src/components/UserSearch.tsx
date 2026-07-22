@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, User, X, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
-import { useMessages } from "@/contexts/MessagesContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMessages } from "@/hooks/useMessages";
+import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { Profile } from "@/types/messages";
 
@@ -29,8 +29,6 @@ const UserSearch = ({ onSelectUsers, onCancel, excludeIds = [], actionLabel, sug
   const searchRequestIdRef = useRef(0);
   
   // Memoize excludeIds to prevent infinite loops
-  const stableExcludeIds = useMemo(() => excludeIds, [excludeIds.join(',')]);
-
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
@@ -46,7 +44,7 @@ const UserSearch = ({ onSelectUsers, onCancel, excludeIds = [], actionLabel, sug
       // Exclude current user and any provided excludeIds from search results
       const allExcludeIds = [
         ...(profile?.id ? [profile.id] : []),
-        ...stableExcludeIds,
+        ...excludeIds,
       ];
       const users = await searchUsers(searchQuery, allExcludeIds);
       
@@ -63,7 +61,7 @@ const UserSearch = ({ onSelectUsers, onCancel, excludeIds = [], actionLabel, sug
         setIsSearching(false);
       }
     }
-  }, [searchUsers, profile?.id, stableExcludeIds]);
+  }, [searchUsers, profile?.id, excludeIds]);
 
   useEffect(() => {
     performSearch(debouncedQuery);
@@ -300,4 +298,3 @@ const UserSearch = ({ onSelectUsers, onCancel, excludeIds = [], actionLabel, sug
 };
 
 export default UserSearch;
-

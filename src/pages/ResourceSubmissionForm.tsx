@@ -180,11 +180,11 @@ export default function ResourceSubmissionForm() {
   };
 
   return (
-    <Card className="border-0 shadow-lg">
+    <Card className="gpe-paper overflow-hidden">
       <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-xl text-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <BookOpen className="h-5 w-5 text-green-500" />
               Resource Details
             </CardTitle>
@@ -192,11 +192,11 @@ export default function ResourceSubmissionForm() {
               Fill out the form below · Your draft is auto-saved
             </CardDescription>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-medium text-muted-foreground">{completionPercentage}% complete</div>
-            <div className="w-24 h-2 bg-muted rounded-full mt-1 overflow-hidden">
+          <div className="rounded-[1.25rem] border-[3px] border-black bg-white p-3 text-right shadow-gpe-sm">
+            <div className="text-xs font-black uppercase text-black/60">{completionPercentage}% complete</div>
+            <div className="mt-2 h-4 w-28 overflow-hidden rounded-full border-[3px] border-black bg-white">
               <div 
-                className="h-full bg-primary transition-all duration-300 rounded-full" 
+                className="h-full rounded-full bg-gpe-pink transition-all duration-300" 
                 style={{ width: `${completionPercentage}%` }}
               />
             </div>
@@ -208,12 +208,12 @@ export default function ResourceSubmissionForm() {
           
           {/* Section: Basic Info */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <FolderOpen className="h-4 w-4" />
               Basic Information
             </div>
             
-            <div className="bg-muted/30 rounded-lg p-4">
+            <div className="rounded-[1.5rem] border-[3px] border-black bg-white p-4">
               <Label className="text-sm font-medium">Resource Thumbnail (Optional)</Label>
               <p className="text-xs text-muted-foreground mb-3">Upload a cover image or screenshot</p>
               <ImageUpload
@@ -238,7 +238,7 @@ export default function ResourceSubmissionForm() {
 
           {/* Section: Resource Type & Access */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <Link className="h-4 w-4" />
               Resource Type & Access
             </div>
@@ -263,7 +263,7 @@ export default function ResourceSubmissionForm() {
 
           {/* Section: Description */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <FileText className="h-4 w-4" />
               Description
             </div>
@@ -277,7 +277,7 @@ export default function ResourceSubmissionForm() {
 
           {/* Section: Additional Notes */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+            <div className="flex items-center gap-2 border-b-[3px] border-black pb-2 text-sm font-black uppercase text-black/70">
               <Info className="h-4 w-4" />
               Additional Information
             </div>

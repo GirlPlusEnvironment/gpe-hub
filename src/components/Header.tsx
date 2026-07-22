@@ -18,8 +18,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import { MessagesContext } from "@/contexts/MessagesContext";
+import { useAuth } from "@/hooks/useAuth";
+import { MessagesContext } from "@/contexts/messages-context";
 import { PointsBadge } from "@/components/PointsBadge";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { cn } from "@/lib/utils";

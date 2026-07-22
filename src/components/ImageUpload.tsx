@@ -116,7 +116,7 @@ export function ImageUpload({ bucket, onUploadComplete, currentImage, folder }: 
 
   return (
     <div className="space-y-4">
-      <div className="relative w-full h-48 border-2 border-dashed border-border rounded-lg overflow-hidden bg-muted/50">
+      <div className="relative h-48 w-full overflow-hidden rounded-[1.5rem] border-[3px] border-dashed border-black bg-white/80">
         {preview ? (
           <>
             <img
@@ -136,12 +136,12 @@ export function ImageUpload({ bucket, onUploadComplete, currentImage, folder }: 
             </Button>
           </>
         ) : (
-          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/70 transition-colors">
-            <ImageIcon className="h-12 w-12 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-1">
+          <label className="flex h-full cursor-pointer flex-col items-center justify-center transition-colors hover:bg-gpe-yellow/20">
+            <ImageIcon className="mb-2 h-12 w-12 text-gpe-pink" />
+            <p className="mb-1 text-sm font-black uppercase text-black">
               {uploading ? "Uploading..." : "Click to upload image"}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs font-bold text-black/55">
               JPG, PNG or GIF (max 5MB)
             </p>
             <input
@@ -158,7 +158,7 @@ export function ImageUpload({ bucket, onUploadComplete, currentImage, folder }: 
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          className="w-full border-[3px] border-black font-black uppercase shadow-gpe-sm"
           onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
           disabled={uploading}
         >

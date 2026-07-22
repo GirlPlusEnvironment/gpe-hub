@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Trophy, Calendar, ArrowLeft, Check, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { Camera, Trophy, ArrowLeft, Check, Loader2 } from "lucide-react";
+import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker } from "@/components/camp/CampDesign";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase, supabasePublicStorageUrl } from "@/lib/supabaseClient";
 import { validateContent } from "@/lib/profanityFilter";
@@ -306,9 +307,8 @@ const Profile = () => {
   if (loading) {
     return (
       <div className="gpe-page flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading your profile...</p>
+        <div className="w-full max-w-md px-4">
+          <LoadingCampCard label="Loading your profile" />
         </div>
       </div>
     );
@@ -317,12 +317,16 @@ const Profile = () => {
   if (!user) {
     return (
       <div className="gpe-page flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <p className="text-muted-foreground">You need to sign in to view this page.</p>
+        <EmptyState
+          illustration="badge"
+          title="Sign In Required"
+          description="You need to sign in to view and edit your profile."
+          action={
           <Link to="/login">
-            <Button>Go to Login</Button>
+            <CampButton>Go to Login</CampButton>
           </Link>
-        </div>
+          }
+        />
       </div>
     );
   }
@@ -332,21 +336,25 @@ const Profile = () => {
       <Header />
       <main className="gpe-page-main">
         <div className="max-w-4xl mx-auto">
-          {/* Back Link */}
           <Link to="/" className="mb-6 inline-flex items-center gap-2 text-sm font-bold uppercase text-black/70 underline transition-colors hover:text-black">
             <ArrowLeft className="h-4 w-4" />
             Back to Home
           </Link>
 
+          <SectionHeader
+            className="mb-8"
+            eyebrow={<Sticker accent="yellow"><Trophy className="mr-2 h-4 w-4" /> Profile</Sticker>}
+            title="Member Profile"
+            description="Keep your Hub identity current so submissions, rankings, and community posts connect cleanly."
+          />
+
           <div className="grid md:grid-cols-3 gap-6">
-            {/* Left Column - Profile Preview */}
             <div className="md:col-span-1">
-              <Card className="sticky top-24">
+              <Card className="sticky top-24 overflow-hidden bg-gpe-cyan">
                 <CardContent className="pt-6">
                   <div className="flex min-w-0 flex-col items-center text-center">
-                    {/* Avatar with Upload */}
                     <div className="relative group mb-4">
-                      <Avatar key={avatarKey} className="h-28 w-28 ring-4 ring-primary/20">
+                      <Avatar key={avatarKey} className="h-28 w-28 border-[4px] border-black ring-4 ring-white">
                         <AvatarImage 
                           src={previewUrl || formState.avatar_url} 
                           alt={formState.full_name}
@@ -365,7 +373,7 @@ const Profile = () => {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="absolute bottom-0 right-0 p-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        className="absolute bottom-0 right-0 rounded-full border-[3px] border-black bg-gpe-yellow p-2 text-black shadow-gpe-sm transition-colors hover:bg-white disabled:opacity-50"
                       >
                           <Camera className="h-4 w-4" />
                       </button>
@@ -379,7 +387,6 @@ const Profile = () => {
                       />
                     </div>
 
-                    {/* Name Preview */}
                     <div className="min-w-0 max-w-full">
                       <h2 className="font-header text-3xl uppercase leading-tight break-words [overflow-wrap:anywhere]">
                         {profileDisplayName}
@@ -391,14 +398,12 @@ const Profile = () => {
                       )}
                     </div>
 
-                    {/* Level Badge */}
                     <Badge className={`mt-3 ${calculateLevel(profile?.points || 0).color}`}>
                       <Trophy className="h-3 w-3 mr-1" />
                       {calculateLevel(profile?.points || 0).name}
                     </Badge>
 
-                    {/* Stats */}
-                    <div className="mt-6 w-full space-y-3 border-t pt-6">
+                    <div className="mt-6 w-full space-y-3 rounded-[1.5rem] border-[3px] border-black bg-white p-4">
                       <div className="flex items-start justify-between gap-3 text-sm">
                         <span className="min-w-0 text-muted-foreground">Points</span>
                         <span className="text-right font-semibold text-primary">{profile?.points || 0}</span>
@@ -414,7 +419,6 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {/* Photo Upload Hint */}
                     <p className="text-xs text-muted-foreground mt-4">
                       Click the camera icon to update your photo
                     </p>
@@ -425,8 +429,9 @@ const Profile = () => {
 
             {/* Right Column - Edit Form */}
             <div className="md:col-span-2">
-              <Card>
+              <Card className="gpe-paper">
                 <CardHeader>
+                  <Sticker accent="pink" className="w-fit">Settings</Sticker>
                   <CardTitle className="text-3xl">Edit Profile</CardTitle>
                   <CardDescription>
                     Update your information to help others in the community know you better.

@@ -32,6 +32,16 @@ test("password reset page removes recovery tokens from the visible URL", async (
   await assertClean();
 });
 
+test("root recovery links open the reset password flow instead of login", async ({ page }) => {
+  const assertClean = await installSmokeGuards(page);
+  await page.goto("/#error=access_denied&error_description=expired&access_token=secret&type=recovery");
+  await expect(page.getByText(/account recovery/i)).toBeVisible();
+  await expect(page.getByText(/invalid or has expired/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await expect(page).not.toHaveURL(/\/login/);
+  await assertClean();
+});
+
 test("reset mode sends a generic activation request through Supabase functions", async ({ page }) => {
   const assertClean = await installSmokeGuards(page);
   const activationRequests: string[] = [];

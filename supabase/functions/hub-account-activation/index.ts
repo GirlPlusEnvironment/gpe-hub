@@ -29,19 +29,19 @@ const PUBLIC_MESSAGE =
   "If that email belongs to an active GPE member, we’ll send secure Hub access instructions.";
 
 function supabaseUrl() {
-  const url = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
+  const url = (Deno.env.get("GPE_SUPABASE_URL") || Deno.env.get("SUPABASE_URL"))?.replace(/\/$/, "");
   if (!url) throw new Error("Missing SUPABASE_URL.");
   return url;
 }
 
 function serviceRoleKey() {
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const key = Deno.env.get("GPE_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!key) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
   return key;
 }
 
 function anonKey() {
-  const key = Deno.env.get("SUPABASE_ANON_KEY");
+  const key = Deno.env.get("GPE_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
   if (!key) throw new Error("Missing SUPABASE_ANON_KEY.");
   return key;
 }
@@ -90,7 +90,8 @@ async function authUsersByEmail(email: string): Promise<AuthUser[]> {
 }
 
 async function sendPasswordRecovery(email: string) {
-  const res = await fetch(`${supabaseUrl()}/auth/v1/recover`, {
+  const redirectUrl = hubRedirectUrl();
+  const res = await fetch(`${supabaseUrl()}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectUrl)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -99,7 +100,6 @@ async function sendPasswordRecovery(email: string) {
     },
     body: JSON.stringify({
       email,
-      redirect_to: hubRedirectUrl(),
     }),
   });
   if (!res.ok) throw new Error(`auth_recover failed with HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);

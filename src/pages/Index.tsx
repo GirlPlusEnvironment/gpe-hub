@@ -222,19 +222,19 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="gpe-card bg-black p-6 text-white md:p-8">
+          <div className="gpe-card bg-foreground p-6 text-background md:p-8">
             <Tape>Recent activity</Tape>
-            <h2 className="mt-4 font-header text-3xl uppercase">Community Buzz</h2>
-            <div className="mt-6 space-y-5 rounded-[2rem] border-[4px] border-black bg-white p-5 text-black">
+            <h2 className="mt-4 font-header text-3xl uppercase text-background">Community Buzz</h2>
+            <div className="mt-6 space-y-5 rounded-[2rem] border-[4px] border-border bg-card p-5 text-card-foreground">
               {postsLoading ? (
                 <div className="flex items-center gap-3 font-bold uppercase">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Loading posts
                 </div>
               ) : postsError ? (
-                <p className="font-bold text-gpe-yellow">Community feed could not be loaded.</p>
+                <p className="font-bold text-card-foreground">Community feed could not be loaded.</p>
               ) : posts.length === 0 ? (
-                <p className="font-bold text-white/70">No community posts yet.</p>
+                <p className="font-bold text-muted-foreground">No community posts yet.</p>
               ) : (
                 posts.slice(0, 3).map((post) => (
                   <ActivityItem
@@ -248,7 +248,7 @@ const Index = () => {
                 ))
               )}
             </div>
-            <Link to="/community" className="mt-6 inline-flex">
+            <Link to="/community" className="mt-6 inline-flex rounded-2xl focus-visible:ring-background focus-visible:ring-offset-foreground">
               <CampButton variant="yellow">Open Community</CampButton>
             </Link>
           </div>

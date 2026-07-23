@@ -1,0 +1,1 @@
+import{r}from"./vendor-react-B9RDGDec.js";import{O as o}from"./index-CrSOkjxw.js";const i=()=>{const t=r.useContext(o);if(t===void 0)throw new Error("useFavorites must be used within a FavoriteProvider");return t};export{i as u};

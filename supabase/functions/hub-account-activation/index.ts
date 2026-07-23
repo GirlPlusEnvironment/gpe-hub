@@ -52,6 +52,15 @@ function hubRedirectUrl() {
   return "https://members.girlplusenvironment.org/reset-password";
 }
 
+function safeRedirectLog(url: string) {
+  try {
+    const parsed = new URL(url);
+    return { host: parsed.host, pathname: parsed.pathname };
+  } catch {
+    return { host: "invalid", pathname: "" };
+  }
+}
+
 async function readBody(req: Request): Promise<Json> {
   const contentType = req.headers.get("content-type") || "";
   if (!contentType.toLowerCase().includes("application/json")) throw new Error("Content-Type must be application/json.");
@@ -153,10 +162,19 @@ Deno.serve(async (req) => {
 
     const users = await authUsersByEmail(email);
     const confirmedUser = users.find((user) => Boolean(user.email_confirmed_at || user.confirmed_at));
+    const redirectUrl = hubRedirectUrl();
     if (confirmedUser) {
       await sendPasswordRecovery(email);
+      console.info("hub activation sent password recovery", {
+        action: "recover",
+        redirect: safeRedirectLog(redirectUrl),
+      });
     } else {
       await sendInvite(email, pickMembershipSummary(memberships), match.neonAccountId);
+      console.info("hub activation sent invite", {
+        action: "invite",
+        redirect: safeRedirectLog(redirectUrl),
+      });
     }
 
     return jsonResponse({ message: PUBLIC_MESSAGE, requestAccepted: true }, 200, origin);

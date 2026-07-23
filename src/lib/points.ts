@@ -13,169 +13,33 @@ export async function awardPoints(
   dailyLimit: number = 100,
   options: AwardPointOptions = {}
 ) {
-    // 1. Check today's points earned from point_transactions
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStart = today.toISOString();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStart = tomorrow.toISOString();
-  
-    const { data: todayTransactions, error: todayError } = await supabase
-      .from("point_transactions")
-      .select("points_earned")
-      .eq("user_id", userId)
-      .eq("counts_for_ongoing", true)
-      .eq("approval_status", "approved")
-      .gte("created_at", todayStart)
-      .lt("created_at", tomorrowStart);
-  
-    if (todayError) {
-      console.error("Failed to get today's points", todayError);
-      throw todayError;
-    }
-  
-    // Calculate points earned today (only positive points count toward limit)
-    const pointsEarnedToday = (todayTransactions || [])
-      .filter(t => t.points_earned > 0)
-      .reduce((sum, t) => sum + t.points_earned, 0);
-  
-    // 2. Calculate how many points we can actually award (respecting daily limit)
-    const remainingDailyCapacity = Math.max(0, dailyLimit - pointsEarnedToday);
-    const pointsToAward = Math.min(points, remainingDailyCapacity);
-  
-    if (pointsToAward === 0) {
-      return { 
-        success: false, 
-        message: "Daily points limit reached",
-        pointsAwarded: 0,
-        pointsRequested: points
-      };
-    }
-  
-    // 3. Update profiles.points atomically
-    const { error: updateError } = await supabase.rpc('increment_user_points', {
-      user_id_param: userId,
-      points_to_add: pointsToAward
-    });
-  
-    // If RPC doesn't exist, use update with increment
-    if (updateError) {
-      // Fallback: Get current points and update
-      const { data: profile, error: fetchError } = await supabase
-        .from("profiles")
-        .select("points")
-        .eq("id", userId)
-        .single();
-  
-      if (fetchError) {
-        console.error("Failed to fetch user profile", fetchError);
-        throw fetchError;
-      }
-  
-      const newTotalPoints = (profile?.points || 0) + pointsToAward;
-  
-      const { error: updateProfileError } = await supabase
-        .from("profiles")
-        .update({ points: newTotalPoints })
-        .eq("id", userId);
-  
-      if (updateProfileError) {
-        console.error("Failed to update user points", updateProfileError);
-        throw updateProfileError;
-      }
-    }
-  
-    // 4. Insert transaction record
-    const { error: transactionError } = await supabase
-      .from("point_transactions")
-      .insert({ 
-        user_id: userId, 
-        points_earned: pointsToAward,
-        created_at: new Date().toISOString(),
-        occurred_at: new Date().toISOString(),
-        action_type: options.actionType || options.source || "hub_action",
-        source: options.source || null,
-        source_id: options.sourceId || null,
-        metadata: options.metadata || {},
-        counts_for_ongoing: true,
-        counts_for_season: false,
-        counts_for_cabin: false,
-        approval_status: "approved"
-      })
-      .select()
-      .single();
-  
-    if (transactionError) {
-      console.error("Failed to insert points transaction", transactionError);
-      throw transactionError;
-    }
-  
-    return { 
-      success: true, 
-      pointsAwarded: pointsToAward,
-      pointsRequested: points,
-      dailyLimitReached: pointsToAward < points
-    };
+  console.warn("Client-side point awarding is disabled; awards must be created by server-side RPCs or triggers.", {
+    userId,
+    points,
+    dailyLimit,
+    actionType: options.actionType,
+    source: options.source,
+    sourceId: options.sourceId,
+  });
+
+  return {
+    success: false,
+    message: "Client-side point awarding is disabled.",
+    pointsAwarded: 0,
+    pointsRequested: points,
+    dailyLimitReached: false,
+  };
 }
 
 export async function deductPoints(userId: string, points: number) {
+  console.warn("Client-side point deduction is disabled; use admin reversal RPCs instead.", { userId, points });
 
-    // 1. Get current points to ensure we don't go below 0
-    const { data: profile, error: fetchError } = await supabase
-        .from("profiles")
-        .select("points")
-        .eq("id", userId)
-        .single();
-
-    if (fetchError) {
-        console.error("Failed to fetch user profile", fetchError);
-        throw fetchError;
-    }
-
-    const newTotalPoints = Math.max(0, profile?.points - points);
-    const pointsToDeduct = profile?.points - newTotalPoints;
-
-    // 2. Update profiles.points atomically
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ points: newTotalPoints })
-      .eq("id", userId);
-  
-    if (updateError) {
-      console.error("Failed to update user points", updateError);
-      throw updateError;
-    }
-  
-    // 3. Insert transaction record (negative points)
-    const { error: transactionError } = await supabase
-    .from("point_transactions")
-    .insert({ 
-        user_id: userId, 
-        points_earned: -pointsToDeduct, // Store as negative
-        created_at: new Date().toISOString(),
-        occurred_at: new Date().toISOString(),
-        action_type: "hub_point_deduction",
-        counts_for_ongoing: true,
-        counts_for_season: false,
-        counts_for_cabin: false,
-        approval_status: "approved",
-        metadata: {}
-    })
-    .select()
-    .single();
-
-    if (transactionError) {
-    console.error("Failed to insert points transaction", transactionError);
-    throw transactionError;
-    }
-
-    return { 
-        success: true, 
-        pointsDeducted: pointsToDeduct,
-        pointsRequested: points,
-        newTotalPoints: newTotalPoints
-    };
+  return {
+    success: false,
+    pointsDeducted: 0,
+    pointsRequested: points,
+    newTotalPoints: null,
+  };
 }
 
 export async function getUserPoints(userId: string) {

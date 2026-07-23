@@ -116,6 +116,69 @@ export type CampSeasonMember = {
   } | null;
 };
 
+export type HubPointRule = {
+  action_type: string;
+  display_name: string;
+  point_value: number;
+  active: boolean;
+  counts_for_ongoing: boolean;
+  counts_for_season: boolean;
+  counts_for_cabin: boolean;
+  requires_approval: boolean;
+  duplicate_strategy: string;
+};
+
+export type AdminPointMember = {
+  profile_id: string;
+  season_member_id: string | null;
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  membership_status: string | null;
+  neon_account_id: string | null;
+  ongoing_points: number;
+  seasonal_points: number;
+  cabin_points: number;
+  cabin_id: string | null;
+  cabin_name: string | null;
+  season_id: string | null;
+  result_rank: number;
+};
+
+export type AdminPointTransaction = {
+  transaction_id: string;
+  points: number;
+  action_type: string | null;
+  source: string | null;
+  source_id: string | null;
+  reason: string | null;
+  admin_note: string | null;
+  counts_for_ongoing: boolean;
+  counts_for_season: boolean;
+  counts_for_cabin: boolean;
+  approval_status: string;
+  season_id: string | null;
+  season_member_id: string | null;
+  challenge_id: string | null;
+  cabin_id: string | null;
+  occurred_at: string;
+  created_at: string;
+  awarded_by: string | null;
+  reversed_by_transaction_id: string | null;
+  reverses_transaction_id: string | null;
+};
+
+export type AdminAwardResult = {
+  point_transaction_id: string | null;
+  camp_ledger_id: string | null;
+  duplicate: boolean;
+  points: number;
+  counts_for_ongoing: boolean;
+  counts_for_season: boolean;
+  counts_for_cabin: boolean;
+};
+
 export type CampSubmission = {
   id: string;
   season_id: string;
@@ -154,6 +217,7 @@ export type CampPointsLedgerRow = {
   reversed_at: string | null;
   reversed_entry_id?: string | null;
   reversal_reason: string | null;
+  approval_status?: string;
 };
 
 export type CampRecentActivityRow = CampPointsLedgerRow & {
@@ -358,6 +422,91 @@ export async function searchSeasonMembers(seasonId: string, query: string) {
     .limit(25);
   if (error) throw error;
   return data || [];
+}
+
+export async function searchPointMembers(params: {
+  seasonId?: string | null;
+  query: string;
+  limit?: number;
+}) {
+  const { data, error } = await supabase.rpc("admin_search_point_members", {
+    p_query: params.query,
+    p_season_id: params.seasonId ?? null,
+    p_limit: params.limit ?? 25,
+  });
+  if (error) throw error;
+  return (data || []) as AdminPointMember[];
+}
+
+export async function getPointRules() {
+  const { data, error } = await supabase
+    .from("hub_point_rules")
+    .select("action_type,display_name,point_value,active,counts_for_ongoing,counts_for_season,counts_for_cabin,requires_approval,duplicate_strategy")
+    .order("display_name", { ascending: true });
+  if (error) throw error;
+  return (data || []) as HubPointRule[];
+}
+
+export async function getAdminMemberPointHistory(params: {
+  profileId: string;
+  seasonId?: string | null;
+  limit?: number;
+}) {
+  const { data, error } = await supabase.rpc("admin_get_member_point_history", {
+    p_profile_id: params.profileId,
+    p_season_id: params.seasonId ?? null,
+    p_limit: params.limit ?? 25,
+  });
+  if (error) throw error;
+  return (data || []) as AdminPointTransaction[];
+}
+
+export async function awardManualPoints(params: {
+  profileId: string;
+  points: number;
+  reason: string;
+  actionType: string;
+  adminNote?: string | null;
+  seasonId?: string | null;
+  challengeId?: string | null;
+  cabinId?: string | null;
+  occurredAt?: string | null;
+  countsForOngoing: boolean;
+  countsForSeason: boolean;
+  countsForCabin: boolean;
+  idempotencyKey: string;
+}) {
+  const { data, error } = await supabase.rpc("admin_award_manual_points", {
+    p_profile_id: params.profileId,
+    p_points: params.points,
+    p_reason: params.reason,
+    p_action_type: params.actionType,
+    p_admin_note: params.adminNote ?? null,
+    p_season_id: params.seasonId ?? null,
+    p_challenge_id: params.challengeId ?? null,
+    p_cabin_id: params.cabinId ?? null,
+    p_occurred_at: params.occurredAt ?? new Date().toISOString(),
+    p_counts_for_ongoing: params.countsForOngoing,
+    p_counts_for_season: params.countsForSeason,
+    p_counts_for_cabin: params.countsForCabin,
+    p_idempotency_key: params.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as AdminAwardResult;
+}
+
+export async function reversePointTransaction(params: { transactionId: string; reason: string }) {
+  const { data, error } = await supabase.rpc("admin_reverse_point_transaction", {
+    p_transaction_id: params.transactionId,
+    p_reason: params.reason,
+  });
+  if (error) throw error;
+  return data as {
+    reversal_transaction_id: string;
+    reversal_ledger_id: string | null;
+    reversed_transaction_id: string;
+    points_reversed: number;
+  };
 }
 
 export async function addManualCampPoints(params: {

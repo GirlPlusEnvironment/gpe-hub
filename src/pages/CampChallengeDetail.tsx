@@ -131,7 +131,7 @@ export default function CampChallengeDetail() {
 
   const completed = useMemo(() => {
     if (!challenge) return false;
-    return ledger.some((row) => row.challenge_id === challenge.id && !row.reversed_at && row.entry_type === "challenge_award");
+    return ledger.some((row) => row.challenge_id === challenge.id && !row.reversed_at && row.approval_status !== "reversed" && row.entry_type === "challenge_award");
   }, [challenge, ledger]);
 
   const externalUrl = normalizeUrl(challenge?.related_url || challenge?.action_url);

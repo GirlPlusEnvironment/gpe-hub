@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Shield, Trophy } from "lucide-react";
 import Header from "@/components/Header";
@@ -12,14 +12,20 @@ import { CampButton, EmptyState, LoadingCampCard, SectionHeader, StatSticker, St
 import {
   type CampChallenge,
   type CampSeason,
-  type CampSeasonMember,
   type CampSubmission,
-  addManualCampPoints,
+  type AdminAwardResult,
+  type AdminPointMember,
+  type AdminPointTransaction,
+  type HubPointRule,
   associateCampSubmissionMember,
+  awardManualPoints,
+  getAdminMemberPointHistory,
   getActiveCampSeason,
   getHubCampChallenges,
   getPendingCampSubmissions,
-  searchSeasonMembers,
+  getPointRules,
+  reversePointTransaction,
+  searchPointMembers,
   updateCampChallengeContent,
   updateCampSubmissionActionReview,
 } from "@/lib/camp";
@@ -52,6 +58,13 @@ function submissionSource(submission: CampSubmission, fields: Record<string, unk
   return String(payload?.source || fields.sourcePage || "Seasonal challenge form");
 }
 
+function createManualIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `manual:${crypto.randomUUID()}`;
+  }
+  return `manual:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
 export default function CampAdmin() {
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
@@ -59,9 +72,23 @@ export default function CampAdmin() {
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("camp");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [memberQuery, setMemberQuery] = useState("");
-  const [memberResults, setMemberResults] = useState<CampSeasonMember[]>([]);
+  const [pointMemberResults, setPointMemberResults] = useState<AdminPointMember[]>([]);
+  const [selectedPointMember, setSelectedPointMember] = useState<AdminPointMember | null>(null);
+  const [pointHistory, setPointHistory] = useState<AdminPointTransaction[]>([]);
+  const [pointRules, setPointRules] = useState<HubPointRule[]>([]);
+  const [isSearchingMembers, setIsSearchingMembers] = useState(false);
+  const [pointSearchMessage, setPointSearchMessage] = useState<string | null>(null);
   const [manualPoints, setManualPoints] = useState("10");
   const [manualReason, setManualReason] = useState("Manual seasonal adjustment");
+  const [manualActionType, setManualActionType] = useState("manual_admin_award");
+  const [manualAdminNote, setManualAdminNote] = useState("");
+  const [manualChallengeId, setManualChallengeId] = useState("");
+  const [manualOccurredAt, setManualOccurredAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [countsForOngoing, setCountsForOngoing] = useState(true);
+  const [countsForSeason, setCountsForSeason] = useState(false);
+  const [countsForCabin, setCountsForCabin] = useState(false);
+  const [lastAwardResult, setLastAwardResult] = useState<AdminAwardResult | null>(null);
+  const [manualIdempotencyKey, setManualIdempotencyKey] = useState(createManualIdempotencyKey);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +111,7 @@ export default function CampAdmin() {
         setSubmissions(submissionRows);
         setChallenges(challengeRows);
       }
+      setPointRules(await getPointRules());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Camp admin could not be loaded.");
     } finally {
@@ -182,35 +210,140 @@ export default function CampAdmin() {
     }
   }
 
-  async function handleSearch() {
-    if (!season) return;
+  async function loadPointHistory(member: AdminPointMember) {
+    const history = await getAdminMemberPointHistory({
+      profileId: member.profile_id,
+      seasonId: season?.id ?? null,
+      limit: 20,
+    });
+    setPointHistory(history);
+  }
+
+  function selectPointMember(member: AdminPointMember) {
+    setSelectedPointMember(member);
+    setLastAwardResult(null);
+    setCountsForSeason(false);
+    setCountsForCabin(false);
+    setManualChallengeId("");
+    setManualIdempotencyKey(createManualIdempotencyKey());
+    void loadPointHistory(member).catch((err) => {
+      setError(err instanceof Error ? err.message : "Could not load member point history.");
+    });
+  }
+
+  useEffect(() => {
+    const trimmed = memberQuery.trim();
+    if (!season || trimmed.length < 2 || activeReviewTab !== "camp") {
+      setPointMemberResults([]);
+      setPointSearchMessage(trimmed.length > 0 && trimmed.length < 2 ? "Enter at least 2 characters." : null);
+      return;
+    }
+
+    const handle = window.setTimeout(async () => {
+      setIsSearchingMembers(true);
+      setPointSearchMessage(null);
+      try {
+        const results = await searchPointMembers({ seasonId: season.id, query: trimmed, limit: 25 });
+        setPointMemberResults(results);
+        setPointSearchMessage(`${results.length} result${results.length === 1 ? "" : "s"} found.`);
+      } catch (err) {
+        setPointMemberResults([]);
+        setPointSearchMessage(err instanceof Error ? err.message : "Member search failed.");
+      } finally {
+        setIsSearchingMembers(false);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(handle);
+  }, [activeReviewTab, memberQuery, season]);
+
+  const selectedRule = useMemo(
+    () => pointRules.find((rule) => rule.action_type === manualActionType) || null,
+    [manualActionType, pointRules],
+  );
+
+  useEffect(() => {
+    if (!selectedRule) return;
+    if (manualActionType === "manual_admin_award" || manualActionType === "manual_camp_award") return;
+    setManualPoints(String(selectedRule.point_value));
+    setCountsForOngoing(selectedRule.counts_for_ongoing);
+    setCountsForSeason(selectedRule.counts_for_season);
+    setCountsForCabin(selectedRule.counts_for_cabin);
+  }, [manualActionType, selectedRule]);
+
+  async function handleScopedManualAward() {
+    if (!season || !selectedPointMember) return;
+    const points = Number(manualPoints);
+    if (!Number.isFinite(points) || points === 0) {
+      setError("Enter a non-zero point amount.");
+      return;
+    }
+    if (!manualReason.trim()) {
+      setError("Enter a reason for the award.");
+      return;
+    }
+    if (countsForCabin && !selectedPointMember.cabin_id) {
+      setError("This member does not have a cabin assignment for cabin-scoped points.");
+      return;
+    }
+
+    const scope = [
+      countsForOngoing ? "ongoing" : null,
+      countsForSeason ? "seasonal" : null,
+      countsForCabin ? "cabin" : null,
+    ].filter(Boolean).join(", ") || "no leaderboard";
+    const confirmed = confirm(
+      `Award ${points} point${points === 1 ? "" : "s"} to ${selectedPointMember.full_name || selectedPointMember.email || selectedPointMember.profile_id}?\n\nScope: ${scope}\nReason: ${manualReason}`,
+    );
+    if (!confirmed) return;
+
+    setBusyId("manual-award");
     setError(null);
+    setLastAwardResult(null);
     try {
-      setMemberResults(await searchSeasonMembers(season.id, memberQuery));
+      const result = await awardManualPoints({
+        profileId: selectedPointMember.profile_id,
+        points,
+        reason: manualReason.trim(),
+        actionType: manualActionType,
+        adminNote: manualAdminNote.trim() || null,
+        seasonId: countsForSeason || countsForCabin ? season.id : null,
+        challengeId: manualChallengeId.trim() || null,
+        cabinId: countsForCabin ? selectedPointMember.cabin_id : null,
+        occurredAt: manualOccurredAt ? new Date(manualOccurredAt).toISOString() : new Date().toISOString(),
+        countsForOngoing,
+        countsForSeason,
+        countsForCabin,
+        idempotencyKey: manualIdempotencyKey,
+      });
+      setLastAwardResult(result);
+      setManualIdempotencyKey(createManualIdempotencyKey());
+      const refreshed = await searchPointMembers({ seasonId: season.id, query: selectedPointMember.profile_id, limit: 1 });
+      if (refreshed[0]) {
+        setSelectedPointMember(refreshed[0]);
+      }
+      await loadPointHistory(refreshed[0] || selectedPointMember);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Member search failed.");
+      setError(err instanceof Error ? err.message : "Could not award manual points.");
+    } finally {
+      setBusyId(null);
     }
   }
 
-  async function handleManualAward(member: CampSeasonMember) {
-    if (!season) return;
-    const points = Number(manualPoints);
-    if (!Number.isFinite(points)) {
-      setError("Enter a valid point amount.");
-      return;
-    }
-    setBusyId(member.id);
+  async function handleReverseTransaction(transaction: AdminPointTransaction) {
+    const reason = prompt("Why reverse this point transaction?", "Admin correction");
+    if (!reason?.trim()) return;
+    setBusyId(transaction.transaction_id);
     setError(null);
     try {
-      await addManualCampPoints({
-        seasonId: season.id,
-        seasonMemberId: member.id,
-        points,
-        reason: manualReason,
-      });
-      await load();
+      await reversePointTransaction({ transactionId: transaction.transaction_id, reason: reason.trim() });
+      if (selectedPointMember) {
+        const refreshed = await searchPointMembers({ seasonId: season?.id ?? null, query: selectedPointMember.profile_id, limit: 1 });
+        if (refreshed[0]) setSelectedPointMember(refreshed[0]);
+        await loadPointHistory(refreshed[0] || selectedPointMember);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add manual points.");
+      setError(err instanceof Error ? err.message : "Could not reverse points.");
     } finally {
       setBusyId(null);
     }
@@ -531,42 +664,276 @@ export default function CampAdmin() {
               <Card>
                 <CardHeader>
                   <CardTitle>Member Search and Manual Points</CardTitle>
-                  <CardDescription>Use this for corrections, manual submissions, and audited point adjustments.</CardDescription>
+                  <CardDescription>Search by name, email, Neon ID, or profile ID. Manual awards use the central scoped point ledger.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5">
                   <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                     <div>
-                      <Label htmlFor="member-search">Member email</Label>
-                      <Input id="member-search" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="member@example.com" />
+                      <Label htmlFor="member-search">Search member</Label>
+                      <Input
+                        id="member-search"
+                        value={memberQuery}
+                        onChange={(event) => setMemberQuery(event.target.value)}
+                        placeholder="First name, last name, full name, email, Neon ID, or profile ID"
+                      />
                     </div>
-                    <Button className="self-end" onClick={handleSearch}>
+                    <Button className="self-end" onClick={() => {
+                      if (memberQuery.trim().length >= 2 && season) {
+                        setIsSearchingMembers(true);
+                        searchPointMembers({ seasonId: season.id, query: memberQuery, limit: 25 })
+                          .then((results) => {
+                            setPointMemberResults(results);
+                            setPointSearchMessage(`${results.length} result${results.length === 1 ? "" : "s"} found.`);
+                          })
+                          .catch((err) => setPointSearchMessage(err instanceof Error ? err.message : "Member search failed."))
+                          .finally(() => setIsSearchingMembers(false));
+                      }
+                    }}>
                       <Search className="mr-2 h-4 w-4" />
-                      Search
+                      {isSearchingMembers ? "Searching" : "Search"}
                     </Button>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <Label htmlFor="manual-points">Points</Label>
-                      <Input id="manual-points" value={manualPoints} onChange={(event) => setManualPoints(event.target.value)} />
+                  {pointSearchMessage && (
+                    <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold">
+                      {pointSearchMessage}
                     </div>
-                    <div>
-                      <Label htmlFor="manual-reason">Reason</Label>
-                      <Input id="manual-reason" value={manualReason} onChange={(event) => setManualReason(event.target.value)} />
-                    </div>
-                  </div>
+                  )}
 
                   <div className="space-y-3">
-                    {memberResults.map((member) => (
-                      <div key={member.id} className="flex flex-col gap-3 rounded-[1.25rem] border-[3px] border-black bg-white p-4 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <div className="font-black">{member.contact_email}</div>
-                          <div className="text-xs font-bold uppercase text-black/60">{member.status}</div>
-                        </div>
-                        <Button disabled={busyId === member.id} onClick={() => handleManualAward(member)}>Add Points</Button>
-                      </div>
-                    ))}
+                    {isSearchingMembers && <LoadingCampCard label="Searching members" />}
+                    {!isSearchingMembers && memberQuery.trim().length >= 2 && pointMemberResults.length === 0 && (
+                      <EmptyState
+                        illustration="clipboard"
+                        title="No Members Found"
+                        description="Try a first name, last name, full name, email, Neon ID, or profile ID."
+                      />
+                    )}
+                    {pointMemberResults.map((member) => {
+                      const selected = selectedPointMember?.profile_id === member.profile_id;
+                      return (
+                        <button
+                          key={`${member.profile_id}-${member.season_member_id || "profile"}`}
+                          type="button"
+                          onClick={() => selectPointMember(member)}
+                          className={`w-full rounded-[1.25rem] border-[3px] p-4 text-left transition ${
+                            selected ? "border-black bg-gpe-yellow shadow-gpe-sm" : "border-black bg-white hover:bg-gpe-yellow/30"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div className="min-w-0">
+                              <div className="font-header text-2xl uppercase leading-tight">
+                                {member.full_name || [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email || "Unnamed member"}
+                              </div>
+                              <div className="mt-1 break-all text-sm font-bold text-black/65">{member.email || "No email"}</div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs font-black uppercase">
+                                <Badge variant="outline">{member.membership_status || "unknown"}</Badge>
+                                <Badge variant="outline">Neon {member.neon_account_id || "not linked"}</Badge>
+                                <Badge variant={member.season_member_id ? "default" : "outline"}>
+                                  {member.season_member_id ? "Season linked" : "No season link"}
+                                </Badge>
+                                <Badge variant={member.cabin_id ? "default" : "outline"}>
+                                  {member.cabin_name || "No cabin"}
+                                </Badge>
+                              </div>
+                              <div className="mt-2 break-all text-xs font-bold text-black/50">
+                                Profile {member.profile_id}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs font-black uppercase">
+                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                <div className="font-header text-2xl">{member.ongoing_points}</div>
+                                Ongoing
+                              </div>
+                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                <div className="font-header text-2xl">{member.seasonal_points}</div>
+                                Season
+                              </div>
+                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                <div className="font-header text-2xl">{member.cabin_points}</div>
+                                Cabin
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
+
+                  {selectedPointMember && (
+                    <div className="space-y-5 rounded-[1.5rem] border-[3px] border-black bg-cyan-50 p-4">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <Tape>Selected member</Tape>
+                          <div className="mt-2 font-header text-3xl uppercase">
+                            {selectedPointMember.full_name || selectedPointMember.email || selectedPointMember.profile_id}
+                          </div>
+                          <div className="break-all text-sm font-bold text-black/65">{selectedPointMember.email}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="outline">Ongoing {selectedPointMember.ongoing_points}</Badge>
+                          <Badge variant="outline">Season {selectedPointMember.seasonal_points}</Badge>
+                          <Badge variant="outline">Cabin {selectedPointMember.cabin_points}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <Label htmlFor="manual-action-type">Action type</Label>
+                          <select
+                            id="manual-action-type"
+                            value={manualActionType}
+                            onChange={(event) => setManualActionType(event.target.value)}
+                            className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            {pointRules.filter((rule) => rule.active).map((rule) => (
+                              <option key={rule.action_type} value={rule.action_type}>
+                                {rule.display_name} ({rule.action_type})
+                              </option>
+                            ))}
+                          </select>
+                          {selectedRule && (
+                            <p className="mt-1 text-xs font-bold text-black/60">
+                              Configured value: {selectedRule.point_value} · {selectedRule.duplicate_strategy}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="manual-points">Point amount</Label>
+                          <Input id="manual-points" value={manualPoints} onChange={(event) => setManualPoints(event.target.value)} />
+                        </div>
+                        <div>
+                          <Label htmlFor="manual-reason">Reason</Label>
+                          <Input id="manual-reason" value={manualReason} onChange={(event) => setManualReason(event.target.value)} />
+                        </div>
+                        <div>
+                          <Label htmlFor="manual-note">Internal note</Label>
+                          <Input id="manual-note" value={manualAdminNote} onChange={(event) => setManualAdminNote(event.target.value)} />
+                        </div>
+                        <div>
+                          <Label htmlFor="manual-challenge">Challenge</Label>
+                          <select
+                            id="manual-challenge"
+                            value={manualChallengeId}
+                            onChange={(event) => setManualChallengeId(event.target.value)}
+                            className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">No challenge</option>
+                            {challenges.map((challenge) => (
+                              <option key={challenge.id} value={challenge.id}>
+                                {challenge.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label htmlFor="manual-occurred">Occurred at</Label>
+                          <Input
+                            id="manual-occurred"
+                            type="datetime-local"
+                            value={manualOccurredAt}
+                            onChange={(event) => setManualOccurredAt(event.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                          <input type="checkbox" checked={countsForOngoing} onChange={(event) => setCountsForOngoing(event.target.checked)} />
+                          Ongoing leaderboard
+                        </label>
+                        <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                          <input
+                            type="checkbox"
+                            checked={countsForSeason}
+                            onChange={(event) => {
+                              setCountsForSeason(event.target.checked);
+                              if (!event.target.checked) setCountsForCabin(false);
+                            }}
+                          />
+                          Seasonal leaderboard
+                        </label>
+                        <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                          <input
+                            type="checkbox"
+                            checked={countsForCabin}
+                            disabled={!countsForSeason || !selectedPointMember.cabin_id}
+                            onChange={(event) => setCountsForCabin(event.target.checked)}
+                          />
+                          Cabin leaderboard
+                        </label>
+                      </div>
+
+                      <div className="rounded-xl border-2 border-black bg-white p-3 text-sm font-bold">
+                        Scope preview: {[
+                          countsForOngoing ? "ongoing" : null,
+                          countsForSeason ? `season ${season.name}` : null,
+                          countsForCabin ? `cabin ${selectedPointMember.cabin_name}` : null,
+                        ].filter(Boolean).join(" + ") || "no leaderboard selected"}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button disabled={busyId === "manual-award"} onClick={handleScopedManualAward}>
+                          <Trophy className="mr-2 h-4 w-4" />
+                          {busyId === "manual-award" ? "Submitting" : "Award Points"}
+                        </Button>
+                        {lastAwardResult && (
+                          <div className="text-sm font-bold text-green-700">
+                            Award saved: {lastAwardResult.point_transaction_id}
+                            {lastAwardResult.camp_ledger_id ? ` · Camp ledger ${lastAwardResult.camp_ledger_id}` : ""}
+                            {lastAwardResult.duplicate ? " · duplicate request reused" : ""}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="font-header text-2xl uppercase">Point History</h3>
+                          <Button variant="outline" size="sm" onClick={() => void loadPointHistory(selectedPointMember)}>
+                            Refresh History
+                          </Button>
+                        </div>
+                        {pointHistory.length === 0 ? (
+                          <EmptyState illustration="clipboard" title="No Point History" description="This member does not have visible point transactions yet." />
+                        ) : pointHistory.map((transaction) => {
+                          const isReversed = Boolean(transaction.reversed_by_transaction_id);
+                          const isReversal = Boolean(transaction.reverses_transaction_id) || transaction.points < 0;
+                          return (
+                            <div key={transaction.transaction_id} className="rounded-xl border-2 border-black bg-white p-3">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <div className={`font-black ${isReversed ? "line-through" : ""}`}>
+                                    {transaction.points > 0 ? "+" : ""}{transaction.points} · {transaction.reason || transaction.action_type || transaction.source}
+                                  </div>
+                                  <div className="mt-1 text-xs font-bold uppercase text-black/60">
+                                    {transaction.approval_status} · {new Date(transaction.occurred_at).toLocaleString()}
+                                  </div>
+                                  <div className="mt-1 text-xs font-bold text-black/50">
+                                    {[
+                                      transaction.counts_for_ongoing ? "ongoing" : null,
+                                      transaction.counts_for_season ? "season" : null,
+                                      transaction.counts_for_cabin ? "cabin" : null,
+                                    ].filter(Boolean).join(" + ")}
+                                  </div>
+                                  {transaction.admin_note && <div className="mt-1 text-sm font-bold text-black/70">Note: {transaction.admin_note}</div>}
+                                  <div className="mt-1 break-all text-xs text-black/40">{transaction.transaction_id}</div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {isReversed && <Badge variant="outline">Reversed</Badge>}
+                                  {isReversal && <Badge variant="outline">Reversal</Badge>}
+                                  {!isReversed && !isReversal && transaction.points > 0 && (
+                                    <Button size="sm" variant="outline" disabled={busyId === transaction.transaction_id} onClick={() => handleReverseTransaction(transaction)}>
+                                      Reverse
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
                 </>

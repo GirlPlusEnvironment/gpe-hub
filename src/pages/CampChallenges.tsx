@@ -51,7 +51,7 @@ export default function CampChallenges() {
 
   const completionCounts = useMemo(() => {
     return ledger.reduce<Record<string, number>>((counts, row) => {
-      if (!row.challenge_id || row.reversed_at || row.entry_type !== "challenge_award") return counts;
+      if (!row.challenge_id || row.reversed_at || row.approval_status === "reversed" || row.entry_type !== "challenge_award") return counts;
       counts[row.challenge_id] = (counts[row.challenge_id] || 0) + 1;
       return counts;
     }, {});

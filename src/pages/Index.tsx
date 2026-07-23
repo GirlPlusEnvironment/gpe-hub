@@ -132,9 +132,11 @@ const Index = () => {
   });
   const headingName = welcomeName.split(" ")[0] || "Bestie";
   const totalSeasonPoints = (campHistory?.ledger || [])
-    .filter((row) => !row.reversed_at)
+    .filter((row) => !row.reversed_at && row.approval_status !== "reversed" && row.entry_type !== "reversal")
     .reduce((sum, row) => sum + row.points, 0);
-  const approvedActions = (campHistory?.ledger || []).filter((row) => !row.reversed_at).length;
+  const approvedActions = (campHistory?.ledger || [])
+    .filter((row) => !row.reversed_at && row.approval_status !== "reversed" && row.entry_type !== "reversal")
+    .length;
   const pendingSubmissions = (campHistory?.submissions || []).filter((submission) => normalizeReviewStatus(submission.review_status) === "pending").length;
   const profilePoints = profile?.points || 0;
   const xpGoal = Math.max(100, Math.ceil((profilePoints + 1) / 100) * 100);

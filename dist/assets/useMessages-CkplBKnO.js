@@ -1,1 +1,0 @@
-import{r as e}from"./vendor-react-B9RDGDec.js";import{Q as t}from"./index-8w9xqVAl.js";const a=()=>{const s=e.useContext(t);if(s===void 0)throw new Error("useMessages must be used within a MessagesProvider");return s};export{a as u};

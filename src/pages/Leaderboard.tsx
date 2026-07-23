@@ -150,7 +150,9 @@ export default function Leaderboard() {
 
   const seasonalTitle = season?.name || "Current Season";
   const totalSeasonalPoints = useMemo(
-    () => ledger.filter((row) => !row.reversed_at).reduce((sum, row) => sum + row.points, 0),
+    () => ledger
+      .filter((row) => !row.reversed_at && row.approval_status !== "reversed" && row.entry_type !== "reversal")
+      .reduce((sum, row) => sum + row.points, 0),
     [ledger],
   );
   const headerCopy = useMemo(() => {
@@ -609,7 +611,7 @@ function SeasonalLeaderboardPanel({
   totalSeasonalPoints: number;
 }) {
   const prizes = parsePrizes(season);
-  const activeLedger = ledger.filter((row) => !row.reversed_at);
+  const activeLedger = ledger.filter((row) => !row.reversed_at && row.approval_status !== "reversed" && row.entry_type !== "reversal");
   const completedChallengeIds = new Set(activeLedger.map((row) => row.challenge_id).filter(Boolean));
   const totalSeasonPoints = seasonalLeaderboard.reduce((sum, row) => sum + row.points, 0);
   const totalActions = seasonalLeaderboard.reduce((sum, row) => sum + (row.approved_challenge_count || 0), 0);

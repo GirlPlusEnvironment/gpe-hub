@@ -424,9 +424,11 @@ export const fetchFavoriteListings = async (profileId: string): Promise<Listing[
 };
 
 export const addFavoriteListing = async (profileId: string, listingId: string) => {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("listing_favorites")
-    .upsert({ profile_id: profileId, listing_id: listingId });
+    .upsert({ profile_id: profileId, listing_id: listingId })
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Failed to save favorite listing", error);
@@ -438,6 +440,7 @@ export const addFavoriteListing = async (profileId: string, listingId: string) =
     return await awardPoints(profileId, 1, 100, {
       actionType: "listing_favorite",
       source: "listing_favorite",
+      sourceId: data.id,
       metadata: { listing_id: listingId },
     });
   } catch (pointsError) {

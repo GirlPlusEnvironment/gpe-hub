@@ -76,10 +76,27 @@ async function activeSeason() {
 }
 
 async function profileByUserId(userId: string) {
-  const res = await supabaseFetch(`profiles?select=id,email,first_name,last_name,neon_account_id,member_status&id=eq.${encodeURIComponent(userId)}&limit=1`);
+  const res = await supabaseFetch(`profiles?select=id,email,first_name,last_name,neon_account_id,member_status,membership_access_state&id=eq.${encodeURIComponent(userId)}&limit=1`);
   if (!res.ok) return null;
   const rows = await res.json();
-  return rows[0] as { id: string; email: string | null; first_name: string | null; last_name: string | null; neon_account_id: string | null; member_status: string | null } | undefined || null;
+  return rows[0] as {
+    id: string;
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    neon_account_id: string | null;
+    member_status: string | null;
+    membership_access_state: string | null;
+  } | undefined || null;
+}
+
+async function profileHasActiveMembership(userId: string) {
+  const res = await supabaseFetch("rpc/profile_has_active_membership", {
+    method: "POST",
+    body: JSON.stringify({ p_profile_id: userId })
+  });
+  if (!res.ok) return false;
+  return Boolean(await res.json().catch(() => false));
 }
 
 async function seasonMember(seasonId: string, userId: string, email: string, neonAccountId: string | null) {
@@ -483,7 +500,11 @@ Deno.serve(async (req) => {
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: false, errorSummary: safeError(error) });
     }
 
-    if (dynamicChallenge && !membership?.isActiveMember) {
+    const hubMembershipActive = authUser ? await profileHasActiveMembership(authUser.id) : false;
+    const activeMembership = Boolean(membership?.isActiveMember || hubMembershipActive);
+    const resolvedNeonAccountId = membership?.neonAccountId || profile?.neon_account_id || null;
+
+    if (dynamicChallenge && !activeMembership) {
       await updateFormSubmission(String(submission.id), {
         submission_status: "requires_manual_review",
         membership_outcome: membership?.outcome || "inactive_member"
@@ -492,10 +513,10 @@ Deno.serve(async (req) => {
     }
 
     let member: { id: string; user_id: string | null } | null = null;
-    const canLinkMember = Boolean(authUser?.id && membership?.isActiveMember && membership?.neonAccountId);
+    const canLinkMember = Boolean(authUser?.id && activeMembership);
     if (canLinkMember && authUser) {
       try {
-        member = await seasonMember(season.id, authUser.id, email, membership?.neonAccountId || null);
+        member = await seasonMember(season.id, authUser.id, email, resolvedNeonAccountId);
       } catch (error) {
         await logSync({ submissionId: String(submission.id), integration: "camp", operation: "season_member_link", success: false, errorSummary: safeError(error) });
       }
@@ -554,8 +575,8 @@ Deno.serve(async (req) => {
     await updateFormSubmission(String(submission.id), {
       submission_status: "requires_manual_review",
       neon_sync_status: membership?.neonAccountId ? "succeeded" : "skipped",
-      neon_account_id: membership?.neonAccountId || null,
-      membership_outcome: membership?.outcome || "not_checked"
+      neon_account_id: resolvedNeonAccountId,
+      membership_outcome: membership?.outcome || (hubMembershipActive ? "hub_active_member" : "not_checked")
     });
     return jsonResponse({
       ok: true,
@@ -567,7 +588,7 @@ Deno.serve(async (req) => {
       approvedActions: 0,
       actions: actionResults,
       memberLinked: Boolean(member?.id),
-      membershipOutcome: membership?.outcome || "not_checked",
+      membershipOutcome: membership?.outcome || (hubMembershipActive ? "hub_active_member" : "not_checked"),
       partialSuccess: false,
       leaderboardUrl: "https://members.girlplusenvironment.org/leaderboard",
       message: "Your submission has been received and will be reviewed by Team GPE. Approved actions will be added to your points.",

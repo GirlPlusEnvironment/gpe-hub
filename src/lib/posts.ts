@@ -265,13 +265,15 @@ export async function votePoll(postId: string, optionId: string) {
     throw new Error("You have already voted on this poll");
   }
 
-  const { error } = await supabase
+  const { data: voteData, error } = await supabase
     .from("poll_votes")
     .insert({
       post_id: postId,
       poll_option_id: optionId,
       user_id: user.id
-    });
+    })
+    .select("id")
+    .single();
 
   if (error) throw error;
   
@@ -280,6 +282,7 @@ export async function votePoll(postId: string, optionId: string) {
     return await awardPoints(user.id, 1, 100, {
       actionType: "hub_poll_vote",
       source: "poll_vote",
+      sourceId: voteData.id,
       metadata: { post_id: postId, option_id: optionId },
     });
   } catch (pointsError) {
@@ -309,12 +312,14 @@ export async function toggleLikePost(postId: string, hasLiked: boolean) {
     }
   } else {
     // Like
-    const { error } = await supabase
+    const { data: likeData, error } = await supabase
       .from("post_likes")
       .insert({
         post_id: postId,
         user_id: user.id,
-      });
+      })
+      .select("id")
+      .single();
     if (error) throw error;
 
     // Increment user points
@@ -322,6 +327,7 @@ export async function toggleLikePost(postId: string, hasLiked: boolean) {
       return await awardPoints(user.id, 1, 100, {
         actionType: "hub_post_like",
         source: "post_like",
+        sourceId: likeData.id,
         metadata: { post_id: postId },
       });
     } catch (pointsError) {

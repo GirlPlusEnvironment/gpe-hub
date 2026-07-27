@@ -45,6 +45,7 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
   const messagesChannelRef = useRef<RealtimeChannel | null>(null);
   const conversationsChannelRef = useRef<RealtimeChannel | null>(null);
   const participantsChannelRef = useRef<RealtimeChannel | null>(null);
+  const lastMarkedReadRef = useRef<string | null>(null);
 
   // Fetch conversations
   const {
@@ -305,13 +306,18 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
       queryClient.invalidateQueries({ queryKey: ["unread-count", profile?.id] });
     },
   });
+  const markConversationAsRead = markAsReadMutation.mutate;
 
   // Mark conversation as read when viewing it
   useEffect(() => {
     if (currentConversationId && profile?.id) {
-      markAsReadMutation.mutate(currentConversationId);
+      const readKey = `${profile.id}:${currentConversationId}`;
+      if (lastMarkedReadRef.current !== readKey) {
+        lastMarkedReadRef.current = readKey;
+        markConversationAsRead(currentConversationId);
+      }
     }
-  }, [currentConversationId, profile?.id, markAsReadMutation]);
+  }, [currentConversationId, profile?.id, markConversationAsRead]);
 
   // Mark current conversation as read when Messages page becomes active
   useEffect(() => {

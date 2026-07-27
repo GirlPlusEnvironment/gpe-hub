@@ -23,6 +23,7 @@ import {
   getHubCampChallenges,
   getMyCampHistory,
 } from "@/lib/camp";
+import { challengeMetadata, resolveChallengeOpenFlow } from "@/lib/challenge-definition";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return null;
@@ -36,15 +37,6 @@ function fullDate(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" }).format(date);
-}
-
-function normalizeUrl(url: string | null | undefined) {
-  if (!url) return null;
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  if (/^(https?:|mailto:)/i.test(trimmed)) return trimmed;
-  if (trimmed.startsWith("//")) return `https:${trimmed}`;
-  return `https://${trimmed}`;
 }
 
 function challengeWindow(challenge: CampChallenge) {
@@ -74,6 +66,18 @@ function submissionLabel(challenge: CampChallenge) {
   if (type.includes("social") || type.includes("story")) return "Submit a social post link, story screenshot, or a short note describing the post.";
   if (type.includes("reflection")) return "Submit a written reflection, video, or social post for Team GPE review.";
   return "Submit proof, a link, or context so Team GPE can review the action.";
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === "string" ? value : "";
+}
+
+function metadataFaq(metadata: Record<string, unknown>) {
+  const value = metadata.faq;
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  return [];
 }
 
 export default function CampChallengeDetail() {
@@ -134,11 +138,14 @@ export default function CampChallengeDetail() {
     return ledger.some((row) => row.challenge_id === challenge.id && !row.reversed_at && row.approval_status !== "reversed" && row.entry_type === "challenge_award");
   }, [challenge, ledger]);
 
-  const externalUrl = normalizeUrl(challenge?.related_url || challenge?.action_url);
   const availability = challenge ? challengeAvailability(challenge) : "Open";
-  const submitHref = challenge ? `/camp-gpe/challenges?challenge=${encodeURIComponent(challenge.slug)}` : "/camp-gpe/challenges";
-  const externalCta = challenge?.cta_label || (challenge?.category === "sign_petition" ? "Open Petition" : "Open Action");
-  const usesExternalCta = Boolean(externalUrl) && (challenge?.related_kind === "petition" || challenge?.submission_type === "petition" || challenge?.action_url);
+  const openFlow = challenge ? resolveChallengeOpenFlow(challenge) : null;
+  const flowHref = challenge ? `/camp-gpe/challenges/${challenge.slug}/flow` : "/camp-gpe/challenges";
+  const metadata = challengeMetadata(challenge);
+  const subtitle = metadataString(metadata, "subtitle");
+  const longDescription = metadataString(metadata, "long_description");
+  const successMessage = metadataString(metadata, "success_message");
+  const faq = metadataFaq(metadata);
 
   return (
     <div className="gpe-page">
@@ -200,8 +207,15 @@ export default function CampChallengeDetail() {
                     <CardHeader>
                       <Tape>{challenge.theme || season.name}</Tape>
                       <CardTitle className="font-header text-4xl uppercase">{challenge.icon ? `${challenge.icon} ` : ""}{challenge.title}</CardTitle>
+                      {subtitle ? <p className="font-bold text-black/65">{subtitle}</p> : null}
                     </CardHeader>
                     <CardContent className="space-y-5">
+                      {longDescription ? (
+                        <div>
+                          <h2 className="font-header text-2xl uppercase">Overview</h2>
+                          <p className="mt-2 whitespace-pre-line font-bold text-black/75">{longDescription}</p>
+                        </div>
+                      ) : null}
                       {challenge.why_it_matters ? (
                         <div>
                           <h2 className="font-header text-2xl uppercase">Why It Matters</h2>
@@ -218,6 +232,24 @@ export default function CampChallengeDetail() {
                         <h2 className="font-header text-2xl uppercase">Submission Requirements</h2>
                         <p className="mt-2 font-bold text-black/75">{submissionLabel(challenge)}</p>
                       </div>
+                      {successMessage ? (
+                        <div>
+                          <h2 className="font-header text-2xl uppercase">Success Message</h2>
+                          <p className="mt-2 whitespace-pre-line font-bold text-black/75">{successMessage}</p>
+                        </div>
+                      ) : null}
+                      {faq.length > 0 ? (
+                        <div>
+                          <h2 className="font-header text-2xl uppercase">FAQ</h2>
+                          <ul className="mt-2 space-y-2">
+                            {faq.map((item) => (
+                              <li key={item} className="rounded-xl border-2 border-black bg-white p-3 text-sm font-bold text-black/75">
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                         <Sticker accent="yellow" rotate="none">{availability}</Sticker>
                         <Sticker accent="cyan" rotate="none">{challengeWindow(challenge)}</Sticker>
@@ -262,21 +294,16 @@ export default function CampChallengeDetail() {
 
                   <Card className="border-[4px] border-black">
                     <CardContent className="space-y-3 p-5">
-                      {usesExternalCta && externalUrl ? (
-                        <a href={externalUrl} target="_blank" rel="noopener noreferrer">
-                          <CampButton className="w-full justify-center" variant="secondary">
-                            {externalCta} <ExternalLink className="ml-2 h-4 w-4" />
-                          </CampButton>
-                        </a>
-                      ) : (
-                        <Link to={submitHref}>
-                          <CampButton className="w-full justify-center" variant="secondary">Open Submission Flow</CampButton>
-                        </Link>
-                      )}
-                      <Link to={submitHref}>
+                      <Link to={flowHref}>
+                        <CampButton className="w-full justify-center" variant="secondary">
+                          {openFlow?.label || "Open Flow"}
+                          {openFlow?.external ? <ExternalLink className="ml-2 h-4 w-4" /> : null}
+                        </CampButton>
+                      </Link>
+                      <Link to={openFlow?.secondaryHref || "/camp-gpe/challenges"}>
                         <CampButton className="w-full justify-center" variant="outline">
                           <Trophy className="mr-2 h-4 w-4" />
-                          Submit for Points
+                          {openFlow?.secondaryLabel || "Submit for Points"}
                         </CampButton>
                       </Link>
                       <Link to="/camp-gpe/challenges">

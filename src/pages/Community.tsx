@@ -5,6 +5,7 @@ import { PostCard } from "@/components/PostCard";
 import { PostCardSkeletonList } from "@/components/PostCardSkeleton";
 import { CreatePostDialog } from "@/components/CreatePostDialog";
 import { fetchPosts, toggleLikePost } from "@/lib/posts";
+import { pointAwardToastCopy } from "@/lib/points";
 import { Post } from "@/types/posts";
 import { MessageSquareText, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -50,7 +51,10 @@ const Community = () => {
     }));
 
     try {
-      await toggleLikePost(postId, hasLiked);
+      const pointAward = await toggleLikePost(postId, hasLiked);
+      if (!hasLiked && pointAward) {
+        toast(pointAwardToastCopy(pointAward));
+      }
     } catch (error) {
       console.error(error);
       // Revert on error

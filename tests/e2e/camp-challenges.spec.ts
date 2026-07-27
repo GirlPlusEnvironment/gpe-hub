@@ -74,6 +74,7 @@ function challenge(overrides: Record<string, unknown>) {
     action_type_label: String(overrides.category).replaceAll("_", " "),
     season_slug: season.slug,
     season_name: season.name,
+    metadata: overrides.metadata || {},
   };
 }
 
@@ -126,6 +127,16 @@ const challenges = [
     week_number: 1,
     theme: "Hot Girl Summer starts with protecting our communities.",
     submission_type: "video_link",
+    metadata: {
+      definition: {
+        open_flow: { type: "submission_form", label: "Submit Challenge" },
+        submission: {
+          enabled: true,
+          title: "Submit Your Challenge",
+          fields: [{ id: "video_url", type: "video_url", label: "Video URL", required: true }],
+        },
+      },
+    },
   }),
   challenge({
     id: "c4",
@@ -336,6 +347,20 @@ async function installCampStubs(page: Page) {
   await page.route("**/rest/v1/gpe_camp_points_ledger?**", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
   });
+
+  await page.route("**/functions/v1/camp-gpe-challenge-submit", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        submissionId: "form-submission-1",
+        reviewSubmissionId: "review-submission-1",
+        status: "pending",
+        message: "Your submission has been received and will be reviewed by Team GPE.",
+      }),
+    });
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -363,7 +388,7 @@ test("Camp challenge board shows every scheduled week and opens internal details
   await expect(page.locator("h1", { hasText: "Sign the Extreme Weather Petition" })).toBeVisible();
 });
 
-test("Camp challenge detail survives refresh and renders safe external CTA", async ({ page }) => {
+test("Camp challenge detail survives refresh and opens the dynamic flow router", async ({ page }) => {
   await page.goto("/camp-gpe/challenges/beat-heat-extreme-weather-petition");
   await expect(page.getByText("Why It Matters")).toBeVisible();
 
@@ -371,10 +396,136 @@ test("Camp challenge detail survives refresh and renders safe external CTA", asy
   await expect(page.locator("h1", { hasText: "Sign the Extreme Weather Petition" })).toBeVisible();
 
   const cta = page.getByRole("link", { name: /open petition/i }).first();
-  await expect(cta).toHaveAttribute("href", "https://girlplusenvironment.org/extreme-weather-action");
-  await expect(cta).toHaveAttribute("target", "_blank");
-  await expect(cta).toHaveAttribute("rel", /noopener/);
-  await expect(cta).toHaveAttribute("rel", /noreferrer/);
+  await expect(cta).toHaveAttribute("href", /\/camp-gpe\/challenges\/beat-heat-extreme-weather-petition\/flow$/);
+});
+
+test("dynamic flow router resolves petition challenges to the configured external action", async ({ page }) => {
+  await page.goto("/camp-gpe/challenges/beat-heat-extreme-weather-petition/flow");
+  await expect(page.getByRole("heading", { name: "Open Petition" })).toBeVisible();
+
+  const action = page.getByRole("link", { name: /open petition/i }).first();
+  await expect(action).toHaveAttribute("href", "https://girlplusenvironment.org/extreme-weather-action");
+  await expect(action).toHaveAttribute("target", "_blank");
+  await expect(action).toHaveAttribute("rel", /noopener/);
+  await expect(action).toHaveAttribute("rel", /noreferrer/);
+
+  await expect(page.getByRole("link", { name: /submit for points/i })).toHaveAttribute("href", /\/camp-gpe\/challenges\/beat-heat-extreme-weather-petition\/submit$/);
+});
+
+test("dynamic flow router accepts legacy open_flow.type and reaches submit route", async ({ page }) => {
+  await page.route("**/rest/v1/gpe_hub_camp_challenges?**", async (route) => {
+    const url = new URL(route.request().url());
+    const slugFilter = url.searchParams.get("slug");
+    const slug = slugFilter?.startsWith("eq.") ? slugFilter.slice(3) : "";
+    if (slug === "beat-heat-short-video") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...challenges.find((item) => item.slug === slug),
+          ends_at: "2026-08-01T04:59:59.000Z",
+        }),
+      });
+      return;
+    }
+    const body = slug ? challenges.find((item) => item.slug === slug) ?? null : challenges;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+
+  await page.goto("/camp-gpe/challenges/beat-heat-short-video/flow");
+  await expect(page).toHaveURL(/\/camp-gpe\/challenges\/beat-heat-short-video\/submit$/);
+  await expect(page.getByRole("heading", { name: "Submit Your Challenge" })).toBeVisible();
+  await expect(page.getByLabel(/video url/i)).toBeVisible();
+});
+
+test("dynamic flow router shows a designed error when configured destination is missing", async ({ page }) => {
+  await page.goto("/camp-gpe/challenges/tell-your-story-camp-graphics/flow");
+  await expect(page).toHaveURL(/\/camp-gpe\/challenges\/tell-your-story-camp-graphics\/flow$/);
+  await expect(page.getByRole("heading", { name: "Open Flow Not Configured" })).toBeVisible();
+  await expect(page.getByText("Toolkit URL is missing.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /challenge details/i })).toHaveAttribute("href", /\/camp-gpe\/challenges\/tell-your-story-camp-graphics$/);
+});
+
+test("dynamic submission route renders schema fields and confirms submission", async ({ page }) => {
+  let payload: Record<string, unknown> | null = null;
+  await page.route("**/functions/v1/camp-gpe-challenge-submit", async (route) => {
+    payload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        submissionId: "form-submission-1",
+        reviewSubmissionId: "review-submission-1",
+        status: "pending",
+        message: "Your submission has been received and will be reviewed by Team GPE.",
+      }),
+    });
+  });
+  await page.route("**/rest/v1/gpe_hub_camp_challenges?**", async (route) => {
+    const url = new URL(route.request().url());
+    const slugFilter = url.searchParams.get("slug");
+    const slug = slugFilter?.startsWith("eq.") ? slugFilter.slice(3) : "";
+    if (slug === "beat-heat-short-video") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...challenges.find((item) => item.slug === slug),
+          ends_at: "2026-08-01T04:59:59.000Z",
+        }),
+      });
+      return;
+    }
+    const body = slug ? challenges.find((item) => item.slug === slug) ?? null : challenges;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+
+  await page.goto("/camp-gpe/challenges/beat-heat-short-video/submit");
+  await expect(page.getByRole("heading", { name: "Submit Your Challenge" })).toBeVisible();
+  await page.getByLabel(/video url/i).fill("https://example.com/video");
+  await page.getByRole("button", { name: /submit challenge/i }).click();
+
+  await expect(page.getByRole("heading", { name: "Under Review" })).toBeVisible();
+  expect(payload?.challengeSlug).toBe("beat-heat-short-video");
+  expect(payload?.submissionData).toMatchObject({
+    video_url: "https://example.com/video",
+  });
+});
+
+test("completed challenge shows designed status instead of silently redirecting", async ({ page }) => {
+  await page.route("**/rest/v1/gpe_camp_points_ledger?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "ledger-1",
+          season_id: season.id,
+          season_member_id: "season-member-1",
+          user_id: testUser.id,
+          submission_id: "submission-1",
+          submission_action_id: "action-1",
+          challenge_id: "c3",
+          points: 5,
+          reason: "Create a Short Video",
+          adjustment_type: "award",
+          entry_type: "challenge_award",
+          source: "team_gpe_review",
+          created_at: "2026-07-24T15:00:00.000Z",
+          reversed_at: null,
+          reversed_entry_id: null,
+          reversal_reason: null,
+          approval_status: "approved",
+        },
+      ]),
+    });
+  });
+
+  await page.goto("/camp-gpe/challenges/beat-heat-short-video/submit");
+  await expect(page).toHaveURL(/\/camp-gpe\/challenges\/beat-heat-short-video\/submit$/);
+  await expect(page.getByRole("heading", { name: "Challenge Complete" })).toBeVisible();
+  await expect(page.getByText("Duplicate submissions are blocked")).toBeVisible();
 });
 
 test("invalid Camp challenge slug shows designed not found state", async ({ page }) => {

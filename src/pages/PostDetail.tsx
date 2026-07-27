@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { PostCard } from "@/components/PostCard";
 import { Comment } from "@/components/Comment";
 import { fetchPostById, fetchComments, addComment, toggleLikePost } from "@/lib/posts";
+import { pointAwardToastCopy } from "@/lib/points";
 import { Post, PostComment } from "@/types/posts";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,10 @@ const PostDetail = () => {
     });
 
     try {
-      await toggleLikePost(postId, hasLiked);
+      const pointAward = await toggleLikePost(postId, hasLiked);
+      if (!hasLiked && pointAward) {
+        toast(pointAwardToastCopy(pointAward));
+      }
     } catch (error) {
       console.error(error);
       // Revert
@@ -77,7 +81,7 @@ const PostDetail = () => {
     if (!id || !newComment.trim()) return;
     setIsSubmitting(true);
     try {
-      await addComment(id, newComment);
+      const comment = await addComment(id, newComment);
       setNewComment("");
       // Reload comments to get the new one in the right place (or append optimistically)
       const commentsData = await fetchComments(id);
@@ -87,6 +91,7 @@ const PostDetail = () => {
       if (post) {
         setPost({ ...post, comments_count: (post.comments_count || 0) + 1 });
       }
+      if (comment.pointAward) toast(pointAwardToastCopy(comment.pointAward));
     } catch (error) {
       console.error(error);
       toast({
@@ -102,13 +107,14 @@ const PostDetail = () => {
   const handleReply = async (parentId: string, content: string) => {
     if (!id) return;
     try {
-      await addComment(id, content, parentId);
+      const comment = await addComment(id, content, parentId);
       const commentsData = await fetchComments(id);
       setComments(commentsData);
       
       if (post) {
         setPost({ ...post, comments_count: (post.comments_count || 0) + 1 });
       }
+      if (comment.pointAward) toast(pointAwardToastCopy(comment.pointAward));
     } catch (error) {
       console.error(error);
       toast({

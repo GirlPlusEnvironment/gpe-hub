@@ -4,7 +4,7 @@ export type FieldSchema = {
   key: string;
   label: string;
   required?: boolean;
-  type?: "text" | "email" | "tel" | "textarea" | "select" | "checkbox" | "radio" | "number" | "url";
+  type?: "text" | "email" | "tel" | "textarea" | "select" | "checkbox" | "radio" | "number" | "url" | "file" | "image" | "video_url";
   allowed?: string[];
   maxLength?: number;
 };
@@ -56,7 +56,7 @@ export function validateFields(values: Record<string, unknown>, schema: FieldSch
     const value = sanitizeText(raw, field.maxLength || (field.type === "textarea" ? 5000 : 1000));
     if (field.required && !value) throw new ValidationError(`${field.label} is required.`);
     if (value && field.type === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) throw new ValidationError(`${field.label} must be a valid email.`);
-    if (value && field.type === "url" && !/^https?:\/\/\S+\.\S+/.test(value)) throw new ValidationError(`${field.label} must be a valid URL.`);
+    if (value && (field.type === "url" || field.type === "file" || field.type === "image" || field.type === "video_url") && !/^https?:\/\/\S+\.\S+/.test(value)) throw new ValidationError(`${field.label} must be a valid URL.`);
     if (field.allowed && value && !field.allowed.includes(value)) throw new ValidationError(`${field.label} contains an unsupported option.`);
     sanitized[field.key] = value;
   }

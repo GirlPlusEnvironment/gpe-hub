@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { Post, PostComment } from "@/types/posts";
-import { awardPoints, deductPoints } from "./points";
+import { awardPoints, deductPoints, type AwardPointResult } from "./points";
 import { validateContent } from "./profanityFilter";
 
 type JoinedUser = {
@@ -17,6 +17,18 @@ type JoinedPollOption = {
   option_text: string;
   poll_votes?: JoinedVote[] | null;
 };
+
+function pointAwardErrorResult(message: string): AwardPointResult {
+  return {
+    success: false,
+    message,
+    reason: "rpc_error",
+    pointsAwarded: 0,
+    pointsRequested: 0,
+    dailyLimitReached: false,
+    transactionId: null,
+  };
+}
 
 type PostRow = Omit<Post, "likes_count" | "comments_count" | "has_liked" | "poll_options" | "user_vote_option_id"> & {
   user?: JoinedUser | null;
@@ -219,8 +231,9 @@ export async function createPost(post: { title: string; description: string; ima
   }
 
   // Increment user points
+  let pointAward: AwardPointResult | null = null;
   try {
-    await awardPoints(user.id, 10, 100, {
+    pointAward = await awardPoints(user.id, 10, 100, {
       actionType: "hub_post",
       source: "post_created",
       sourceId: postData.id,
@@ -228,9 +241,10 @@ export async function createPost(post: { title: string; description: string; ima
     // Profile will refresh automatically via useUserPoints hook watching profile.points
   } catch (pointsError) {
     console.error("Failed to award points for post creation", pointsError);
+    pointAward = pointAwardErrorResult(pointsError instanceof Error ? pointsError.message : "Post was created, but points failed.");
   }
   
-  return postData;
+  return { ...postData, pointAward };
 }
 
 export async function votePoll(postId: string, optionId: string) {
@@ -263,13 +277,14 @@ export async function votePoll(postId: string, optionId: string) {
   
   // Award points for voting? Maybe small amount
   try {
-    await awardPoints(user.id, 1, 100, {
+    return await awardPoints(user.id, 1, 100, {
       actionType: "hub_poll_vote",
       source: "poll_vote",
       metadata: { post_id: postId, option_id: optionId },
     });
   } catch (pointsError) {
     console.error("Failed to award points for voting", pointsError);
+    return pointAwardErrorResult(pointsError instanceof Error ? pointsError.message : "Vote was recorded, but points failed.");
   }
 }
 
@@ -304,13 +319,14 @@ export async function toggleLikePost(postId: string, hasLiked: boolean) {
 
     // Increment user points
     try {
-      await awardPoints(user.id, 1, 100, {
+      return await awardPoints(user.id, 1, 100, {
         actionType: "hub_post_like",
         source: "post_like",
         metadata: { post_id: postId },
       });
     } catch (pointsError) {
       console.error("Failed to award points for post like", pointsError);
+      return pointAwardErrorResult(pointsError instanceof Error ? pointsError.message : "Like was saved, but points failed.");
     }
   }
 }
@@ -381,17 +397,19 @@ export async function addComment(postId: string, content: string, parentId?: str
   if (error) throw error;
 
   // Increment user points
+  let pointAward: AwardPointResult | null = null;
   try {
-    await awardPoints(user.id, 2, 100, {
+    pointAward = await awardPoints(user.id, 2, 100, {
       actionType: "hub_comment",
       source: "post_comment",
       sourceId: data.id,
     });
   } catch (pointsError) {
     console.error("Failed to award points for comment creation", pointsError);
+    pointAward = pointAwardErrorResult(pointsError instanceof Error ? pointsError.message : "Comment was posted, but points failed.");
   }
 
-  return data as PostComment;
+  return { ...(data as PostComment), pointAward };
 }
 
 export async function deletePost(postId: string) {

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createPost } from "@/lib/posts";
+import { pointAwardToastCopy } from "@/lib/points";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
 import { ImageUpload } from "@/components/ImageUpload";
@@ -66,16 +67,17 @@ export function CreatePostDialog({ onPostCreated }: CreatePostDialogProps) {
 
     setIsLoading(true);
     try {
-      await createPost({
+      const createdPost = await createPost({
         ...data,
         image_url: imageUrl,
         type: postType,
         poll_options: postType === 'poll' ? pollOptions.filter(opt => opt.trim() !== "") : undefined
       });
-      toast({
-        title: "Success",
-        description: "Post created successfully!",
-      });
+      if (createdPost.pointAward) {
+        toast(pointAwardToastCopy(createdPost.pointAward));
+      } else {
+        toast({ title: "Post created", description: "Post created successfully." });
+      }
       reset();
       setImageUrl(undefined);
       setPollOptions(["", ""]);

@@ -5,6 +5,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { votePoll } from "@/lib/posts";
+import { pointAwardToastCopy } from "@/lib/points";
 import type { Post, PollOption } from "@/types/posts";
 import { CheckCircle2 } from "lucide-react";
 
@@ -27,11 +28,8 @@ export function PollView({ post, onVote }: PollViewProps) {
     
     setIsVoting(true);
     try {
-      await votePoll(post.id, selectedOption);
-      toast({
-        title: "Vote recorded",
-        description: "Thanks for voting!",
-      });
+      const pointAward = await votePoll(post.id, selectedOption);
+      toast(pointAwardToastCopy(pointAward));
       if (onVote) onVote();
     } catch (error) {
       console.error(error);

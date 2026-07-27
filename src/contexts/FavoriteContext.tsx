@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchFavoriteListingIds, addFavoriteListing, removeFavoriteListing } from "@/lib/listings";
+import { pointAwardToastCopy } from "@/lib/points";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import useDeepCompareEffect from "use-deep-compare-effect";
@@ -80,7 +81,8 @@ export const FavoriteProvider = ({ children }: FavoriteProviderProps) => {
       if (wasFavorited) {
         await removeFavoriteListing(profile.id, listingId);
       } else {
-        await addFavoriteListing(profile.id, listingId);
+        const pointAward = await addFavoriteListing(profile.id, listingId);
+        toast(pointAwardToastCopy(pointAward));
       }
       
       // Invalidate the favorites query to ensure cache is updated

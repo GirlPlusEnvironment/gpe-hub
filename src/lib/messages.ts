@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { Conversation, ConversationParticipant, Message, Profile } from "@/types/messages";
-import { awardPoints } from "./points";
+import { awardPoints, type AwardPointResult } from "./points";
 import { validateContent } from "./profanityFilter";
 
 type ConversationRow = {
@@ -458,17 +458,27 @@ export const sendMessage = async (conversationId: string, senderId: string, cont
   }
 
   // Increment user points
+  let pointAward: AwardPointResult | null = null;
   try {
-    await awardPoints(senderId, 1, 100, {
+    pointAward = await awardPoints(senderId, 1, 100, {
       actionType: "hub_message",
       source: "message_sent",
       sourceId: newMessage.id,
     });
   } catch (pointsError) {
     console.error("Failed to award points for message send", pointsError);
+    pointAward = {
+      success: false,
+      message: pointsError instanceof Error ? pointsError.message : "Message was sent, but points failed.",
+      reason: "rpc_error",
+      pointsAwarded: 0,
+      pointsRequested: 0,
+      dailyLimitReached: false,
+      transactionId: null,
+    };
   }
 
-  return transformMessage(newMessage as MessageRow);
+  return { ...transformMessage(newMessage as MessageRow), pointAward };
 };
 
 export const updateMessage = async (messageId: string, content: string): Promise<Message> => {

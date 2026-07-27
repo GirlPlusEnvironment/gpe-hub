@@ -23,12 +23,11 @@ export async function approveSubmission(
   params: { reviewerNotes?: string | null; points?: number | null },
 ) {
   if (submission.type === "camp") {
-    await approveCampSubmissionAction({
+    return await approveCampSubmissionAction({
       actionId: submission.id,
       notes: params.reviewerNotes,
       points: params.points,
     });
-    return;
   }
 
   throw new Error(`${submission.type} approval is waiting for the unified review migration.`);

@@ -63,6 +63,7 @@ export type CampChallenge = {
   max_completions_per_member: number;
   display_order: number;
   action_url: string | null;
+  metadata?: Record<string, unknown> | null;
   week_number?: number | null;
   theme?: string | null;
   icon?: string | null;
@@ -271,6 +272,21 @@ export async function getCampCabinLeaderboard(seasonId: string) {
 export async function getHubCampChallenges(seasonId: string) {
   const { data, error } = await supabase
     .from("gpe_hub_camp_challenges")
+    .select("*")
+    .eq("season_id", seasonId)
+    .order("week_number", { ascending: true, nullsFirst: false })
+    .order("display_order", { ascending: true })
+    .order("title", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((challenge) => ({
+    ...challenge,
+    action_url: canonicalCampActionUrl(challenge.action_url),
+  })) as CampChallenge[];
+}
+
+export async function getAdminCampChallenges(seasonId: string) {
+  const { data, error } = await supabase
+    .from("gpe_challenges")
     .select("*")
     .eq("season_id", seasonId)
     .order("week_number", { ascending: true, nullsFirst: false })
@@ -529,12 +545,13 @@ export async function approveCampSubmissionAction(params: {
   points?: number | null;
   notes?: string | null;
 }) {
-  const { error } = await supabase.rpc("approve_camp_submission_action", {
+  const { data, error } = await supabase.rpc("approve_camp_submission_action", {
     p_action_id: params.actionId,
     p_points: params.points ?? null,
     p_notes: params.notes ?? null,
   });
   if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
 }
 
 export async function markCampSubmissionAction(params: {
@@ -583,6 +600,7 @@ export async function updateCampSubmissionActionReview(params: {
 export async function updateCampChallengeContent(challengeId: string, patch: Partial<Pick<
   CampChallenge,
   | "title"
+  | "slug"
   | "short_description"
   | "instructions"
   | "week_number"
@@ -596,6 +614,16 @@ export async function updateCampChallengeContent(challengeId: string, patch: Par
   | "submission_type"
   | "verification_method"
   | "display_order"
+  | "category"
+  | "icon"
+  | "why_it_matters"
+  | "badge_eligible"
+  | "auto_approve"
+  | "requires_review"
+  | "requires_proof"
+  | "allow_multiple_submissions"
+  | "max_completions_per_member"
+  | "metadata"
   | "is_featured"
   | "is_active"
   | "is_hub_visible"

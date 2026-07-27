@@ -152,8 +152,14 @@ async function seasonMember(seasonId: string, userId: string, email: string, neo
 }
 
 function proofLinks(fields: Record<string, unknown>) {
-  return [fields.screenshotLinks, fields.socialLinks]
-    .flatMap((value) => String(value || "").split(/\s+/))
+  const collect = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.flatMap(collect);
+    if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).flatMap(collect);
+    return String(value || "").split(/\s+/);
+  };
+
+  return [fields.screenshotLinks, fields.socialLinks, fields.submissionData]
+    .flatMap(collect)
     .map((value) => value.trim())
     .filter((value) => /^https?:\/\//i.test(value));
 }
@@ -164,12 +170,19 @@ type ChallengeRow = {
   action_type_id: string | null;
   slug: string;
   title: string;
+  category: string | null;
+  submission_type: string | null;
   point_value: number | null;
   requires_proof: boolean;
   requires_review: boolean;
   auto_approve: boolean;
   allow_multiple_submissions: boolean;
   max_completions_per_member: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_hub_visible: boolean;
+  related_kind: string | null;
+  metadata: Record<string, unknown>;
 };
 
 async function loadChallenges(seasonId: string, challengeIds: string[]) {
@@ -177,13 +190,115 @@ async function loadChallenges(seasonId: string, challengeIds: string[]) {
   if (cleanIds.length === 0) return [] as ChallengeRow[];
   const res = await supabaseFetch([
     "gpe_challenges",
-    "?select=id,season_id,action_type_id,slug,title,point_value,requires_proof,requires_review,auto_approve,allow_multiple_submissions,max_completions_per_member",
+    "?select=id,season_id,action_type_id,slug,title,category,submission_type,point_value,requires_proof,requires_review,auto_approve,allow_multiple_submissions,max_completions_per_member,starts_at,ends_at,is_hub_visible,related_kind,metadata",
     `&season_id=eq.${encodeURIComponent(seasonId)}`,
     `&id=in.(${cleanIds.map(encodeURIComponent).join(",")})`,
     "&is_active=eq.true"
   ].join(""));
   if (!res.ok) throw new Error("Could not load selected seasonal challenges.");
   return await res.json() as ChallengeRow[];
+}
+
+async function loadChallengeBySlug(seasonId: string, slug: string) {
+  if (!/^[a-z0-9-]{2,160}$/i.test(slug)) throw new ValidationError("Invalid challenge.");
+  const res = await supabaseFetch([
+    "gpe_challenges",
+    "?select=id,season_id,action_type_id,slug,title,category,submission_type,point_value,requires_proof,requires_review,auto_approve,allow_multiple_submissions,max_completions_per_member,starts_at,ends_at,is_hub_visible,related_kind,metadata",
+    `&season_id=eq.${encodeURIComponent(seasonId)}`,
+    `&slug=eq.${encodeURIComponent(slug)}`,
+    "&is_active=eq.true",
+    "&limit=1"
+  ].join(""));
+  if (!res.ok) throw new Error("Could not load selected seasonal challenge.");
+  const rows = await res.json();
+  const challenge = rows[0] as ChallengeRow | undefined;
+  if (!challenge || !challenge.is_hub_visible) throw new ValidationError("This challenge is not accepting submissions.");
+  const now = Date.now();
+  const start = challenge.starts_at ? new Date(challenge.starts_at).getTime() : null;
+  const end = challenge.ends_at ? new Date(challenge.ends_at).getTime() : null;
+  if (start && now < start) throw new ValidationError("This challenge has not opened yet.");
+  if (end && now > end) throw new ValidationError("This challenge is closed.");
+  return challenge;
+}
+
+function challengeDefinition(challenge: ChallengeRow) {
+  const definition = challenge.metadata?.definition;
+  return definition && typeof definition === "object" && !Array.isArray(definition)
+    ? definition as {
+      open_flow?: { kind?: string; type?: string };
+      submission?: { enabled?: boolean; fields?: Array<Record<string, unknown>> };
+    }
+    : {};
+}
+
+function normalizedOpenFlowType(challenge: ChallengeRow) {
+  const openFlow = challengeDefinition(challenge).open_flow || {};
+  const raw = String(openFlow.kind || openFlow.type || "").trim().toLowerCase();
+  if (raw === "external") return "external_action";
+  if (raw === "external_action" || raw === "submission_form" || raw === "toolkit" || raw === "completion_page") return raw;
+  const inferred = `${challenge.submission_type || ""} ${challenge.category || ""} ${challenge.related_kind || ""}`.toLowerCase();
+  if (inferred.includes("petition")) return "external_action";
+  if (inferred.includes("toolkit")) return "toolkit";
+  return "submission_form";
+}
+
+function defaultFieldDefinitions(challenge: ChallengeRow) {
+  const type = `${challenge.submission_type || ""} ${challenge.category || ""}`.toLowerCase();
+  if (type.includes("petition")) {
+    return [
+      { id: "completed_petition", type: "checkbox", label: "I completed the petition", required: true, options: ["yes"] },
+      { id: "proof", type: "image", label: "Screenshot or confirmation URL", required: Boolean(challenge.requires_proof) }
+    ];
+  }
+  if (type.includes("video")) {
+    return [
+      { id: "video_url", type: "video_url", label: "Video URL", required: true },
+      { id: "caption", type: "textarea", label: "Caption or description" },
+      { id: "proof", type: "image", label: "Screenshot or proof URL", required: Boolean(challenge.requires_proof) }
+    ];
+  }
+  if (type.includes("story") || type.includes("social")) {
+    return [
+      { id: "story_url", type: "url", label: "Story or post URL", required: true },
+      { id: "proof", type: "image", label: "Screenshot URL", required: Boolean(challenge.requires_proof) },
+      { id: "notes", type: "textarea", label: "Notes" }
+    ];
+  }
+  if (type.includes("reflection")) {
+    return [
+      { id: "reflection", type: "textarea", label: "Reflection", required: true },
+      { id: "image", type: "image", label: "Image URL", required: Boolean(challenge.requires_proof) }
+    ];
+  }
+  return [
+    { id: "proof", type: "url", label: "Proof URL", required: Boolean(challenge.requires_proof) },
+    { id: "notes", type: "textarea", label: "Notes" }
+  ];
+}
+
+function fieldSchemaForChallenge(challenge: ChallengeRow) {
+  const submission = challengeDefinition(challenge).submission || {};
+  const fields = Array.isArray(submission.fields) && submission.fields.length > 0
+    ? submission.fields
+    : defaultFieldDefinitions(challenge);
+  return fields
+    .map((field) => {
+      const key = sanitizeText(field.id, 80);
+      const label = sanitizeText(field.label, 160) || key;
+      const rawType = sanitizeText(field.type, 40);
+      const type = rawType === "video_url" ? "url" : rawType;
+      const allowedTypes = ["text", "textarea", "url", "checkbox", "select", "file", "image"];
+      if (!key || !allowedTypes.includes(type)) return null;
+      return {
+        key,
+        label,
+        required: Boolean(field.required),
+        type: type as "text" | "textarea" | "url" | "checkbox" | "select" | "file" | "image",
+        allowed: Array.isArray(field.options) ? field.options.map((option) => sanitizeText(option, 120)).filter(Boolean) : undefined,
+        maxLength: type === "textarea" ? 5000 : 1000
+      };
+    })
+    .filter(Boolean) as Array<{ key: string; label: string; required?: boolean; type?: "text" | "textarea" | "url" | "checkbox" | "select" | "file" | "image"; allowed?: string[]; maxLength?: number }>;
 }
 
 async function completionCount(params: { seasonMemberId: string; challengeId: string }) {
@@ -195,6 +310,19 @@ async function completionCount(params: { seasonMemberId: string; challengeId: st
     "&reversed_entry_id=is.null",
     "&reversed_at=is.null",
     `&gpe_camp_submission_actions.challenge_id=eq.${encodeURIComponent(params.challengeId)}`
+  ].join(""));
+  if (!res.ok) return 0;
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+async function openSubmissionCount(params: { seasonMemberId: string; challengeId: string }) {
+  const res = await supabaseFetch([
+    "gpe_camp_submission_actions",
+    "?select=id,gpe_camp_challenge_submissions!inner(season_member_id)",
+    `&challenge_id=eq.${encodeURIComponent(params.challengeId)}`,
+    "&review_status=in.(pending,needs_information,approved)",
+    `&gpe_camp_challenge_submissions.season_member_id=eq.${encodeURIComponent(params.seasonMemberId)}`
   ].join(""));
   if (!res.ok) return 0;
   const rows = await res.json();
@@ -279,13 +407,50 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return jsonResponse({ message: "Method not allowed." }, 405, origin);
     const body = await readJson(req);
     const idempotencyKey = validateIdempotencyKey(req.headers.get("idempotency-key") || body.idempotencyKey);
-    const fields = validateFields((body.fields || {}) as Record<string, unknown>, CHALLENGE_FIELDS);
+    const rawFields = (body.fields || {}) as Record<string, unknown>;
+    let fields = validateFields(rawFields, CHALLENGE_FIELDS);
+    const challengeSlug = sanitizeText(body.challengeSlug || rawFields.challengeSlug, 160);
     const submittedEmail = String(fields.email).toLowerCase();
     const authUser = await authenticatedUser(req, origin);
     const email = authUser?.email || submittedEmail;
-    const selectedChallengeIds = Array.isArray(fields.challengeIds) ? fields.challengeIds.map(String) : [];
-    const wantsOther = Array.isArray(fields.actions) && fields.actions.includes("other");
-    const otherDescription = String(fields.otherAction || "").trim();
+    let selectedChallengeIds = Array.isArray(fields.challengeIds) ? fields.challengeIds.map(String) : [];
+    let wantsOther = Array.isArray(fields.actions) && fields.actions.includes("other");
+    let otherDescription = String(fields.otherAction || "").trim();
+
+    const profile = authUser ? await profileByUserId(authUser.id) : null;
+    const firstName = preferredName(fields, profile, authUser, "firstName");
+    const lastName = preferredName(fields, profile, authUser, "lastName");
+    const season = await activeSeason();
+    let dynamicChallenge: ChallengeRow | null = null;
+    if (challengeSlug) {
+      if (!authUser) throw new ValidationError("Sign in to submit this challenge.");
+      dynamicChallenge = await loadChallengeBySlug(season.id, challengeSlug);
+      const flowType = normalizedOpenFlowType(dynamicChallenge);
+      console.info("camp-gpe-challenge-submit flow resolution", {
+        challengeSlug,
+        flowType,
+        submissionEnabled: challengeDefinition(dynamicChallenge).submission?.enabled !== false
+      });
+      if (flowType !== "submission_form") {
+        throw new ValidationError("This challenge is not configured for direct form submission.");
+      }
+      if (challengeDefinition(dynamicChallenge).submission?.enabled === false) {
+        throw new ValidationError("This challenge is not accepting submissions.");
+      }
+      const submissionSchema = fieldSchemaForChallenge(dynamicChallenge);
+      const rawSubmissionData = (body.submissionData || rawFields.submissionData || {}) as Record<string, unknown>;
+      const submissionData = validateFields(rawSubmissionData, submissionSchema);
+      fields = {
+        ...fields,
+        challengeSlug,
+        challengeIds: [dynamicChallenge.id],
+        submissionData,
+        sourcePage: "dynamic_challenge_submission"
+      };
+      selectedChallengeIds = [dynamicChallenge.id];
+      wantsOther = false;
+      otherDescription = "";
+    }
 
     const { submission, duplicate } = await createFormSubmission({
       idempotencyKey,
@@ -297,10 +462,6 @@ Deno.serve(async (req) => {
     });
     if (duplicate) return jsonResponse({ duplicate: true, submissionId: submission.id, ...publicConfig() }, 200, origin);
 
-    const profile = authUser ? await profileByUserId(authUser.id) : null;
-    const firstName = preferredName(fields, profile, authUser, "firstName");
-    const lastName = preferredName(fields, profile, authUser, "lastName");
-    const season = await activeSeason();
     let membership: Awaited<ReturnType<typeof resolveMembership>> | null = null;
     try {
       membership = await resolveMembership({
@@ -322,6 +483,14 @@ Deno.serve(async (req) => {
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_challenge_activity", success: false, errorSummary: safeError(error) });
     }
 
+    if (dynamicChallenge && !membership?.isActiveMember) {
+      await updateFormSubmission(String(submission.id), {
+        submission_status: "requires_manual_review",
+        membership_outcome: membership?.outcome || "inactive_member"
+      });
+      throw new ValidationError("Active membership is required to submit this challenge.");
+    }
+
     let member: { id: string; user_id: string | null } | null = null;
     const canLinkMember = Boolean(authUser?.id && membership?.isActiveMember && membership?.neonAccountId);
     if (canLinkMember && authUser) {
@@ -333,6 +502,9 @@ Deno.serve(async (req) => {
     }
     const challenges = await loadChallenges(season.id, selectedChallengeIds);
     const submittedProofLinks = proofLinks(fields);
+    if (dynamicChallenge?.requires_proof && submittedProofLinks.length === 0) {
+      throw new ValidationError("Proof is required for this challenge.");
+    }
 
     const reviewSubmission = await createReviewSubmission({
       formSubmissionId: String(submission.id),
@@ -350,7 +522,9 @@ Deno.serve(async (req) => {
 
     for (const challenge of challenges) {
       const completed = member?.id ? await completionCount({ seasonMemberId: member.id, challengeId: challenge.id }) : 0;
-      const limitReached = Boolean(member?.id) && (completed >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && completed > 0));
+      const openSubmissions = member?.id ? await openSubmissionCount({ seasonMemberId: member.id, challengeId: challenge.id }) : 0;
+      const existingSubmissions = completed + openSubmissions;
+      const limitReached = Boolean(member?.id) && (existingSubmissions >= challenge.max_completions_per_member || (!challenge.allow_multiple_submissions && existingSubmissions > 0));
       const action = await createSubmissionAction({
         submissionId: reviewSubmission.id,
         challenge,

@@ -23,6 +23,8 @@ const Favorites = lazy(() => import("./pages/Favorites"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const CampChallenges = lazy(() => import("./pages/CampChallenges"));
 const CampChallengeDetail = lazy(() => import("./pages/CampChallengeDetail"));
+const CampChallengeFlow = lazy(() => import("./pages/CampChallengeFlow"));
+const CampChallengeSubmit = lazy(() => import("./pages/CampChallengeSubmit"));
 const MySubmissions = lazy(() => import("./pages/MySubmissions"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
@@ -210,6 +212,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CampChallenges />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/challenges/:challengeSlug/submit"
+              element={
+                <ProtectedRoute>
+                  <CampChallengeSubmit />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/camp-gpe/challenges/:challengeSlug/flow"
+              element={
+                <ProtectedRoute>
+                  <CampChallengeFlow />
                 </ProtectedRoute>
               }
             />

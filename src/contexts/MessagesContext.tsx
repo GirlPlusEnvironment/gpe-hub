@@ -21,6 +21,7 @@ import {
 import type { Conversation, Profile } from "@/types/messages";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { pointAwardToastCopy, type AwardPointResult } from "@/lib/points";
 
 import { supabase } from "@/lib/supabaseClient";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -132,6 +133,7 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
       return { previousMessages };
     },
     onSuccess: async (newMessage, { conversationId }) => {
+      const pointAward = (newMessage as typeof newMessage & { pointAward?: AwardPointResult | null }).pointAward;
       // Decrypt the message before adding to cache
       if (newMessage.content && newMessage.content.startsWith("ENC:")) {
         try {
@@ -159,6 +161,7 @@ export const MessagesProvider = ({ children }: MessagesProviderProps) => {
       // Invalidate and refetch other queries
       queryClient.invalidateQueries({ queryKey: ["conversations", profile?.id] });
       queryClient.invalidateQueries({ queryKey: ["unread-count", profile?.id] });
+      if (pointAward) toast(pointAwardToastCopy(pointAward));
     },
     onError: (error, { conversationId }, context) => {
       // Rollback to the previous messages on error

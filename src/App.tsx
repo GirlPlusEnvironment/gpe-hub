@@ -31,6 +31,7 @@ const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
 const Login = lazy(() => import("./pages/Login"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminMembershipDiagnostics = lazy(() => import("./pages/AdminMembershipDiagnostics"));
 const CampAdmin = lazy(() => import("./pages/CampAdmin"));
 
 const queryClient = new QueryClient();
@@ -271,6 +272,16 @@ const App = () => (
                 <ProtectedRoute>
                   <AdminRoute>
                     <AdminDashboard />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/membership-diagnostics"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminMembershipDiagnostics />
                   </AdminRoute>
                 </ProtectedRoute>
               }

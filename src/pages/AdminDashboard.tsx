@@ -162,6 +162,7 @@ export default function AdminDashboard() {
         action={
           <>
             <Link to="/"><CampButton variant="outline">Back to Home</CampButton></Link>
+            <Link to="/admin/membership-diagnostics"><CampButton variant="outline">Membership Diagnostics</CampButton></Link>
             <CampButton variant="cyan" onClick={loadData}>Refresh</CampButton>
           </>
         }

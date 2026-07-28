@@ -115,6 +115,15 @@ async function createIntent(args: {
   return rows[0] as Record<string, unknown>;
 }
 
+async function updateIntent(id: string, fields: Record<string, unknown>) {
+  const res = await supabaseFetch(`gpe_event_registration_intents?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(fields)
+  });
+  if (!res.ok) throw new Error("Could not update event registration intent.");
+}
+
 async function createParticipationClaim(intent: Record<string, unknown>, event: Record<string, unknown>, email: string, neonAccountId: string | null, hubUserId: string | null) {
   const res = await supabaseFetch("gpe_event_participation_claims", {
     method: "POST",
@@ -184,6 +193,8 @@ Deno.serve(async (req) => {
     });
 
     let membershipPartialSuccess = false;
+    let membershipCreationStatus = membershipRequest?.requested === true && membershipRequest?.consent === true ? "not_attempted" : "not_requested";
+    let membershipFailureMessage = "";
     if (
       membershipRequest?.requested === true &&
       membershipRequest?.consent === true &&
@@ -200,8 +211,11 @@ Deno.serve(async (req) => {
         });
         if (account.status === "ambiguous" || !account.neonAccountId) {
           membershipPartialSuccess = true;
+          membershipCreationStatus = "failed";
+          membershipFailureMessage = "Membership could not be created because the Neon account match requires manual review.";
         } else {
-          await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: "event_registration" } });
+          const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: "event_registration" } });
+          membershipCreationStatus = membershipResult.membershipCreationStatus;
           await queueHubInvitation({ submissionId: String(intent.id), email, neonAccountId: account.neonAccountId }).catch(() => {
             membershipPartialSuccess = true;
             return undefined;
@@ -210,8 +224,22 @@ Deno.serve(async (req) => {
         }
       } catch (error) {
         membershipPartialSuccess = true;
+        membershipCreationStatus = "failed";
+        membershipFailureMessage = safeError(error);
         await logEventSync({ registrationIntentId: String(intent.id), integration: "neon", operation: "event_membership_request", success: false, errorSummary: safeError(error) });
       }
+    }
+    if (membershipCreationStatus === "failed") {
+      await updateIntent(String(intent.id), {
+        membership_outcome: "membership_creation_failed",
+        submission_payload: {
+          fields,
+          membershipRequest,
+          membershipCreationStatus,
+          membershipFailureMessage,
+          paymentBoundary: "Payment, tickets, capacity, and final registration status remain in Neon CRM."
+        }
+      }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "supabase", operation: "event_intent_membership_failure", success: false, errorSummary: safeError(error) }));
     }
 
     if (status === "registered") {
@@ -243,8 +271,23 @@ Deno.serve(async (req) => {
       neonSyncStatus: status === "registered" ? "succeeded" : "pending",
       hubIdentityStatus: hubUserId ? "succeeded" : "not_attempted",
       pointsStatus: status === "registered" ? "pending_membership" : "not_applicable",
-      rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membership.outcome }
+      rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membershipCreationStatus === "failed" ? "membership_creation_failed" : membership.outcome, membershipCreationStatus, membershipFailureMessage }
     }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
+
+    if (membershipCreationStatus === "failed") {
+      return jsonResponse({
+        ok: false,
+        intentId: intent.id,
+        registrationStatus: status,
+        registrationUrl,
+        membershipOutcome: "membership_creation_failed",
+        membershipCreationStatus,
+        partialSuccess: true,
+        hubUserLinked: Boolean(hubUserId),
+        neonAccountLinked: Boolean(membership.neonAccountId),
+        message: "Your event registration intent was saved, but membership could not be created yet. Continue to Neon for event registration; Team GPE can retry membership from the saved record."
+      }, 502, origin);
+    }
 
     return jsonResponse({
       ok: true,
@@ -252,6 +295,7 @@ Deno.serve(async (req) => {
       registrationStatus: status,
       registrationUrl,
       membershipOutcome: membership.outcome,
+      membershipCreationStatus,
       partialSuccess: membershipPartialSuccess,
       hubUserLinked: Boolean(hubUserId),
       neonAccountLinked: Boolean(membership.neonAccountId),

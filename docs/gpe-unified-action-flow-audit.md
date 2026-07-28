@@ -14,7 +14,7 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 | Camp GPE challenge submission | Hub/custom | Challenge proof fields; member-only authenticated submit | `camp-gpe-challenge-submit` | requires Hub auth and active membership | existing challenge submission + reviewed point ledger | Existing protected flow |
 | Mobile climate survey | Neon/custom survey | Survey already includes age, race/ethnicity, gender | `neon-climate-survey` writes survey audit and Neon activity | resolves membership and queues invitation where appropriate | `constituent_leads` + `lead_actions` | Backend implemented; production route returns `200` |
 | GPE Grad Highlight | Neon/custom | Highlight fields plus shared inline canonical membership continuation for nonmembers | `gpe-grad-highlight-submit` | optional membership queues Hub invitation only after confirmed membership create | `constituent_leads` + `lead_actions` | Route now returns `200`; submission and lead are durable, but real membership creation is blocked until Neon membership level/term secrets are configured |
-| Events | Neon/custom handoff | Event registration fields plus shared inline membership continuation where used | `neon-event-register` | optional membership queues Hub invitation | `constituent_leads` + `lead_actions` | Backend implemented; individual event config still needs route-level QA |
+| Events | Neon/custom handoff | Event registration fields plus shared inline membership continuation where used | `neon-event-register` | optional membership queues Hub invitation only after confirmed membership create | `constituent_leads` + `lead_actions` | Backend implemented; optional membership failure now returns partial failure instead of a success-looking response; individual event config still needs route-level QA |
 | Extreme Weather Action | Action Network | Action Network widget plus Camp completion claim | Action Network-owned; Camp completion endpoint exists | Hub challenge claim requires Hub auth | registry row seeded; full petition webhook/lead logging still pending | Partial |
 | High Energy Bills Action | Action Network | Action Network widget | Action Network-owned | Not connected | Not yet connected to lead/action logging | Incomplete |
 | Coal Slush Fund Action | Action Network | Action Network widget | Action Network-owned | Not connected | Not yet connected to lead/action logging | Incomplete |
@@ -36,6 +36,8 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - Removed false membership success from the public submit paths. Membership-capable functions now require confirmed Neon membership creation before returning a membership success state.
 - Added partial-failure responses for flows where the primary action is saved but Neon membership creation fails or is not configured.
 - Updated Neon activity payloads to use the v2 API shape with `activityDates`, `clientAccount`, and `status` ID pairs instead of the older flat payload.
+- Standardized legacy Take Action subpage back links in the source website repo to `https://www.girlplusenvironment.org/take-action` with `target="_top"`.
+- Updated `neon-event-register` so optional membership creation failures return `502 partialSuccess` with `membership_outcome = membership_creation_failed` instead of a normal success-looking event response.
 
 ## Production Verification
 
@@ -45,6 +47,7 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - Public invalid POST to `gpe-membership-enroll` now reaches function validation and returns `400` with `Eligibility affirmation is required`, not `401`.
 - Public invalid POST to `gpe-grad-highlight-submit` with an incomplete membership request returns `400` with `Eligibility affirmation is required`.
 - Public invalid POST to `neon-event-register` reaches function validation/event lookup and returns `400`, not JWT failure.
+- `neon-event-register` was redeployed after the partial-failure membership response fix.
 - `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `200`.
 - `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` returns `200`.
 - Controlled `gpe-membership-enroll` POST with a full canonical membership request saves `gpe_form_submissions` as `partial_failure` with `membership_outcome = membership_creation_failed` when `DEFAULT_MEMBERSHIP_LEVEL_ID` / `DEFAULT_MEMBERSHIP_TERM_ID` are missing. The response includes a submission ID and no longer reports success before Neon confirms membership creation.
@@ -64,6 +67,7 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - `DEFAULT_MEMBERSHIP_LEVEL_ID` and `DEFAULT_MEMBERSHIP_TERM_ID` are not configured in Supabase production secrets. Until those are set to the real Neon membership level and term IDs, no flow can create a confirmed Neon membership.
 - Neon activity logging now uses the current v2 payload shape, but tenant-specific activity IDs are still missing. Configure `NEON_ACTIVITY_TIMEZONE_ID` and either `NEON_ACTIVITY_STATUS_ID` or the more specific `NEON_ACTIVITY_COMPLETED_STATUS_ID`; membership request fallback activity also needs `NEON_ACTIVITY_OPEN_STATUS_ID` or `NEON_ACTIVITY_STATUS_ID`.
 - Production Wix embeds still need to be republished from the updated mirror files. Local HTML changes do not automatically update Wix.
+- Some archived mirror exports, such as `old-events.html`, still contain Wix-generated relative menu links. They are retained as reference exports and are not treated as active embed source.
 - Action Network signature webhooks are not fully generalized yet. `camp-gpe-action-network-ingest` exists, but High Energy Bills and Coal Slush Fund are not wired into canonical lead/action logging or membership continuation.
 - General petition points at `+5` and Camp petition dual-awards are represented in the registry seed for Extreme Weather, but automatic idempotent awarding from petition webhook completions is not complete.
 - Retroactive point awarding from logged-out petition actions to later Hub identities is not complete.

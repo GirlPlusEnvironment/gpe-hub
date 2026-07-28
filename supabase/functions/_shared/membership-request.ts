@@ -1,18 +1,36 @@
 import { type Json, getEnv, neonFetch, supabaseFetch } from "./neon-membership.ts";
 import { sanitizeText } from "./validation.ts";
 
+export class MembershipCreationError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "MembershipCreationError";
+    this.code = code;
+  }
+}
+
 export async function createMembershipRequestActivity(neonAccountId: string, request: Json) {
+  const now = new Date().toISOString();
+  const statusId = getEnv("NEON_ACTIVITY_OPEN_STATUS_ID", false) || getEnv("NEON_ACTIVITY_STATUS_ID", false);
+  const timeZoneId = getEnv("NEON_ACTIVITY_TIMEZONE_ID", false);
+  if (!statusId || !timeZoneId) {
+    throw new Error("Neon activity status/timezone IDs are not configured.");
+  }
   const result = await neonFetch("/activities", {
     method: "POST",
     body: JSON.stringify({
-      accountId: neonAccountId,
       subject: "GPE Membership Request",
-      type: "Membership",
-      status: "Open",
-      priority: "Normal",
       note: JSON.stringify(request).slice(0, 10_000),
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date().toISOString().slice(0, 10)
+      activityDates: {
+        startDate: now,
+        endDate: now,
+        timeZone: { id: timeZoneId }
+      },
+      clientAccount: [{ accountId: neonAccountId }],
+      status: { id: statusId },
+      priority: "Normal"
     })
   });
   const data = result as Json;
@@ -47,10 +65,14 @@ export async function createMembershipServerSide(args: { neonAccountId: string; 
   const levelId = getEnv("DEFAULT_MEMBERSHIP_LEVEL_ID", false);
   const termId = getEnv("DEFAULT_MEMBERSHIP_TERM_ID", false);
   if (!levelId || !termId) {
-    return createMembershipRequestActivity(args.neonAccountId, {
+    await createMembershipRequestActivity(args.neonAccountId, {
       ...args.request,
-      note: "Membership level/term IDs are not configured; dashboard follow-up required."
-    });
+      note: "Membership level/term IDs are not configured; real membership was not created."
+    }).catch(() => undefined);
+    throw new MembershipCreationError(
+      "membership_config_missing",
+      "Membership is not fully configured. Team GPE has your submission, but the membership record was not created yet."
+    );
   }
   const result = await neonFetch("/memberships", {
     method: "POST",
@@ -62,5 +84,12 @@ export async function createMembershipServerSide(args: { neonAccountId: string; 
     })
   });
   const data = result as Json;
-  return String(data.id || data.membershipId || "");
+  const membershipId = String(data.id || data.membershipId || "");
+  if (!membershipId) {
+    throw new MembershipCreationError("membership_id_missing", "Neon did not return a membership ID.");
+  }
+  return {
+    membershipId,
+    membershipCreationStatus: "confirmed" as const
+  };
 }

@@ -159,19 +159,30 @@ Deno.serve(async (req) => {
 
     let membership = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName), neonAccountId: account.neonAccountId || undefined });
     let secondaryFailure = false;
+    let membershipCreationStatus = membershipRequest ? "not_attempted" : "not_requested";
+    let membershipFailureMessage = "";
     try {
       if (Array.isArray(fields.membershipConsent) && fields.membershipConsent.includes("consent") && !membershipRequest) {
         throw new ValidationError("Complete the membership questions before creating a GPE membership.");
       }
       if (membershipRequest && membership.outcome !== "active_member_existing_hub_user" && membership.outcome !== "active_member_needs_hub_invite" && account.neonAccountId) {
-        await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: FORM_KEY } });
+        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: FORM_KEY } });
+        membershipCreationStatus = membershipResult.membershipCreationStatus;
         membership = { ...membership, outcome: "active_member_needs_hub_invite", neonAccountId: account.neonAccountId };
       }
+    } catch (error) {
+      secondaryFailure = true;
+      membershipCreationStatus = membershipRequest ? "failed" : "not_attempted";
+      membershipFailureMessage = safeError(error);
+      await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_membership", success: false, errorSummary: safeError(error) });
+    }
+
+    try {
       await createActivity({ neonAccountId: account.neonAccountId || "", subject: `${season.name} Registration`, type: season.name, note: { formKey: FORM_KEY, fields } });
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_activity", success: true });
     } catch (error) {
       secondaryFailure = true;
-      await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_membership_or_activity", success: false, errorSummary: safeError(error) });
+      await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_activity", success: false, errorSummary: safeError(error) });
     }
 
     if (membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
@@ -202,9 +213,20 @@ Deno.serve(async (req) => {
       neonSyncStatus: secondaryFailure ? "failed" : "succeeded",
       hubIdentityStatus: membership.outcome === "active_member_needs_hub_invite" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { registrationState: "registered", membershipOutcome: membership.outcome, seasonId: season.id }
+      rawPayload: { registrationState: "registered", membershipOutcome: membership.outcome, membershipCreationStatus, membershipFailureMessage, seasonId: season.id }
     }).catch((error) => logSync({ submissionId: String(submission.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
-    return jsonResponse({ submissionId: submission.id, registrationState: "not_registered", membershipOutcome: membership.outcome, partialSuccess: secondaryFailure, ...publicConfig() }, 200, origin);
+    if (membershipRequest && membershipCreationStatus === "failed") {
+      return jsonResponse({
+        submissionId: submission.id,
+        registrationState: "registered",
+        membershipOutcome: "membership_creation_failed",
+        membershipCreationStatus,
+        partialSuccess: true,
+        message: `Your ${season.name} registration is saved, but membership could not be created yet. Team GPE can retry from the saved submission.`,
+        ...publicConfig()
+      }, 502, origin);
+    }
+    return jsonResponse({ submissionId: submission.id, registrationState: "registered", membershipOutcome: membership.outcome, membershipCreationStatus, partialSuccess: secondaryFailure, ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("camp-gpe-submit", safeError(error));

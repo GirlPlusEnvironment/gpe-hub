@@ -15,7 +15,7 @@ This map lists the custom frontend keys, source labels, Neon IDs where found, an
 | `linkedin` | LinkedIn URL | url | no | custom field `137` | |
 | `openToCollaborations` | Open to Collaborations? | radio | no | custom field `136` | `yes` = option `136`; `no` = option `80` |
 | `otherAccounts` | Other Accounts? | textarea | no | custom field `134` | |
-| `membershipConsent` | Become a Girl Plus Environment member with this Camp registration | checkbox | no | Neon membership creation via `DEFAULT_MEMBERSHIP_LEVEL_ID` / `DEFAULT_MEMBERSHIP_TERM_ID`; fallback activity if IDs are not configured | `consent` |
+| `membershipConsent` | Become a Girl Plus Environment member with this Camp registration | checkbox | no | Neon membership creation via `DEFAULT_MEMBERSHIP_LEVEL_ID` / `DEFAULT_MEMBERSHIP_TERM_ID` | `consent`; production currently returns partial failure until these secrets are configured |
 
 ## Camp GPE Challenge
 
@@ -48,7 +48,7 @@ This map lists the custom frontend keys, source labels, Neon IDs where found, an
 | `state` | State/Province | text | no | `account.address.stateOrProvince` when supplied | |
 | `zip` | ZIP/Postal Code | text | no | `account.address.zipCode` when supplied | |
 | `country` | Country | text | no | `account.address.country` when supplied | default United States |
-| `membershipLevel` | Membership Level | server config | yes | server membership creation config | Export shows `GPE Member`, term ID `1`, cost `0`; production uses `DEFAULT_MEMBERSHIP_LEVEL_ID` and `DEFAULT_MEMBERSHIP_TERM_ID` instead of hardcoding HTML values. |
+| `membershipLevel` | Membership Level | server config | yes | server membership creation config | Export shows `GPE Member`, term ID `1`, cost `0`; production uses `DEFAULT_MEMBERSHIP_LEVEL_ID` and `DEFAULT_MEMBERSHIP_TERM_ID` instead of hardcoding HTML values. These secrets are not currently configured in production, so real membership creation cannot be certified yet. |
 | `autoRenew` | I would like to automatically renew my membership | checkbox | no | membership option | included from export, though the term is free/lifetime |
 | `eligibilityAffirmed` | I identify as a Black or Brown girl, woman, femme, or gender-expansive person | checkbox | yes | canonical membership payload; exact Neon custom field pending dashboard confirmation | `yes` |
 | `ageRange` | Age range | select | yes | canonical membership payload; exact Neon custom field pending dashboard confirmation | `under_18`, `18_24`, `25_34`, `35_44`, `45_plus`, `prefer_not_to_say` |
@@ -81,6 +81,19 @@ This map lists the custom frontend keys, source labels, Neon IDs where found, an
 | `tributeNote` | Tribute or donor note | textarea | no | safe donation note | |
 
 Raw card fields from the Neon export are intentionally excluded from the custom page and Supabase tables.
+
+## Neon Runtime Configuration
+
+Membership creation must not be treated as successful unless Neon returns a membership ID. Production currently needs these Supabase secrets before end-to-end membership certification can pass:
+
+| Secret | Purpose | Current impact if missing |
+|---|---|---|
+| `DEFAULT_MEMBERSHIP_LEVEL_ID` | Neon membership level for new GPE members | Membership-capable flows save the submission, then return partial failure instead of false success |
+| `DEFAULT_MEMBERSHIP_TERM_ID` | Neon membership term for new GPE members | Membership-capable flows save the submission, then return partial failure instead of false success |
+| `NEON_ACTIVITY_TIMEZONE_ID` | Required by Neon CRM v2 `/activities` `activityDates.timeZone.id` | Activity logging fails before sending invalid JSON |
+| `NEON_ACTIVITY_STATUS_ID` | Shared fallback status ID for Neon activity records | Activity logging fails before sending invalid JSON when no specific status secret is set |
+| `NEON_ACTIVITY_COMPLETED_STATUS_ID` | Completed status ID for saved survey/highlight/contact activity records | Needed to log completed activity records without relying on the shared fallback |
+| `NEON_ACTIVITY_OPEN_STATUS_ID` | Open status ID for membership request fallback activities | Needed only for membership request fallback activity records |
 
 ## GPE Grad Highlight
 

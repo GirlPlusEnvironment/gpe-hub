@@ -27,6 +27,7 @@ const FIELDS = [
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
+  let submissionId: string | null = null;
   try {
     assertAllowedOrigin(origin);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
@@ -37,6 +38,7 @@ Deno.serve(async (req) => {
     const canonicalMembership = normalizeCanonicalMembershipInput(fields);
     const email = String(fields.email).toLowerCase();
     const { submission, duplicate } = await createFormSubmission({ idempotencyKey, formKey: FORM_KEY, email, payload: { fields, canonicalMembership }, membershipRequest: { requested: true, consent: true, source: FORM_KEY, ...canonicalMembership }, honeypot: sanitizeText(body.website, 250) });
+    submissionId = String(submission.id);
     if (duplicate) return jsonResponse({ duplicate: true, submissionId: submission.id, ...publicConfig() }, 200, origin);
 
     const before = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName) });
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ submissionId: submission.id, membershipOutcome: "ambiguous_account", requiresManualReview: true, ...publicConfig() }, 200, origin);
     }
 
-    const membershipId = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, canonicalMembership, source: FORM_KEY } });
+    const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, canonicalMembership, source: FORM_KEY } });
     await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId }).catch(() => undefined);
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",
@@ -92,12 +94,24 @@ Deno.serve(async (req) => {
       neonSyncStatus: "succeeded",
       hubIdentityStatus: "pending",
       pointsStatus: "not_applicable",
-      rawPayload: { membershipId, membershipOutcome: "active_member_needs_hub_invite" }
+      rawPayload: { ...membershipResult, membershipOutcome: "active_member_needs_hub_invite" }
     }).catch(() => undefined);
-    return jsonResponse({ submissionId: submission.id, membershipId, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
+    return jsonResponse({ submissionId: submission.id, ...membershipResult, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
+    if (submissionId) {
+      await updateFormSubmission(submissionId, {
+        submission_status: "partial_failure",
+        neon_sync_status: "failed",
+        membership_outcome: "membership_creation_failed"
+      }).catch(() => undefined);
+    }
     console.error("gpe-membership-enroll", safeError(error));
-    return jsonResponse({ message: error instanceof ValidationError ? error.message : "Membership enrollment could not be completed." }, error instanceof ValidationError ? 400 : 500, origin);
+    return jsonResponse({
+      message: error instanceof ValidationError ? error.message : safeError(error) || "Membership enrollment could not be completed.",
+      submissionId,
+      membershipCreationStatus: "failed",
+      membershipOutcome: "membership_creation_failed"
+    }, error instanceof ValidationError ? 400 : 500, origin);
   }
 });

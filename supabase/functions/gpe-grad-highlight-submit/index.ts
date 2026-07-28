@@ -44,6 +44,8 @@ Deno.serve(async (req) => {
     if (duplicate) return jsonResponse({ duplicate: true, submissionId, ...publicConfig() }, 200, origin);
 
     let membershipOutcome = "lookup_failed";
+    let membershipCreationStatus = membershipRequest ? "not_attempted" : "not_requested";
+    let membershipFailureMessage = "";
     try {
       const account = await resolveOrCreateAccount({
         email,
@@ -67,16 +69,24 @@ Deno.serve(async (req) => {
         membershipOutcome !== "active_member_existing_hub_user" &&
         membershipOutcome !== "active_member_needs_hub_invite"
       ) {
-        await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { request, fields, source: FORM_KEY } });
+        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { request, fields, source: FORM_KEY } });
         await queueHubInvitation({ submissionId, email, neonAccountId: account.neonAccountId }).catch((error) =>
           logSync({ submissionId, integration: "hub", operation: "invite", success: false, errorSummary: safeError(error) })
         );
+        membershipCreationStatus = membershipResult.membershipCreationStatus;
         membershipOutcome = "active_member_needs_hub_invite";
       }
     } catch (error) {
+      membershipFailureMessage = safeError(error);
+      membershipCreationStatus = membershipRequest ? "failed" : "not_attempted";
       await logSync({ submissionId, integration: "neon", operation: "grad_highlight_activity", success: false, errorSummary: safeError(error) });
     }
-    await updateFormSubmission(submissionId, { submission_status: membershipOutcome === "lookup_failed" ? "partial_failure" : "completed", membership_outcome: membershipOutcome });
+    const membershipFailed = membershipRequest && membershipCreationStatus === "failed";
+    await updateFormSubmission(submissionId, {
+      submission_status: membershipOutcome === "lookup_failed" || membershipFailed ? "partial_failure" : "completed",
+      membership_outcome: membershipFailed ? "membership_creation_failed" : membershipOutcome,
+      neon_sync_status: membershipOutcome === "lookup_failed" || membershipFailed ? "failed" : "succeeded"
+    });
     await recordLeadAction({
       submissionId,
       email,
@@ -89,12 +99,22 @@ Deno.serve(async (req) => {
       campaignSlug: "gpe-grad-highlight",
       sourceUrl: "https://www.girlplusenvironment.org/gpe-grad-highlight#submission",
       membershipRequest,
-      neonSyncStatus: membershipOutcome === "lookup_failed" ? "failed" : "succeeded",
+      neonSyncStatus: membershipOutcome === "lookup_failed" || membershipFailed ? "failed" : "succeeded",
       hubIdentityStatus: membershipOutcome === "active_member_needs_hub_invite" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { membershipOutcome }
+      rawPayload: { membershipOutcome, membershipCreationStatus, membershipFailureMessage }
     }).catch((error) => logSync({ submissionId, integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
-    return jsonResponse({ submissionId, membershipOutcome, ...publicConfig() }, 200, origin);
+    if (membershipFailed) {
+      return jsonResponse({
+        message: "Your Grad Highlight was saved, but membership could not be created yet. Team GPE can retry from the saved submission.",
+        submissionId,
+        membershipOutcome: "membership_creation_failed",
+        membershipCreationStatus,
+        partialSuccess: true,
+        ...publicConfig()
+      }, 502, origin);
+    }
+    return jsonResponse({ submissionId, membershipOutcome, membershipCreationStatus, ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     if (submissionId) await updateFormSubmission(submissionId, { submission_status: "partial_failure" }).catch(() => undefined);

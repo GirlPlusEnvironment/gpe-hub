@@ -46,8 +46,10 @@ Checked on July 28, 2026:
 
 - `https://www.girlplusenvironment.org/take-action` returns `200`.
 - `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` returns `200`.
-- `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `404`, so the Grad Highlight mirror markup still needs to be added to a published Wix page or routed with a Wix redirect before the canonical CTA can work in production.
+- `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `200`.
 - The Neon-connected public Edge Functions `neon-climate-survey` and `gpe-grad-highlight-submit` accept Wix-origin unauthenticated requests and return function-level validation errors for invalid payloads, confirming requests reach the deployed functions instead of failing at JWT auth.
+- The pushed website source now uses canonical absolute top-level Wix URLs for Back to Actions on Grad Highlight and Mobile Climate Survey, and the Take Action page links Mobile Climate Survey through the first-party route instead of the hosted Neon survey URL.
+- If production Wix still renders an older embed script version, republish the Wix HTML embed with the current `gpe-form-membership.js?v=20260728` helper reference.
 
 Manual dashboard work:
 

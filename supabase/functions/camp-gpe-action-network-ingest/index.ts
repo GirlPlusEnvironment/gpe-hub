@@ -1,5 +1,5 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createFormSubmission, logSync, updateFormSubmission } from "../_shared/form-submission.ts";
+import { createFormSubmission, logSync, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { type Json, resolveMembership, safeError, supabaseFetch } from "../_shared/neon-membership.ts";
 import { normalizeEmail, readJson, sanitizeText, ValidationError } from "../_shared/validation.ts";
 
@@ -99,6 +99,11 @@ function extractActionSlug(body: Json) {
 
 function externalId(body: Json, email: string, actionSlug: string) {
   return sanitizeText(firstValue(body.id, body.submission_id, body.action_network_id, body.uuid), 160) || `${actionSlug}:${email}`;
+}
+
+function extractPersonId(body: Json) {
+  const person = nestedRecord(body.person || body.person_data || body.supporter);
+  return sanitizeText(firstValue(body.person_id, body.personId, person.id, person.uuid, person.action_network_id), 180) || null;
 }
 
 async function idempotencyKeyFor(body: Json, email: string, actionSlug: string) {
@@ -318,6 +323,27 @@ Deno.serve(async (req) => {
       neon_account_id: membership.neonAccountId,
       neon_sync_status: "skipped"
     });
+
+    await recordLeadAction({
+      submissionId: String(formSubmission.id),
+      email,
+      firstName: names.firstName,
+      lastName: names.lastName,
+      neonAccountId: membership.neonAccountId,
+      actionType: "petition_signature",
+      actionSlug,
+      provider: "action_network",
+      providerActionId: actionSlug,
+      providerPersonId: extractPersonId(body),
+      providerSignatureId: externalId(body, email, actionSlug),
+      campaignSlug: season.slug,
+      sourceUrl: sanitizeText(firstValue(body.url, body.action_url, body.referrer), 500) || null,
+      membershipRequest: null,
+      rawPayload: { source: "action_network", actionSlug, payload: body },
+      neonSyncStatus: membership.neonAccountId ? "succeeded" : "skipped",
+      hubIdentityStatus: seasonMember?.user_id ? "succeeded" : "pending",
+      pointsStatus: seasonMember?.user_id ? "pending_membership" : "pending_identity"
+    }).catch((error) => console.error("action-network lead action logging failed", safeError(error)));
 
     return jsonResponse({
       ok: true,

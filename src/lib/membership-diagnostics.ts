@@ -90,6 +90,34 @@ export type CrmConfigurationReport = {
   blockers: string[];
 };
 
+export type PetitionReconciliationRow = {
+  submissionId: string | null;
+  leadActionId: string | null;
+  email: string;
+  actionSlug: string;
+  petitionTitle: string;
+  campaignSlug: string | null;
+  sourceUrl: string | null;
+  providerPersonId: string | null;
+  providerSignatureId: string;
+  occurredAt: string;
+  neonAccountId: string | null;
+  hubProfileId: string | null;
+  membershipStatus: string;
+  hubIdentityStatus: string;
+  neonSyncStatus: string;
+  pointsStatus: string;
+  invitationStatus: string;
+  reconciliationError: string | null;
+};
+
+export type PetitionReconciliationReport = {
+  ok: boolean;
+  reconciled?: number;
+  checkedAt: string;
+  rows: PetitionReconciliationRow[];
+};
+
 export async function getMembershipDiagnosticReport(email: string): Promise<MembershipDiagnosticReport> {
   const normalizedEmail = email.trim().toLowerCase();
   const { data, error } = await supabase.rpc("admin_get_membership_identity_diagnostic", {
@@ -172,5 +200,23 @@ export async function getCrmConfigurationReport(): Promise<CrmConfigurationRepor
   });
   if (error) throw error;
   if (!data) throw new Error("CRM configuration report was empty.");
+  return data;
+}
+
+export async function getPetitionReconciliationReport(limit = 50): Promise<PetitionReconciliationReport> {
+  const { data, error } = await supabase.functions.invoke<PetitionReconciliationReport>("admin-petition-reconciliation", {
+    body: { action: "list", limit },
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Petition reconciliation report was empty.");
+  return data;
+}
+
+export async function reconcilePetitionSigners(submissionIds?: string[], limit = 50): Promise<PetitionReconciliationReport> {
+  const { data, error } = await supabase.functions.invoke<PetitionReconciliationReport>("admin-petition-reconciliation", {
+    body: { action: "reconcile", limit, submissionIds },
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Petition reconciliation response was empty.");
   return data;
 }

@@ -47,8 +47,12 @@ Checked on July 28, 2026:
 - `https://www.girlplusenvironment.org/take-action` returns `200`.
 - `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` returns `200`.
 - `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `200`.
+- `https://www.girlplusenvironment.org/extreme-weather-action` returns `200`.
+- `https://www.girlplusenvironment.org/high-energy-bills-action` returns `200`.
+- Repo-only paths under `https://www.girlplusenvironment.org/take-action/*` such as `/take-action/extreme-weather`, `/take-action/high-energy-bills`, and `/take-action/climate-adaptation-survey` return `404` in Wix. The active Take Action source does not link to these paths; publish or redirect them only if they become public CTAs.
 - The Neon-connected public Edge Functions `neon-climate-survey` and `gpe-grad-highlight-submit` accept Wix-origin unauthenticated requests and return function-level validation errors for invalid payloads, confirming requests reach the deployed functions instead of failing at JWT auth.
 - The pushed website source now uses canonical absolute top-level Wix URLs for Back to Actions on Grad Highlight and Mobile Climate Survey, and the Take Action page links Mobile Climate Survey through the first-party route instead of the hosted Neon survey URL.
+- Legacy source-only Take Action subpages now use `https://www.girlplusenvironment.org/take-action` with `target="_top"` for Back to Actions links.
 - If production Wix still renders an older embed script version, republish the Wix HTML embed with the current `gpe-form-membership.js?v=20260728` helper reference.
 
 Manual dashboard work:

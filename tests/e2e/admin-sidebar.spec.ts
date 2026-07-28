@@ -407,16 +407,16 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
 
   await expect(page.getByRole("heading", { name: "Camp Admin" })).toBeVisible();
   await expect(page).toHaveURL(/\/admin\/camp/);
-  for (const tab of ["Overview", "Challenge Management", "Schedule", "Submission Review", "Moderation", "Cabins", "Rewards & Points", "Settings"]) {
+  for (const tab of ["Overview", "Season Builder", "Challenge Builder", "Schedule", "Review", "Moderation", "Cabins", "Rewards", "Settings"]) {
     await expect(page.getByRole("tab", { name: tab })).toBeVisible();
   }
   await expect(page.getByRole("heading", { name: "Camp GPE Summer" })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Challenge Management" }).click();
+  await page.getByRole("tab", { name: "Challenge Builder" }).click();
   await expect(page).toHaveURL(/tab=challenges/);
   await expect(page.getByRole("heading", { name: "Challenges" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Create a Short Video/ })).toBeVisible();
-  for (const editorTab of ["Overview", "Content", "Schedule", "Rewards", "Submission", "Resources", "Notifications", "History"]) {
+  for (const editorTab of ["Overview", "Content", "Schedule", "Rewards", "Submission", "Actions", "Notifications", "History"]) {
     await expect(page.getByRole("tab", { name: editorTab }).last()).toBeVisible();
   }
   await expect(page.getByLabel("Challenge title")).toHaveValue("Create a Short Video");
@@ -431,10 +431,10 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await page.getByRole("tab", { name: "History" }).last().click();
   await expect(page.getByRole("heading", { name: "Version History" })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const tabPosition = await page.getByRole("tab", { name: "Challenge Management" }).evaluate((node) => window.getComputedStyle(node.parentElement?.parentElement || node).position);
+  const tabPosition = await page.getByRole("tab", { name: "Challenge Builder" }).evaluate((node) => window.getComputedStyle(node.parentElement?.parentElement || node).position);
   expect(tabPosition).toBe("sticky");
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Challenge Management" })).toHaveAttribute("data-state", "active");
+  await expect(page.getByRole("tab", { name: "Challenge Builder" })).toHaveAttribute("data-state", "active");
 
   await page.getByRole("tab", { name: "Schedule", exact: true }).first().click();
   await expect(page).toHaveURL(/tab=schedule/);
@@ -444,7 +444,7 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await expect(page.getByRole("button", { name: "draft", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Draft Reflection/ })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Submission Review" }).click();
+  await page.getByRole("tab", { name: "Review" }).click();
   await expect(page).toHaveURL(/tab=submissions/);
   await expect(page.getByRole("heading", { name: "Submissions" })).toBeVisible();
   for (const statusTab of [/Pending \d+/, /Approved \d+/, /Rejected \d+/, /Needs Changes \d+/, /Duplicate \d+/]) {
@@ -466,7 +466,7 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("tab", { name: "Moderation" }).click();
-  for (const tab of [/Reports 0/, /Listings 0/, /Posts 0/, /Comments 0/]) {
+  for (const tab of [/Posts 0/, /Comments 0/, /Listings 0/, /Reports 0/, /Users 0/]) {
     await expect(page.getByRole("tab", { name: tab })).toBeVisible();
   }
 
@@ -477,15 +477,17 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await page.getByRole("button", { name: "Create cabin and chat" }).click();
   await expect(page.getByText("Conversation connected")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Rewards & Points" }).click();
+  await page.getByRole("tab", { name: "Rewards" }).click();
   await expect(page.getByRole("heading", { name: "Point Rules and Ledger" })).toBeVisible();
   for (const tab of ["Point Rules", "Point Ledger", "Manual Adjustments", "Badges", "Achievements"]) {
     await expect(page.getByRole("tab", { name: tab })).toBeVisible();
   }
 
-  await page.getByRole("tab", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Global Camp Settings" })).toBeVisible();
+  await page.getByRole("tab", { name: "Season Builder" }).click();
+  await expect(page.getByRole("heading", { name: "Global Season Workspace" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save Draft" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Preview" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish Changes" })).toBeVisible();
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: "Admin Operations" })).toBeVisible();
 });

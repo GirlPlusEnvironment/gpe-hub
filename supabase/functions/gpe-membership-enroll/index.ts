@@ -1,6 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createFormSubmission, publicConfig, updateFormSubmission } from "../_shared/form-submission.ts";
+import { createFormSubmission, publicConfig, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { CANONICAL_MEMBERSHIP_FIELDS, normalizeCanonicalMembershipInput } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { resolveMembership, safeError } from "../_shared/neon-membership.ts";
 import { readJson, sanitizeText, validateFields, validateIdempotencyKey, ValidationError } from "../_shared/validation.ts";
@@ -20,7 +21,8 @@ const FIELDS = [
   { key: "zip", label: "Zip/Postal Code" },
   { key: "country", label: "Country" },
   { key: "autoRenew", label: "Auto renew", type: "checkbox" as const },
-  { key: "consent", label: "Membership consent", required: true, type: "checkbox" as const, allowed: ["consent"] }
+  { key: "consent", label: "Membership consent", required: true, type: "checkbox" as const, allowed: ["consent"] },
+  ...CANONICAL_MEMBERSHIP_FIELDS
 ];
 
 Deno.serve(async (req) => {
@@ -32,8 +34,9 @@ Deno.serve(async (req) => {
     const body = await readJson(req);
     const idempotencyKey = validateIdempotencyKey(req.headers.get("idempotency-key") || body.idempotencyKey);
     const fields = validateFields((body.fields || {}) as Record<string, unknown>, FIELDS);
+    const canonicalMembership = normalizeCanonicalMembershipInput(fields);
     const email = String(fields.email).toLowerCase();
-    const { submission, duplicate } = await createFormSubmission({ idempotencyKey, formKey: FORM_KEY, email, payload: { fields }, honeypot: sanitizeText(body.website, 250) });
+    const { submission, duplicate } = await createFormSubmission({ idempotencyKey, formKey: FORM_KEY, email, payload: { fields, canonicalMembership }, membershipRequest: { requested: true, consent: true, source: FORM_KEY, ...canonicalMembership }, honeypot: sanitizeText(body.website, 250) });
     if (duplicate) return jsonResponse({ duplicate: true, submissionId: submission.id, ...publicConfig() }, 200, origin);
 
     const before = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName) });
@@ -61,7 +64,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ submissionId: submission.id, membershipOutcome: "ambiguous_account", requiresManualReview: true, ...publicConfig() }, 200, origin);
     }
 
-    const membershipId = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, source: FORM_KEY } });
+    const membershipId = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, canonicalMembership, source: FORM_KEY } });
     await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId }).catch(() => undefined);
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",
@@ -70,6 +73,27 @@ Deno.serve(async (req) => {
       neon_account_id: account.neonAccountId,
       membership_outcome: "active_member_needs_hub_invite"
     });
+    await recordLeadAction({
+      submissionId: String(submission.id),
+      email,
+      firstName: String(fields.firstName),
+      lastName: String(fields.lastName),
+      phone: String(fields.phone || ""),
+      postalCode: String(fields.zip || ""),
+      city: String(fields.city || ""),
+      state: String(fields.state || ""),
+      neonAccountId: account.neonAccountId,
+      actionType: "membership_enrollment",
+      actionSlug: "become-a-member",
+      provider: "neon_form",
+      campaignSlug: "membership",
+      sourceUrl: "https://www.girlplusenvironment.org/become-a-member#membership",
+      membershipRequest: { requested: true, consent: true, source: FORM_KEY, canonicalMembership },
+      neonSyncStatus: "succeeded",
+      hubIdentityStatus: "pending",
+      pointsStatus: "not_applicable",
+      rawPayload: { membershipId, membershipOutcome: "active_member_needs_hub_invite" }
+    }).catch(() => undefined);
     return jsonResponse({ submissionId: submission.id, membershipId, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;

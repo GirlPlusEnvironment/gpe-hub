@@ -1,6 +1,6 @@
 # GPE Form URL Migration
 
-Status: repository links were updated where they are controlled public links. Export/reference files are intentionally retained.
+Status: repository links were updated where they are controlled public links. Export/reference files are intentionally retained. Wix-embedded navigation must use canonical absolute URLs with `target="_top"` so route changes escape the Wix HTML iframe.
 
 ## Canonical URLs
 
@@ -28,8 +28,10 @@ Status: repository links were updated where they are controlled public links. Ex
 
 ## Links Updated In This Pass
 
-- `gpe-mirror/take-action.html`: climate survey CTA now points to `mobile-climate-adaptation-survey.html#survey`.
-- `gpe-mirror/take-action.html`: added `gpe-grad-highlight.html#submission` advocacy card.
+- `gpe-mirror/take-action.html`: climate survey CTA points to `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey#survey` with `target="_top"`.
+- `gpe-mirror/take-action.html`: Grad Highlight CTA points to `https://www.girlplusenvironment.org/gpe-grad-highlight#submission` with `target="_top"`.
+- `gpe-mirror/mobile-climate-adaptation-survey.html`: Back to actions and membership fallback links use canonical absolute Wix URLs.
+- `gpe-mirror/gpe-grad-highlight.html`: Back to actions uses the canonical absolute Wix URL.
 - `gpe-mirror/camp-gpe-toolkit.html`: visible Camp challenge CTAs now point to `camp-gpe.html#challenge`.
 - `gpe-mirror/camp-gpe-toolkit.html`: JavaScript `campaignLinks.submissions` now points to `https://www.girlplusenvironment.org/camp-gpe#challenge`.
 - `gpe-mirror/event-details/camp-gpe.html`: challenge link and removed Neon share script area now point to `../camp-gpe.html#challenge`.
@@ -37,6 +39,15 @@ Status: repository links were updated where they are controlled public links. Ex
 ## Neon Redirect Reality
 
 Neon-hosted forms may support configurable after-submission destination/confirmation URLs in dashboard settings. That helps after someone submits a Neon form, but it does not make the old hosted Neon URL a reliable landing-page redirect endpoint.
+
+## Production Check
+
+Checked on July 28, 2026:
+
+- `https://www.girlplusenvironment.org/take-action` returns `200`.
+- `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` returns `200`.
+- `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `404`, so the Grad Highlight mirror markup still needs to be added to a published Wix page or routed with a Wix redirect before the canonical CTA can work in production.
+- The Neon-connected public Edge Functions `neon-climate-survey` and `gpe-grad-highlight-submit` accept Wix-origin unauthenticated requests and return function-level validation errors for invalid payloads, confirming requests reach the deployed functions instead of failing at JWT auth.
 
 Manual dashboard work:
 

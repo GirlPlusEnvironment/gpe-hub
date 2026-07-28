@@ -1,4 +1,7 @@
 import {
+  recordLeadAction
+} from "../_shared/form-submission.ts";
+import {
   type Json,
   findNeonAccountsByEmail,
   getEnv,
@@ -370,6 +373,27 @@ Deno.serve(async (req) => {
     }
 
     await updateSubmission(String(submission.id), { membership_outcome: outcome, status });
+    await recordLeadAction({
+      email: valid.normalizedEmail,
+      firstName: valid.firstName,
+      lastName: valid.lastName,
+      phone: valid.phone,
+      postalCode: sanitizeText(valid.address.zipCode, 40),
+      city: sanitizeText(valid.address.city, 120),
+      state: sanitizeText(valid.address.stateOrProvince, 80),
+      neonAccountId,
+      actionType: "survey_completion",
+      actionSlug: "mobile-climate-adaptation-survey",
+      provider: "neon_survey",
+      providerActionId: `survey:${SURVEY_ID}/form:${FORM_ID}`,
+      campaignSlug: "mobile-climate-adaptation",
+      sourceUrl: valid.sourceUrl,
+      membershipRequest: null,
+      neonSyncStatus: status === "neon_synced" || status === "hub_invited" || status === "hub_invite_pending" ? "succeeded" : "failed",
+      hubIdentityStatus: status === "hub_invited" ? "succeeded" : status === "hub_invite_pending" ? "pending" : "not_attempted",
+      pointsStatus: "not_applicable",
+      rawPayload: { climateSurveySubmissionId: submission.id, membershipOutcome: outcome, status }
+    }).catch((error) => console.error("climate-survey-lead-action", safeError(error)));
     return jsonResponse({
       submissionId: submission.id,
       membershipOutcome: outcome,

@@ -1,5 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
+import { recordLeadAction } from "../_shared/form-submission.ts";
 import { logEventSync } from "../_shared/neon-events.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { extractRows, neonFetch, resolveMembership, safeError, supabaseFetch } from "../_shared/neon-membership.ts";
@@ -150,7 +152,7 @@ Deno.serve(async (req) => {
 
     const event = await loadEvent(body);
     const fields = validateFields((body.fields || {}) as Record<string, unknown>, FIELDS);
-    const membershipRequest = (body.membershipRequest || null) as Record<string, unknown> | null;
+    const membershipRequest = normalizeMembershipRequest(body.membershipRequest) as Record<string, unknown> | null;
     const email = String(fields.email).toLowerCase();
     let membership = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName) });
     const hubUserId = await profileByEmail(email);
@@ -225,6 +227,24 @@ Deno.serve(async (req) => {
         p_payload: { neonEventId: event.neon_event_id, membershipOutcome: membership.outcome }
       })
     }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "notification", operation: "event_registration_intent", success: false, errorSummary: safeError(error) }));
+    await recordLeadAction({
+      email,
+      firstName: String(fields.firstName),
+      lastName: String(fields.lastName),
+      phone: String(fields.phone || ""),
+      neonAccountId: membership.neonAccountId,
+      actionType: "event_registration_intent",
+      actionSlug: String(event.slug || event.neon_event_id || "event"),
+      provider: "neon_form",
+      providerActionId: String(event.neon_event_id || ""),
+      campaignSlug: String(event.campaign_slug || ""),
+      sourceUrl: String(event.public_url || ""),
+      membershipRequest,
+      neonSyncStatus: status === "registered" ? "succeeded" : "pending",
+      hubIdentityStatus: hubUserId ? "succeeded" : "not_attempted",
+      pointsStatus: status === "registered" ? "pending_membership" : "not_applicable",
+      rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membership.outcome }
+    }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
 
     return jsonResponse({
       ok: true,

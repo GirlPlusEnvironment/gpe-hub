@@ -1,6 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createFormSubmission, logSync, publicConfig, updateFormSubmission } from "../_shared/form-submission.ts";
+import { createFormSubmission, logSync, publicConfig, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { createActivity } from "../_shared/neon-activity.ts";
 import { type Json, resolveMembership, safeError } from "../_shared/neon-membership.ts";
@@ -29,7 +30,8 @@ Deno.serve(async (req) => {
     const idempotencyKey = validateIdempotencyKey(req.headers.get("idempotency-key") || body.idempotencyKey);
     const fields = validateFields((body.fields || {}) as Record<string, unknown>, FIELDS);
     const email = String(fields.email).toLowerCase();
-    const membershipRequest = (body.membershipRequest || null) as Json | null;
+    const membershipRequest = normalizeMembershipRequest(body.membershipRequest) as Json | null;
+    let resolvedNeonAccountId: string | null = null;
     const { submission, duplicate } = await createFormSubmission({
       idempotencyKey,
       formKey: FORM_KEY,
@@ -50,6 +52,7 @@ Deno.serve(async (req) => {
         allowCreate: true
       });
       if (account.status !== "ambiguous" && account.neonAccountId) {
+        resolvedNeonAccountId = account.neonAccountId;
         await createActivity({ neonAccountId: account.neonAccountId, subject: "GPE Grad Highlight Submission", type: "Highlight", note: { formKey: FORM_KEY, fields } });
         await updateFormSubmission(submissionId, { neon_account_id: account.neonAccountId, neon_sync_status: "succeeded" });
       }
@@ -74,6 +77,23 @@ Deno.serve(async (req) => {
       await logSync({ submissionId, integration: "neon", operation: "grad_highlight_activity", success: false, errorSummary: safeError(error) });
     }
     await updateFormSubmission(submissionId, { submission_status: membershipOutcome === "lookup_failed" ? "partial_failure" : "completed", membership_outcome: membershipOutcome });
+    await recordLeadAction({
+      submissionId,
+      email,
+      firstName: String(fields.firstName),
+      lastName: String(fields.lastName),
+      neonAccountId: resolvedNeonAccountId,
+      actionType: "grad_highlight_submission",
+      actionSlug: "gpe-grad-highlight",
+      provider: "neon_form",
+      campaignSlug: "gpe-grad-highlight",
+      sourceUrl: "https://www.girlplusenvironment.org/gpe-grad-highlight#submission",
+      membershipRequest,
+      neonSyncStatus: membershipOutcome === "lookup_failed" ? "failed" : "succeeded",
+      hubIdentityStatus: membershipOutcome === "active_member_needs_hub_invite" ? "pending" : "not_attempted",
+      pointsStatus: "not_applicable",
+      rawPayload: { membershipOutcome }
+    }).catch((error) => logSync({ submissionId, integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
     return jsonResponse({ submissionId, membershipOutcome, ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;

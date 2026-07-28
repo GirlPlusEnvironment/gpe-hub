@@ -171,16 +171,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.neon-climate-survey]
-verify_jwt = true
+verify_jwt = false
 
 [functions.neon-event-register]
-verify_jwt = true
+verify_jwt = false
 
 [functions.gpe-grad-highlight-submit]
-verify_jwt = true
+verify_jwt = false
 
 [functions.gpe-membership-enroll]
-verify_jwt = true
+verify_jwt = false
 
 [auth]
 enabled = true

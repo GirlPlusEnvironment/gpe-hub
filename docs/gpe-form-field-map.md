@@ -50,6 +50,18 @@ This map lists the custom frontend keys, source labels, Neon IDs where found, an
 | `country` | Country | text | no | `account.address.country` when supplied | default United States |
 | `membershipLevel` | Membership Level | server config | yes | server membership creation config | Export shows `GPE Member`, term ID `1`, cost `0`; production uses `DEFAULT_MEMBERSHIP_LEVEL_ID` and `DEFAULT_MEMBERSHIP_TERM_ID` instead of hardcoding HTML values. |
 | `autoRenew` | I would like to automatically renew my membership | checkbox | no | membership option | included from export, though the term is free/lifetime |
+| `eligibilityAffirmed` | I identify as a Black or Brown girl, woman, femme, or gender-expansive person | checkbox | yes | canonical membership payload; exact Neon custom field pending dashboard confirmation | `yes` |
+| `ageRange` | Age range | select | yes | canonical membership payload; exact Neon custom field pending dashboard confirmation | `under_18`, `18_24`, `25_34`, `35_44`, `45_plus`, `prefer_not_to_say` |
+| `raceEthnicity` | Race/ethnicity | checkbox | yes | canonical membership payload; exact Neon custom field pending dashboard confirmation | `black_african_american`, `latina_latine_hispanic`, `indigenous_native`, `asian_pacific_islander`, `middle_eastern_north_african`, `multiracial`, `self_describe` |
+| `raceEthnicityOther` | Race/ethnicity self-description | text | no | canonical membership payload; exact Neon custom field pending dashboard confirmation | |
+| `genderIdentity` | Gender identity | checkbox | no | canonical membership payload; exact Neon custom field pending dashboard confirmation | `girl`, `woman`, `femme`, `gender_expansive`, `nonbinary`, `self_describe`, `prefer_not_to_say` |
+| `genderIdentityOther` | Gender self-description | text | no | canonical membership payload; exact Neon custom field pending dashboard confirmation | |
+| `climateInterests` | Climate interests | checkbox | no | canonical membership payload; exact Neon custom field pending dashboard confirmation | `energy_justice`, `extreme_weather`, `clean_beauty`, `climate_mental_health`, `green_jobs`, `community_advocacy` |
+| `communicationPreferences` | Communication preferences | checkbox | no | canonical membership payload; exact Neon custom field pending dashboard confirmation | `email`, `sms`, `events`, `office_hours` |
+| `interestedInOfficeHours` | Interested in attending GPE Office Hours | checkbox | no | canonical membership payload; exact Neon automation field pending dashboard confirmation | `yes`; must be remapped to exact Neon field/option before automation parity is claimed |
+| `emailConsent` | Email consent | checkbox | yes | canonical membership payload; exact Neon consent field pending dashboard confirmation | `yes` |
+| `smsConsent` | SMS consent | checkbox | no | canonical membership payload; exact Neon consent field pending dashboard confirmation | `yes` |
+| `termsConsent` | Terms/privacy consent | checkbox | yes | canonical membership payload; exact Neon consent field pending dashboard confirmation | `yes` |
 | `consent` | Membership consent | checkbox | yes | submission consent | required before server membership create/reactivation |
 
 ## Donation Intake

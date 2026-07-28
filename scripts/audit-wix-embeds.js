@@ -39,6 +39,9 @@ const badBytes = [
 const checks = [
   ...badBytes.map((value) => ({ name: "mojibake", needle: value, blocking: true })),
   { name: "hash-only link", needle: "href=" + "\"#\"", blocking: true },
+  { name: "relative climate survey route", needle: "href=\"mobile-climate-adaptation-survey.html#survey\"", blocking: true, embedOnly: true },
+  { name: "relative grad highlight route", needle: "href=\"gpe-grad-highlight.html#submission\"", blocking: true, embedOnly: true },
+  { name: "unresolved action back link", needle: "REPLACE-WITH-GPE-ACTIONS-PAGE-URL", blocking: true, embedOnly: true },
   { name: "prototype page switcher", needle: "show" + "Page(", blocking: true },
   { name: "wix component id", needle: "com" + "p-", blocking: true },
   { name: "wix generated gallery", needle: "Pro" + "Gallery", blocking: true },
@@ -81,6 +84,7 @@ for (const file of walk(gpeRoot)) {
     continue;
   }
   for (const check of checks) {
+    if (check.embedOnly && !isEmbed) continue;
     lines.forEach((line, index) => {
       if (line.includes(check.needle)) {
         if (isDocumentedPatternReference(rel, line)) return;

@@ -4,7 +4,11 @@ export type ChallengeOpenFlowKind =
   | "external_action"
   | "submission_form"
   | "toolkit"
-  | "completion_page";
+  | "petition"
+  | "external_link"
+  | "event"
+  | "completion_page"
+  | "completion_only";
 
 export type ChallengeOpenFlowDefinition = {
   kind?: ChallengeOpenFlowKind;
@@ -14,6 +18,9 @@ export type ChallengeOpenFlowDefinition = {
   return_url?: string;
   secondary_label?: string;
   secondary_url?: string;
+  completion_url?: string;
+  open_in_new_tab?: boolean;
+  track_clicks?: boolean;
 };
 
 export type ChallengeDefinition = {
@@ -80,7 +87,16 @@ export function challengeDefinition(challenge: CampChallenge | null | undefined)
 function normalizeOpenFlowKind(value: unknown): ChallengeOpenFlowKind | null {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "external") return "external_action";
-  if (normalized === "external_action" || normalized === "submission_form" || normalized === "toolkit" || normalized === "completion_page") {
+  if (normalized === "external_link") return "external_link";
+  if (
+    normalized === "external_action" ||
+    normalized === "submission_form" ||
+    normalized === "toolkit" ||
+    normalized === "petition" ||
+    normalized === "event" ||
+    normalized === "completion_page" ||
+    normalized === "completion_only"
+  ) {
     return normalized;
   }
   return null;
@@ -140,6 +156,7 @@ function normalizeUrl(url: string | null | undefined) {
 function inferredOpenFlowKind(challenge: CampChallenge): ChallengeOpenFlowKind {
   const type = String(challenge.submission_type || challenge.category || "").toLowerCase();
   if (type.includes("petition") || challenge.related_kind === "petition") return "external_action";
+  if (type.includes("event") || challenge.related_kind === "event") return "event";
   if (type.includes("toolkit") || challenge.related_kind === "toolkit") return "toolkit";
   return "submission_form";
 }
@@ -152,7 +169,8 @@ export function resolveChallengeOpenFlow(challenge: CampChallenge) {
   const fallbackExternal = normalizeUrl(
     openFlow.url ||
     (kind === "toolkit" ? resources.toolkit_url : null) ||
-    (kind === "external_action" ? resources.petition_url : null) ||
+    (kind === "petition" || kind === "external_action" ? resources.petition_url : null) ||
+    (kind === "event" ? resources.event_url : null) ||
     challenge.related_url ||
     challenge.action_url,
   );
@@ -160,23 +178,28 @@ export function resolveChallengeOpenFlow(challenge: CampChallenge) {
   const completionHref = `/camp-gpe/challenges/${challenge.slug}?status=complete`;
   const isExternalHref = (href: string) => !href.startsWith("/");
 
-  if (kind === "external_action" || kind === "toolkit") {
+  if (kind === "external_action" || kind === "external_link" || kind === "toolkit" || kind === "petition" || kind === "event") {
+    const missingLabel =
+      kind === "toolkit" ? "Toolkit URL is missing." :
+      kind === "petition" ? "Petition URL is missing." :
+      kind === "event" ? "Event URL is missing." :
+      "External action URL is missing.";
     if (!fallbackExternal) {
       return {
         kind,
-        label: openFlow.label || challenge.cta_label || (kind === "toolkit" ? "Open Toolkit" : "Open Action"),
+        label: openFlow.label || challenge.cta_label || (kind === "toolkit" ? "Open Toolkit" : kind === "petition" ? "Sign the Petition" : kind === "event" ? "Open Event" : "Open Action"),
         href: "",
         external: false,
         returnHref: submissionHref,
         secondaryLabel: openFlow.secondary_label || "Submit for Points",
         secondaryHref: normalizeUrl(openFlow.secondary_url) || submissionHref,
         invalid: true,
-        invalidReason: kind === "toolkit" ? "Toolkit URL is missing." : "External action URL is missing.",
+        invalidReason: missingLabel,
       };
     }
     return {
       kind,
-      label: openFlow.label || challenge.cta_label || (kind === "toolkit" ? "Open Toolkit" : "Open Action"),
+      label: openFlow.label || challenge.cta_label || (kind === "toolkit" ? "Open Toolkit" : kind === "petition" ? "Sign the Petition" : kind === "event" ? "Open Event" : "Open Action"),
       href: fallbackExternal,
       external: isExternalHref(fallbackExternal),
       returnHref: normalizeUrl(openFlow.return_url) || submissionHref,
@@ -185,11 +208,11 @@ export function resolveChallengeOpenFlow(challenge: CampChallenge) {
     };
   }
 
-  if (kind === "completion_page") {
-    const href = normalizeUrl(openFlow.url || definition.completion?.url) || completionHref;
+  if (kind === "completion_page" || kind === "completion_only") {
+    const href = normalizeUrl(openFlow.completion_url || openFlow.url || definition.completion?.url) || completionHref;
     return {
       kind,
-      label: openFlow.label || challenge.cta_label || "View Completion",
+      label: openFlow.label || challenge.cta_label || "Complete Challenge",
       href,
       external: isExternalHref(href),
       returnHref: submissionHref,

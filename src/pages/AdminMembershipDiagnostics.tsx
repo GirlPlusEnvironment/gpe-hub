@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CampButton, EmptyState, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 import {
+  getChallengeDiagnosticReport,
   getMembershipDiagnosticReport,
+  type ChallengeDiagnosticReport,
   type MembershipDiagnosticReport,
 } from "@/lib/membership-diagnostics";
 
@@ -131,6 +133,7 @@ function buildRows(report: MembershipDiagnosticReport) {
 export default function AdminMembershipDiagnostics() {
   const [email, setEmail] = useState("hub-qa-member@girlplusenvironment.org");
   const [report, setReport] = useState<MembershipDiagnosticReport | null>(null);
+  const [challengeReport, setChallengeReport] = useState<ChallengeDiagnosticReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +150,7 @@ export default function AdminMembershipDiagnostics() {
     setError(null);
     try {
       setReport(await getMembershipDiagnosticReport(email));
+      setChallengeReport(await getChallengeDiagnosticReport());
     } catch (err) {
       setReport(null);
       setError(err instanceof Error ? err.message : "Membership diagnostic could not be loaded.");
@@ -161,8 +165,8 @@ export default function AdminMembershipDiagnostics() {
       <main className="gpe-page-main space-y-6">
         <SectionHeader
           eyebrow={<Sticker accent="cyan">Admin</Sticker>}
-          title="Membership Diagnostics"
-          description="Compare Auth, Hub profile, cached membership access, and the live Neon membership decision."
+          title="Admin Diagnostics"
+          description="Compare membership identity state and Camp challenge health before release checks."
           action={
             <>
               <Link to="/admin"><CampButton variant="outline">Admin Hub</CampButton></Link>
@@ -213,6 +217,18 @@ export default function AdminMembershipDiagnostics() {
                 <DiagnosticRow key={row.label} {...row} />
               ))}
             </div>
+            {challengeReport ? (
+              <div className="gpe-card overflow-hidden p-0">
+                <Tape className="m-4">Challenge health</Tape>
+                <div className="grid grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white">
+                  <div className="col-span-4">Check</div>
+                  <div className="col-span-8">Result</div>
+                </div>
+                {challengeReport.checks.map((row) => (
+                  <DiagnosticRow key={row.label} {...row} />
+                ))}
+              </div>
+            ) : null}
           </>
         ) : (
           <EmptyState

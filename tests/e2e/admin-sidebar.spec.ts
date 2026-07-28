@@ -46,6 +46,7 @@ const campSeason = {
   status: "active",
   is_visible: true,
   point_rules: null,
+  metadata: {},
 };
 
 const adminChallenges = [
@@ -219,7 +220,19 @@ async function installAdminSupabaseStubs(page: Page) {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
   });
 
+  await page.route("**/rest/v1/posts?**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+
+  await page.route("**/rest/v1/post_comments?**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+
   await page.route("**/rest/v1/listing_flags?**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+
+  await page.route("**/rest/v1/moderation_audit_log?**", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
   });
 
@@ -394,12 +407,12 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
 
   await expect(page.getByRole("heading", { name: "Camp Admin" })).toBeVisible();
   await expect(page).toHaveURL(/\/admin\/camp/);
-  for (const tab of ["Overview", "Challenge Builder", "Schedule", "Submission Review", "Moderation", "Cabins", "Rewards & Points", "Settings"]) {
+  for (const tab of ["Overview", "Challenge Management", "Schedule", "Submission Review", "Moderation", "Cabins", "Rewards & Points", "Settings"]) {
     await expect(page.getByRole("tab", { name: tab })).toBeVisible();
   }
   await expect(page.getByRole("heading", { name: "Camp GPE Summer" })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Challenge Builder" }).click();
+  await page.getByRole("tab", { name: "Challenge Management" }).click();
   await expect(page).toHaveURL(/tab=challenges/);
   await expect(page.getByRole("heading", { name: "Challenges" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Create a Short Video/ })).toBeVisible();
@@ -418,10 +431,10 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await page.getByRole("tab", { name: "History" }).last().click();
   await expect(page.getByRole("heading", { name: "Version History" })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const tabPosition = await page.getByRole("tab", { name: "Challenge Builder" }).evaluate((node) => window.getComputedStyle(node.parentElement?.parentElement || node).position);
+  const tabPosition = await page.getByRole("tab", { name: "Challenge Management" }).evaluate((node) => window.getComputedStyle(node.parentElement?.parentElement || node).position);
   expect(tabPosition).toBe("sticky");
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Challenge Builder" })).toHaveAttribute("data-state", "active");
+  await expect(page.getByRole("tab", { name: "Challenge Management" })).toHaveAttribute("data-state", "active");
 
   await page.getByRole("tab", { name: "Schedule", exact: true }).first().click();
   await expect(page).toHaveURL(/tab=schedule/);
@@ -453,8 +466,9 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("tab", { name: "Moderation" }).click();
-  await expect(page.getByRole("tab", { name: /Posts 3/ })).toBeVisible();
-  await expect(page.getByRole("tab", { name: /Messages 1/ })).toBeVisible();
+  for (const tab of [/Reports 0/, /Listings 0/, /Posts 0/, /Comments 0/]) {
+    await expect(page.getByRole("tab", { name: tab })).toBeVisible();
+  }
 
   await page.getByRole("tab", { name: "Cabins" }).click();
   await expect(page.getByRole("heading", { name: "Cabin Management" })).toBeVisible();
@@ -470,6 +484,8 @@ test("Team Review sidebar opens URL-backed Camp Admin workspace tabs", async ({ 
   }
 
   await page.getByRole("tab", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Publishing, Duplication, and Validation" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Duplicate last year" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Global Camp Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save Draft" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preview" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish Changes" })).toBeVisible();
 });

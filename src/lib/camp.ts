@@ -11,7 +11,13 @@ export type CampSeason = {
   status: "draft" | "active" | "archived";
   is_visible: boolean;
   point_rules?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
 };
+
+export type CampSeasonPatch = Partial<Pick<
+  CampSeason,
+  "name" | "description" | "starts_at" | "ends_at" | "status" | "is_visible" | "metadata"
+>>;
 
 export type CampLeaderboardRow = {
   season_id: string;
@@ -79,6 +85,37 @@ export type CampChallenge = {
   action_type_label?: string | null;
   season_slug?: string;
   season_name?: string;
+};
+
+export type ChallengePublishState = "draft" | "scheduled" | "active" | "paused" | "archived";
+
+export type ModerationQueueItem = {
+  id: string;
+  queue: "posts" | "comments" | "listings" | "reports";
+  title: string;
+  body: string | null;
+  author_id: string | null;
+  author_label: string | null;
+  content_id: string;
+  related_id?: string | null;
+  status: string;
+  reported_at: string;
+  is_removed?: boolean | null;
+  is_hidden?: boolean | null;
+  reason?: string | null;
+  history?: ModerationAuditRow[];
+};
+
+export type ModerationAuditRow = {
+  id: string;
+  moderator_id: string | null;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string | null;
+  previous_state: Record<string, unknown> | null;
+  new_state: Record<string, unknown> | null;
+  created_at: string;
 };
 
 export type CampSubmissionAction = {
@@ -236,7 +273,7 @@ export type CampRecentActivityRow = CampPointsLedgerRow & {
 export async function getActiveCampSeason() {
   const { data, error } = await supabase
     .from("gpe_seasons")
-    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules")
+    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules,metadata")
     .eq("status", "active")
     .eq("is_visible", true)
     .order("starts_at", { ascending: false, nullsFirst: false })
@@ -244,6 +281,17 @@ export async function getActiveCampSeason() {
     .maybeSingle();
   if (error) throw error;
   return data as CampSeason | null;
+}
+
+export async function updateCampSeasonContent(seasonId: string, patch: CampSeasonPatch) {
+  const { data, error } = await supabase
+    .from("gpe_seasons")
+    .update(patch)
+    .eq("id", seasonId)
+    .select("id,slug,name,description,starts_at,ends_at,status,is_visible,point_rules,metadata")
+    .single();
+  if (error) throw error;
+  return data as CampSeason;
 }
 
 export async function getCampLeaderboard(seasonId: string, limit = 50) {
@@ -627,11 +675,217 @@ export async function updateCampChallengeContent(challengeId: string, patch: Par
   | "is_featured"
   | "is_active"
   | "is_hub_visible"
+  | "is_public"
 >>) {
   const { error } = await supabase
     .from("gpe_challenges")
     .update(patch)
     .eq("id", challengeId);
+  if (error) throw error;
+}
+
+export async function duplicateCampChallenge(challenge: CampChallenge) {
+  const copySlug = `${challenge.slug}-copy-${Date.now().toString(36)}`.slice(0, 120);
+  const metadata = {
+    ...(challenge.metadata || {}),
+    duplicated_from: challenge.id,
+    publish_state: "draft",
+    history: [
+      {
+        editor: "Team GPE",
+        timestamp: new Date().toISOString(),
+        publish_state: "draft",
+        changed_fields: ["duplicated_from"],
+      },
+      ...(
+        Array.isArray(challenge.metadata?.history)
+          ? (challenge.metadata.history as Array<Record<string, unknown>>)
+          : []
+      ),
+    ].slice(0, 25),
+  };
+  const { data, error } = await supabase
+    .from("gpe_challenges")
+    .insert({
+      season_id: challenge.season_id,
+      action_type_id: challenge.action_type_id,
+      slug: copySlug,
+      title: `${challenge.title} Copy`,
+      short_description: challenge.short_description,
+      instructions: challenge.instructions,
+      category: challenge.category,
+      point_value: challenge.point_value,
+      starts_at: null,
+      ends_at: null,
+      is_active: false,
+      is_public: false,
+      is_hub_visible: false,
+      requires_proof: challenge.requires_proof,
+      requires_review: challenge.requires_review,
+      auto_approve: challenge.auto_approve,
+      allow_multiple_submissions: challenge.allow_multiple_submissions,
+      max_completions_per_member: challenge.max_completions_per_member,
+      display_order: (challenge.display_order ?? 0) + 1,
+      action_url: challenge.action_url,
+      week_number: challenge.week_number,
+      theme: challenge.theme,
+      icon: challenge.icon,
+      cta_label: challenge.cta_label,
+      submission_type: challenge.submission_type,
+      verification_method: challenge.verification_method,
+      badge_eligible: challenge.badge_eligible,
+      why_it_matters: challenge.why_it_matters,
+      related_kind: challenge.related_kind,
+      related_url: challenge.related_url,
+      is_featured: false,
+      metadata,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as CampChallenge;
+}
+
+export async function updateCampChallengePublishState(challenge: CampChallenge, state: ChallengePublishState) {
+  const metadata = {
+    ...(challenge.metadata || {}),
+    publish_state: state,
+    history: [
+      {
+        editor: "Team GPE",
+        timestamp: new Date().toISOString(),
+        publish_state: state,
+        changed_fields: ["publish_state"],
+      },
+      ...(
+        Array.isArray(challenge.metadata?.history)
+          ? (challenge.metadata.history as Array<Record<string, unknown>>)
+          : []
+      ),
+    ].slice(0, 25),
+  };
+  const patch = {
+    metadata,
+    is_active: state === "active" || state === "scheduled",
+    is_hub_visible: state === "active" || state === "scheduled",
+    is_public: state === "active" || state === "scheduled",
+    is_featured: state === "active",
+  };
+  await updateCampChallengeContent(challenge.id, patch);
+}
+
+export async function getModerationQueueItems() {
+  const [{ data: posts, error: postsError }, { data: comments, error: commentsError }, { data: listings, error: listingsError }, { data: flags, error: flagsError }, { data: audit, error: auditError }] =
+    await Promise.all([
+      supabase
+        .from("posts")
+        .select("id,title,description,user_id,created_at,is_hidden,is_removed,moderation_status")
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("post_comments")
+        .select("id,post_id,user_id,content,created_at,is_hidden,is_removed,moderation_status")
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("listings")
+        .select("id,title,description,submitted_by,status,is_removed,is_hidden,moderation_status,created_at")
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("listing_flags")
+        .select("id,listing_id,flagged_by,reason,flagged_at,resolved")
+        .order("flagged_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("moderation_audit_log")
+        .select("id,moderator_id,action,target_type,target_id,reason,previous_state,new_state,created_at")
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+  if (postsError) throw postsError;
+  if (commentsError) throw commentsError;
+  if (listingsError) throw listingsError;
+  if (flagsError) throw flagsError;
+  if (auditError) throw auditError;
+
+  const auditRows = (audit || []) as ModerationAuditRow[];
+  const historyFor = (targetType: string, targetId: string) =>
+    auditRows.filter((row) => row.target_type === targetType && row.target_id === targetId).slice(0, 8);
+
+  return [
+    ...(posts || []).map((post) => ({
+      id: `post:${post.id}`,
+      queue: "posts" as const,
+      title: post.title,
+      body: post.description,
+      author_id: post.user_id,
+      author_label: post.user_id,
+      content_id: post.id,
+      status: post.is_removed ? "removed" : post.is_hidden ? "hidden" : post.moderation_status || "published",
+      reported_at: post.created_at,
+      is_removed: post.is_removed,
+      is_hidden: post.is_hidden,
+      history: historyFor("post", post.id),
+    })),
+    ...(comments || []).map((comment) => ({
+      id: `comment:${comment.id}`,
+      queue: "comments" as const,
+      title: "Comment",
+      body: comment.content,
+      author_id: comment.user_id,
+      author_label: comment.user_id,
+      content_id: comment.id,
+      related_id: comment.post_id,
+      status: comment.is_removed ? "removed" : comment.is_hidden ? "hidden" : comment.moderation_status || "published",
+      reported_at: comment.created_at,
+      is_removed: comment.is_removed,
+      is_hidden: comment.is_hidden,
+      history: historyFor("comment", comment.id),
+    })),
+    ...(listings || []).map((listing) => ({
+      id: `listing:${listing.id}`,
+      queue: "listings" as const,
+      title: listing.title,
+      body: listing.description,
+      author_id: listing.submitted_by,
+      author_label: listing.submitted_by,
+      content_id: listing.id,
+      status: listing.is_removed ? "removed" : listing.is_hidden ? "hidden" : listing.moderation_status || listing.status,
+      reported_at: listing.created_at,
+      is_removed: listing.is_removed,
+      is_hidden: listing.is_hidden,
+      history: historyFor("listing", listing.id),
+    })),
+    ...(flags || []).map((flag) => ({
+      id: `report:${flag.id}`,
+      queue: "reports" as const,
+      title: "Listing report",
+      body: flag.reason,
+      author_id: flag.flagged_by,
+      author_label: flag.flagged_by,
+      content_id: flag.id,
+      related_id: flag.listing_id,
+      status: flag.resolved ? "resolved" : "open",
+      reported_at: flag.flagged_at,
+      reason: flag.reason,
+      history: historyFor("report", flag.id),
+    })),
+  ] as ModerationQueueItem[];
+}
+
+export async function applyModerationAction(params: {
+  action: "hide" | "restore" | "remove" | "resolve" | "dismiss" | "warn_user" | "suspend_user" | "restore_user";
+  targetType: "post" | "comment" | "listing" | "report" | "user";
+  targetId: string;
+  reason?: string | null;
+}) {
+  const { error } = await supabase.rpc("camp_admin_moderation_action", {
+    p_action: params.action,
+    p_target_type: params.targetType,
+    p_target_id: params.targetId,
+    p_reason: params.reason ?? null,
+  });
   if (error) throw error;
 }
 

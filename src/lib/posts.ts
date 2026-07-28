@@ -93,6 +93,8 @@ export async function fetchPosts() {
         poll_votes (user_id)
       )
     `)
+    .eq("is_removed", false)
+    .eq("is_hidden", false)
     .order("created_at", { ascending: false });
 
   // If poll tables don't exist, fetch without them
@@ -109,6 +111,8 @@ export async function fetchPosts() {
         post_likes (user_id),
         post_comments (count)
       `)
+      .eq("is_removed", false)
+      .eq("is_hidden", false)
       .order("created_at", { ascending: false });
     
     data = basicResult.data;
@@ -150,6 +154,8 @@ export async function fetchPostById(postId: string) {
       )
     `)
     .eq("id", postId)
+    .eq("is_removed", false)
+    .eq("is_hidden", false)
     .single();
 
   // If poll tables don't exist, fetch without them
@@ -167,6 +173,8 @@ export async function fetchPostById(postId: string) {
         post_comments (count)
       `)
       .eq("id", postId)
+      .eq("is_removed", false)
+      .eq("is_hidden", false)
       .single();
     
     data = basicResult.data;
@@ -349,6 +357,8 @@ export async function fetchComments(postId: string) {
       )
     `)
     .eq("post_id", postId)
+    .eq("is_removed", false)
+    .eq("is_hidden", false)
     .order("created_at", { ascending: true });
 
   if (error) throw error;

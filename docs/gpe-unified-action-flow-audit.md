@@ -38,6 +38,9 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - Updated Neon activity payloads to use the v2 API shape with `activityDates`, `clientAccount`, and `status` ID pairs instead of the older flat payload.
 - Standardized legacy Take Action subpage back links in the source website repo to `https://www.girlplusenvironment.org/take-action` with `target="_top"`.
 - Updated `neon-event-register` so optional membership creation failures return `502 partialSuccess` with `membership_outcome = membership_creation_failed` instead of a normal success-looking event response.
+- Added an admin-only `admin-crm-configuration` Edge Function and Admin Diagnostics CRM configuration panel. It validates Neon API connectivity and reports missing CRM secrets without exposing secret values.
+- Updated the shared website membership helper so lookup failures and ambiguous matches still show the full optional membership continuation, including age range, race/ethnicity, and Office Hours interest.
+- Updated Grad Highlight submit handling so server `partialSuccess` responses show the server warning instead of generic submitted copy.
 
 ## Production Verification
 
@@ -48,6 +51,7 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - Public invalid POST to `gpe-grad-highlight-submit` with an incomplete membership request returns `400` with `Eligibility affirmation is required`.
 - Public invalid POST to `neon-event-register` reaches function validation/event lookup and returns `400`, not JWT failure.
 - `neon-event-register` was redeployed after the partial-failure membership response fix.
+- `admin-crm-configuration` is deployed with `verify_jwt = true`; unauthenticated requests return `401`.
 - `https://www.girlplusenvironment.org/gpe-grad-highlight` returns `200`.
 - `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` returns `200`.
 - Controlled `gpe-membership-enroll` POST with a full canonical membership request saves `gpe_form_submissions` as `partial_failure` with `membership_outcome = membership_creation_failed` when `DEFAULT_MEMBERSHIP_LEVEL_ID` / `DEFAULT_MEMBERSHIP_TERM_ID` are missing. The response includes a submission ID and no longer reports success before Neon confirms membership creation.
@@ -66,6 +70,7 @@ Status: partial implementation pass completed on July 28, 2026. This document co
 - The exact Neon custom field IDs and option values for Office Hours, race/ethnicity, age range, gender identity, interests, and communication preferences are not present in the local repository. The new canonical values are preserved in Supabase and Neon membership request/activity payloads, but exact Neon custom-field writes need dashboard/API confirmation before claiming automation parity.
 - `DEFAULT_MEMBERSHIP_LEVEL_ID` and `DEFAULT_MEMBERSHIP_TERM_ID` are not configured in Supabase production secrets. Until those are set to the real Neon membership level and term IDs, no flow can create a confirmed Neon membership.
 - Neon activity logging now uses the current v2 payload shape, but tenant-specific activity IDs are still missing. Configure `NEON_ACTIVITY_TIMEZONE_ID` and either `NEON_ACTIVITY_STATUS_ID` or the more specific `NEON_ACTIVITY_COMPLETED_STATUS_ID`; membership request fallback activity also needs `NEON_ACTIVITY_OPEN_STATUS_ID` or `NEON_ACTIVITY_STATUS_ID`.
+- Office Hours field persistence still needs exact Neon custom field and option IDs. The admin CRM panel reports this as blocked until `NEON_OFFICE_HOURS_FIELD_ID` and `NEON_OFFICE_HOURS_OPTION_ID` are configured.
 - Production Wix embeds still need to be republished from the updated mirror files. Local HTML changes do not automatically update Wix.
 - Some archived mirror exports, such as `old-events.html`, still contain Wix-generated relative menu links. They are retained as reference exports and are not treated as active embed source.
 - Action Network signature webhooks are not fully generalized yet. `camp-gpe-action-network-ingest` exists, but High Energy Bills and Coal Slush Fund are not wired into canonical lead/action logging or membership continuation.

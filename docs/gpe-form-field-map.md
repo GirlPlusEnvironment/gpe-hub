@@ -94,6 +94,10 @@ Membership creation must not be treated as successful unless Neon returns a memb
 | `NEON_ACTIVITY_STATUS_ID` | Shared fallback status ID for Neon activity records | Activity logging fails before sending invalid JSON when no specific status secret is set |
 | `NEON_ACTIVITY_COMPLETED_STATUS_ID` | Completed status ID for saved survey/highlight/contact activity records | Needed to log completed activity records without relying on the shared fallback |
 | `NEON_ACTIVITY_OPEN_STATUS_ID` | Open status ID for membership request fallback activities | Needed only for membership request fallback activity records |
+| `NEON_OFFICE_HOURS_FIELD_ID` | Neon custom field used by the Office Hours automation | Office Hours automation parity cannot be certified |
+| `NEON_OFFICE_HOURS_OPTION_ID` | Neon custom option/value used by the Office Hours automation | Office Hours automation parity cannot be certified |
+
+The Admin Diagnostics page includes a CRM configuration panel backed by the admin-only `admin-crm-configuration` Edge Function. It reports these settings as present or missing without exposing secret values.
 
 ## GPE Grad Highlight
 

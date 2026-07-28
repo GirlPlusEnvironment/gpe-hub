@@ -182,6 +182,9 @@ verify_jwt = false
 [functions.gpe-membership-enroll]
 verify_jwt = false
 
+[functions.admin-crm-configuration]
+verify_jwt = true
+
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

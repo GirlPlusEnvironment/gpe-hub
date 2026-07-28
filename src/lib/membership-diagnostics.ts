@@ -70,6 +70,26 @@ export type ChallengeDiagnosticReport = {
   }>;
 };
 
+export type CrmConfigurationCheck = {
+  key: string;
+  label: string;
+  status: "pass" | "warn" | "fail";
+  required: boolean;
+  category: "neon" | "membership" | "activities" | "automations" | "hub" | "action_network";
+  message: string;
+};
+
+export type CrmConfigurationReport = {
+  ok: boolean;
+  status: "ready" | "warning" | "blocked";
+  membershipCreationEnabled: boolean;
+  activityLoggingEnabled: boolean;
+  officeHoursAutomationReady: boolean;
+  checkedAt: string;
+  checks: CrmConfigurationCheck[];
+  blockers: string[];
+};
+
 export async function getMembershipDiagnosticReport(email: string): Promise<MembershipDiagnosticReport> {
   const normalizedEmail = email.trim().toLowerCase();
   const { data, error } = await supabase.rpc("admin_get_membership_identity_diagnostic", {
@@ -144,4 +164,13 @@ export async function getChallengeDiagnosticReport(): Promise<ChallengeDiagnosti
       { label: "Notifications", value: `${notificationCount} configured`, status: notificationCount > 0 ? "pass" : "warn" },
     ],
   };
+}
+
+export async function getCrmConfigurationReport(): Promise<CrmConfigurationReport> {
+  const { data, error } = await supabase.functions.invoke<CrmConfigurationReport>("admin-crm-configuration", {
+    body: { action: "validate" },
+  });
+  if (error) throw error;
+  if (!data) throw new Error("CRM configuration report was empty.");
+  return data;
 }

@@ -6,10 +6,16 @@ import { Label } from "@/components/ui/label";
 import { CampButton, LoadingCampCard, Sticker, Tape } from "@/components/camp/CampDesign";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
-import { checkNeonMembership } from "@/lib/membership";
+import {
+  checkNeonMembership,
+  GPE_MEMBERSHIP_URL,
+  updateCurrentHubMembershipState,
+  type MembershipCheckResult,
+} from "@/lib/membership";
 
 const INVITE_LINK_ERROR =
   "This invitation link is invalid or has expired. Request a new Hub access link from the login page.";
+const GRACE_DAYS = 7;
 
 const SENSITIVE_INVITE_PARAMS = [
   "access_token",
@@ -51,6 +57,10 @@ const AcceptInvite = () => {
   const { refreshProfile, updatePassword } = useAuth();
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [membership, setMembership] = useState<MembershipCheckResult | null>(null);
+  const [membershipDecision, setMembershipDecision] = useState<"active" | "membership_pending" | null>(null);
+  const [isCheckingMembership, setIsCheckingMembership] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +100,7 @@ const AcceptInvite = () => {
 
         if (!cancelled) {
           setSessionReady(Boolean(data.session));
+          setInviteEmail(data.session?.user.email || "");
           if (!data.session) setErrorMessage(INVITE_LINK_ERROR);
         }
 
@@ -113,10 +124,77 @@ const AcceptInvite = () => {
     };
   }, [location.key]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const runMembershipLookup = async () => {
+      if (!sessionReady || !inviteEmail) return;
+      setIsCheckingMembership(true);
+      setErrorMessage(null);
+
+      try {
+        const result = await checkNeonMembership({ email: inviteEmail });
+        if (cancelled) return;
+        if (result.error) {
+          setMembership(null);
+          setMembershipDecision("membership_pending");
+          setSuccessMessage(
+            `We could not confirm membership right now. You can still accept this invite and complete membership within ${GRACE_DAYS} days.`,
+          );
+          return;
+        }
+
+        setMembership(result.data);
+        if (result.data?.isActiveMember || result.data?.outcome === "active_member_needs_hub_invite" || result.data?.outcome === "active_member_existing_hub_user") {
+          setMembershipDecision("active");
+          await updateCurrentHubMembershipState({
+            membershipAccessState: "active",
+            neonAccountId: result.data.neonAccountId,
+            membershipLevel: result.data.membershipLevel,
+            membershipStartDate: result.data.membershipStartAt,
+            membershipEndDate: result.data.membershipEndAt,
+          });
+          await refreshProfile();
+        }
+      } finally {
+        if (!cancelled) setIsCheckingMembership(false);
+      }
+    };
+
+    void runMembershipLookup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteEmail, refreshProfile, sessionReady]);
+
+  const continueWithoutMembership = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const result = await updateCurrentHubMembershipState({ membershipAccessState: "membership_pending" });
+      if (result.error) {
+        setErrorMessage(result.error);
+        return;
+      }
+      await refreshProfile();
+      setMembershipDecision("membership_pending");
+      setSuccessMessage(`Invitation can continue. Complete membership within ${GRACE_DAYS} days to keep Hub access.`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    if (!membershipDecision) {
+      setErrorMessage("Choose a membership option before creating your password.");
+      return;
+    }
 
     if (password.length < 8) {
       setErrorMessage("Your password must be at least 8 characters long.");
@@ -138,7 +216,9 @@ const AcceptInvite = () => {
 
       const { data } = await supabase.auth.getUser();
       if (data.user?.email) {
-        await checkNeonMembership({ email: data.user.email });
+        if (membershipDecision === "active") {
+          await checkNeonMembership({ email: data.user.email });
+        }
         await refreshProfile(data.user);
       }
 
@@ -175,7 +255,31 @@ const AcceptInvite = () => {
               <LoadingCampCard label="Preparing your invitation" />
             </div>
           ) : sessionReady ? (
-            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div className="mt-8 space-y-5">
+              {isCheckingMembership ? (
+                <LoadingCampCard label="Checking membership" />
+              ) : membershipDecision ? (
+                <div className="rounded-[1.25rem] border-[3px] border-black bg-white p-4 text-sm font-bold text-black">
+                  {membershipDecision === "active"
+                    ? "Membership confirmed. Create your password and come on in."
+                    : `Membership pending. You can accept this invite now and complete membership within ${GRACE_DAYS} days.`}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-[1.25rem] border-[3px] border-black bg-gpe-yellow p-4 text-sm font-bold text-black">
+                    We could not find an active GPE membership for {inviteEmail || "this email"}.
+                  </div>
+                  <a href={GPE_MEMBERSHIP_URL} target="_blank" rel="noreferrer" className="block">
+                    <CampButton type="button" className="w-full">
+                      Become a Member
+                    </CampButton>
+                  </a>
+                  <CampButton type="button" variant="outline" className="w-full" onClick={continueWithoutMembership} disabled={isSubmitting}>
+                    Continue Without Membership
+                  </CampButton>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-xs font-bold uppercase">
                   Password
@@ -193,7 +297,8 @@ const AcceptInvite = () => {
               <CampButton type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                 {isSubmitting ? "Creating Account..." : "Accept Invite"}
               </CampButton>
-            </form>
+              </form>
+            </div>
           ) : (
             <div className="mt-8 space-y-4">
               {errorMessage ? <div className="rounded-[1.25rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">{errorMessage}</div> : null}

@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const before = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName) });
     if (before.outcome === "active_member_existing_hub_user" || before.outcome === "active_member_needs_hub_invite") {
       await updateFormSubmission(String(submission.id), { submission_status: "duplicate", membership_outcome: before.outcome, neon_account_id: before.neonAccountId });
-      return jsonResponse({ submissionId: submission.id, membershipOutcome: before.outcome, alreadyMember: true, ...publicConfig() }, 200, origin);
+      return jsonResponse({ submissionId: submission.id, membershipOutcome: before.outcome, alreadyMember: true, neonAccountId: before.neonAccountId, ...publicConfig() }, 200, origin);
     }
     if (before.outcome === "ambiguous_account") {
       await updateFormSubmission(String(submission.id), { submission_status: "requires_manual_review", membership_outcome: before.outcome });
@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         membershipTermId: String(submission.id)
       }
     }).catch(() => undefined);
-    return jsonResponse({ submissionId: submission.id, ...membershipResult, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
+    return jsonResponse({ submissionId: submission.id, neonAccountId: account.neonAccountId, ...membershipResult, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     if (submissionId) {

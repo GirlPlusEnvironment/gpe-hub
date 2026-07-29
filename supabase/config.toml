@@ -167,6 +167,15 @@ verify_jwt = false
 [functions.camp-gpe-action-network-ingest]
 verify_jwt = false
 
+[functions.petition-action-status]
+verify_jwt = false
+
+[functions.action-network-completion-bridge]
+verify_jwt = false
+
+[functions.gpe-lifecycle-email-send]
+verify_jwt = false
+
 [functions.camp-gpe-challenges]
 verify_jwt = false
 
@@ -180,6 +189,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.gpe-membership-enroll]
+verify_jwt = false
+
+[functions.hub-membership-grace-period]
 verify_jwt = false
 
 [functions.admin-crm-configuration]

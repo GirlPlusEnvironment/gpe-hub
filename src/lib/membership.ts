@@ -63,6 +63,119 @@ export const checkNeonMembership = async (args: {
   return { data: data ?? null, error: null };
 };
 
+export type MembershipEnrollmentFields = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  eligibilityAffirmed: string[];
+  ageRange: string;
+  raceEthnicity: string[];
+  raceEthnicityOther?: string;
+  genderIdentity: string[];
+  genderIdentityOther?: string;
+  climateInterests: string[];
+  communicationPreferences: string[];
+  interestedInOfficeHours: string[];
+  emailConsent: string[];
+  smsConsent: string[];
+  termsConsent: string[];
+  consent: string[];
+};
+
+export type MembershipEnrollmentResult = {
+  submissionId?: string;
+  neonAccountId?: string | null;
+  membershipId?: string | null;
+  membershipOutcome?: MembershipOutcome | "membership_creation_failed";
+  membershipCreationStatus?: string;
+  alreadyMember?: boolean;
+  duplicate?: boolean;
+  requiresManualReview?: boolean;
+  message?: string;
+};
+
+export const enrollGpeMembership = async (args: {
+  idempotencyKey: string;
+  fields: MembershipEnrollmentFields;
+}) => {
+  const { data, error } = await supabase.functions.invoke<MembershipEnrollmentResult>("gpe-membership-enroll", {
+    body: {
+      idempotencyKey: args.idempotencyKey,
+      fields: args.fields,
+    },
+    headers: {
+      "idempotency-key": args.idempotencyKey,
+    },
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: error.message || "Membership could not be created right now.",
+    };
+  }
+
+  return {
+    data: data ?? null,
+    error: null,
+  };
+};
+
+export const updateCurrentHubMembershipState = async (args: {
+  membershipAccessState: "active" | "membership_pending";
+  neonAccountId?: string | null;
+  membershipLevel?: string | null;
+  membershipStartDate?: string | null;
+  membershipEndDate?: string | null;
+}) => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    return { error: userError?.message || "No active Hub session found." };
+  }
+
+  const now = new Date();
+  const pending = args.membershipAccessState === "membership_pending";
+  const payload = {
+    membership_access_state: args.membershipAccessState,
+    neon_account_id: args.neonAccountId || undefined,
+    membership_level: args.membershipLevel || undefined,
+    membership_start_date: args.membershipStartDate || undefined,
+    membership_end_date: args.membershipEndDate || undefined,
+  };
+
+  const { error: authError } = await supabase.auth.updateUser({ data: payload });
+  if (authError) return { error: authError.message };
+
+  const { error: profileError } = await supabase.from("profiles").upsert(
+    {
+      id: userData.user.id,
+      email: userData.user.email?.toLowerCase() ?? null,
+      neon_account_id: args.neonAccountId ?? null,
+      member_status: args.membershipAccessState === "active" ? "active" : "pending",
+      membership_access_state: args.membershipAccessState,
+      membership_level: args.membershipLevel ?? null,
+      membership_start_date: args.membershipStartDate ?? null,
+      membership_end_date: args.membershipEndDate ?? null,
+      membership_last_synced_at: now.toISOString(),
+      account_status: "active",
+      membership_pending_started_at: pending ? now.toISOString() : null,
+      membership_grace_expires_at: pending
+        ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        : null,
+      membership_reminder_sent_at: null,
+      membership_deactivated_at: null,
+      membership_deactivation_reason: null,
+      updated_at: now.toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (profileError) return { error: profileError.message };
+
+  return { error: null };
+};
+
 export const requestHubAccountActivation = async (args: {
   email: string;
   firstName?: string;

@@ -689,6 +689,14 @@ async function syncHubProfileMembership(args: {
       : "inactive",
     updated_at: now
   };
+  if (args.isActive) {
+    body.account_status = "active";
+    body.membership_pending_started_at = null;
+    body.membership_grace_expires_at = null;
+    body.membership_reminder_sent_at = null;
+    body.membership_deactivated_at = null;
+    body.membership_deactivation_reason = null;
+  }
   if (!protectedStatuses.has(currentStatus)) {
     legacyBody.member_status = args.isActive
       ? "active"

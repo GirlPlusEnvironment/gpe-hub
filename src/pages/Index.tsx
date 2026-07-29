@@ -42,7 +42,7 @@ import {
 } from "@/lib/camp";
 import { normalizeReviewStatus } from "@/lib/review-status";
 import { getEncouragementMessage, getTimeOfDayGreeting, seasonalThemes } from "@/lib/delight";
-import { MEMBERSHIP_SYNC_WARNING_STORAGE_KEY } from "@/lib/membership";
+import { GPE_MEMBERSHIP_URL, MEMBERSHIP_SYNC_WARNING_STORAGE_KEY } from "@/lib/membership";
 import type { Listing } from "@/types/listings";
 
 const quickLinks = [
@@ -70,6 +70,7 @@ const categoryRoutes = {
 const Index = () => {
   const { profile, user } = useAuth();
   const [membershipWarning, setMembershipWarning] = useState<string | null>(null);
+  const [dismissedPendingNotice, setDismissedPendingNotice] = useState(false);
 
   useEffect(() => {
     const warning = window.localStorage.getItem(MEMBERSHIP_SYNC_WARNING_STORAGE_KEY);
@@ -149,6 +150,17 @@ const Index = () => {
     pendingSubmissions,
     activeChallenges: campChallenges.length,
   });
+  const membershipGraceDaysRemaining = useMemo(() => {
+    if (
+      dismissedPendingNotice ||
+      profile?.membership_access_state !== "membership_pending" ||
+      !profile.membership_grace_expires_at
+    ) {
+      return null;
+    }
+    const diffMs = new Date(profile.membership_grace_expires_at).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+  }, [dismissedPendingNotice, profile?.membership_access_state, profile?.membership_grace_expires_at]);
 
   return (
     <div className="gpe-page">
@@ -180,6 +192,27 @@ const Index = () => {
         {membershipWarning && (
           <div className="gpe-card border-[4px] border-black bg-gpe-yellow p-5 text-sm font-black text-black shadow-gpe">
             {membershipWarning}
+          </div>
+        )}
+
+        {membershipGraceDaysRemaining !== null && (
+          <div className="gpe-card border-[4px] border-black bg-gpe-yellow p-5 text-sm font-black text-black shadow-gpe">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-header text-2xl uppercase">Membership Pending</p>
+                <p className="mt-2">
+                  You have {membershipGraceDaysRemaining} {membershipGraceDaysRemaining === 1 ? "day" : "days"} left to complete GPE membership and keep Hub access.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <a href={GPE_MEMBERSHIP_URL}>
+                  <CampButton type="button" size="sm">Become a Member</CampButton>
+                </a>
+                <CampButton type="button" variant="outline" size="sm" onClick={() => setDismissedPendingNotice(true)}>
+                  Dismiss
+                </CampButton>
+              </div>
+            </div>
           </div>
         )}
 

@@ -187,6 +187,74 @@ Join the group chat:
 {{hubUrl}}
 
 ${OFFICIAL_FOOTER}`
+  },
+  "hub-user-nonmember": {
+    subject: "Okayyy, you found the Hub 💖",
+    preview: "You have a Hub account. Here’s how to become a GPE member too.",
+    heroSymbol: "🌎",
+    heroHeading: "YOU FOUND THE HUB",
+    heroText: "Now let’s make sure you know what membership means.",
+    eyebrow: "Membership check",
+    contentHeading: "COME ALL THE WAY IN",
+    body: `<p style="margin:0 0 18px;font-size:16px;line-height:1.7;font-weight:700;color:#000000;">
+You already have a GPE Hub account, {{firstName}}.
+</p>
+<p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#000000;">
+Membership is required to keep long-term Hub access.
+</p>
+<p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:#000000;">
+You have {{daysRemaining}} days left in your grace period. Become a member with this same email so we can connect your account.
+</p>`,
+    ctaLabel: "Become a GPE Member",
+    ctaUrl: "{{membershipUrl}}",
+    secondaryTitle: "Already a member?",
+    secondaryBody: "Use the membership help link so Team GPE can connect your account.",
+    closingNote: "Come make space with us.",
+    text: `Okayyy, you found the Hub.
+
+You already have a GPE Hub account, {{firstName}}.
+Membership is required to keep long-term Hub access.
+You have {{daysRemaining}} days left in your grace period.
+
+Become a GPE member:
+{{membershipUrl}}
+
+Already a member? Get membership help:
+{{membershipHelpUrl}}
+
+${OFFICIAL_FOOTER}`
+  },
+  "win-back": {
+    subject: "Girl, your Hub access needs attention 👀",
+    preview: "Membership is required to keep using the GPE Hub.",
+    heroSymbol: "👀",
+    heroHeading: "HUB ACCESS CHECK",
+    heroText: "Your membership grace period has ended.",
+    eyebrow: "Membership required",
+    contentHeading: "COME BACK TO THE TABLE",
+    body: `<p style="margin:0 0 18px;font-size:16px;line-height:1.7;font-weight:700;color:#000000;">
+Your GPE Hub grace period has ended, {{firstName}}.
+</p>
+<p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:#000000;">
+Become a GPE member with this same email to restore long-term Hub access.
+</p>`,
+    ctaLabel: "Become a GPE Member",
+    ctaUrl: "{{membershipUrl}}",
+    secondaryTitle: "Need help?",
+    secondaryBody: "If your membership uses another email, Team GPE can help connect it.",
+    closingNote: "The group chat will be here when your membership is connected.",
+    text: `Your Hub access needs attention.
+
+Your GPE Hub grace period has ended, {{firstName}}.
+Become a GPE member with this same email to restore long-term Hub access.
+
+Become a GPE member:
+{{membershipUrl}}
+
+Membership help:
+{{membershipHelpUrl}}
+
+${OFFICIAL_FOOTER}`
   }
 } satisfies Record<string, TemplateDefinition>;
 

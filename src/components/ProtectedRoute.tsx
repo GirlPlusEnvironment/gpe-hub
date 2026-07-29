@@ -8,7 +8,7 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -23,6 +23,19 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: `${location.pathname}${location.search}${location.hash}` }}
+      />
+    );
+  }
+
+  if (
+    profile?.account_status === "deactivated" ||
+    profile?.membership_access_state === "membership_grace_expired"
+  ) {
     return (
       <Navigate
         to="/login"

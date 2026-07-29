@@ -18,6 +18,12 @@ export type Profile = {
   membership_end_date?: string | null;
   membership_last_synced_at?: string | null;
   membership_access_state?: string | null;
+  account_status?: string | null;
+  membership_pending_started_at?: string | null;
+  membership_grace_expires_at?: string | null;
+  membership_reminder_sent_at?: string | null;
+  membership_deactivated_at?: string | null;
+  membership_deactivation_reason?: string | null;
   points: number | null;
   created_at: string | null;
   updated_at: string | null;
@@ -34,6 +40,11 @@ export type AuthContextValue = {
     password: string;
     displayName?: string;
     username?: string;
+    membershipAccessState?: "active" | "membership_pending";
+    neonAccountId?: string | null;
+    membershipLevel?: string | null;
+    membershipStartDate?: string | null;
+    membershipEndDate?: string | null;
   }) => Promise<{
     error: string | null;
     errorKind?: SignupErrorState;

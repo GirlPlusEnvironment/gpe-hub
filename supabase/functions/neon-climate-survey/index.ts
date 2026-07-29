@@ -1,6 +1,8 @@
 import {
-  recordLeadAction
+  recordLeadAction,
+  recordPointEventForLeadAction
 } from "../_shared/form-submission.ts";
+import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
 import {
   type Json,
   findNeonAccountsByEmail,
@@ -13,7 +15,7 @@ import {
   sanitizeText,
   supabaseFetch
 } from "../_shared/neon-membership.ts";
-import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -268,15 +270,30 @@ async function createPendingConversion(submissionId: string, email: string, acco
 }
 
 async function invokeHubInvitation(submissionId: string, email: string, accountId: string): Promise<boolean> {
+  const queuedInvitation = {
+    submission_id: submissionId,
+    source: FORM_KEY,
+    source_id: submissionId,
+    neon_account_id: accountId,
+    normalized_email: email,
+    status: "pending"
+  };
   const invitationUrl = Deno.env.get("HUB_INVITATION_FUNCTION_URL");
   if (!invitationUrl) {
     await supabaseFetch("hub_invitations", {
       method: "POST",
-      body: JSON.stringify({ submission_id: submissionId, neon_account_id: accountId, normalized_email: email, status: "pending" })
+      body: JSON.stringify(queuedInvitation)
     });
     return false;
   }
-  const secret = getEnv("HUB_INVITATION_SECRET");
+  const secret = getEnv("HUB_INVITATION_SECRET", false);
+  if (!secret) {
+    await supabaseFetch("hub_invitations", {
+      method: "POST",
+      body: JSON.stringify(queuedInvitation)
+    });
+    return false;
+  }
   const res = await fetch(invitationUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secret}` },
@@ -285,20 +302,19 @@ async function invokeHubInvitation(submissionId: string, email: string, accountI
   if (!res.ok) throw new Error(`Hub invitation workflow failed (${res.status}).`);
   await supabaseFetch("hub_invitations", {
     method: "POST",
-    body: JSON.stringify({ submission_id: submissionId, neon_account_id: accountId, normalized_email: email, status: "sent", sent_at: new Date().toISOString() })
+    body: JSON.stringify({ ...queuedInvitation, status: "sent", sent_at: new Date().toISOString() })
   });
   return true;
 }
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
-  const allowedOrigins = (Deno.env.get("ALLOWED_FORM_ORIGINS") || "").split(",").map((item) => item.trim()).filter(Boolean);
-  if (origin && !allowedOrigins.includes(origin)) return jsonResponse({ message: "Origin is not allowed." }, 403, origin);
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders(origin) });
   if (req.method !== "POST") return jsonResponse({ message: "Method not allowed." }, 405, origin);
-
   let submission: Json | null = null;
   try {
+    assertAllowedOrigin(origin);
+
     const payload = await readBody(req);
     const valid = validatePayload(payload, req);
     const existing = await getExistingSubmission(valid.idempotencyKey);
@@ -333,15 +349,29 @@ Deno.serve(async (req) => {
 
     if (!neonAccountId) throw new Error("Neon account could not be resolved.");
     await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "started");
-    const activityId = await createNeonActivity(neonAccountId, valid);
-    await updateSubmission(String(submission.id), {
-      neon_account_id: neonAccountId,
-      neon_activity_id: activityId || null,
-      neon_sync_attempts: Number(submission.neon_sync_attempts || 0) + 1,
-      neon_synced_at: new Date().toISOString(),
-      status: "neon_synced" satisfies SubmissionStatus
-    });
-    await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "succeeded");
+    let activitySynced = false;
+    let activityFailureMessage = "";
+    try {
+      const activityId = await createNeonActivity(neonAccountId, valid);
+      await updateSubmission(String(submission.id), {
+        neon_account_id: neonAccountId,
+        neon_activity_id: activityId || null,
+        neon_sync_attempts: Number(submission.neon_sync_attempts || 0) + 1,
+        neon_synced_at: new Date().toISOString(),
+        status: "neon_synced" satisfies SubmissionStatus
+      });
+      activitySynced = true;
+      await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "succeeded");
+    } catch (error) {
+      activityFailureMessage = safeError(error);
+      await updateSubmission(String(submission.id), {
+        neon_account_id: neonAccountId,
+        neon_sync_attempts: Number(submission.neon_sync_attempts || 0) + 1,
+        status: "neon_sync_pending" satisfies SubmissionStatus,
+        last_error_summary: activityFailureMessage
+      });
+      await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "failed", activityFailureMessage);
+    }
 
     const membership = await resolveMembership({
       email: valid.normalizedEmail,
@@ -357,7 +387,7 @@ Deno.serve(async (req) => {
       : membership.outcome === "lookup_failed"
         ? "submission_saved_neon_sync_pending"
         : "nonmember";
-    let status: SubmissionStatus = "neon_synced";
+    let status: SubmissionStatus = activitySynced ? "neon_synced" : "neon_sync_pending";
     if (membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
       try {
         const invited = await invokeHubInvitation(String(submission.id), valid.normalizedEmail, membership.neonAccountId);
@@ -373,7 +403,7 @@ Deno.serve(async (req) => {
     }
 
     await updateSubmission(String(submission.id), { membership_outcome: outcome, status });
-    await recordLeadAction({
+    const leadActionResult = await recordLeadAction({
       email: valid.normalizedEmail,
       firstName: valid.firstName,
       lastName: valid.lastName,
@@ -389,11 +419,44 @@ Deno.serve(async (req) => {
       campaignSlug: "mobile-climate-adaptation",
       sourceUrl: valid.sourceUrl,
       membershipRequest: null,
-      neonSyncStatus: status === "neon_synced" || status === "hub_invited" || status === "hub_invite_pending" ? "succeeded" : "failed",
+      neonSyncStatus: status === "neon_synced" || status === "hub_invited" || status === "hub_invite_pending" ? "succeeded" : status === "neon_sync_pending" ? "pending" : "failed",
       hubIdentityStatus: status === "hub_invited" ? "succeeded" : status === "hub_invite_pending" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { climateSurveySubmissionId: submission.id, membershipOutcome: outcome, status }
+      rawPayload: { climateSurveySubmissionId: submission.id, membershipOutcome: outcome, status, activityFailureMessage }
     }).catch((error) => console.error("climate-survey-lead-action", safeError(error)));
+    await recordPointEventForLeadAction({
+      eventType: "SURVEY_COMPLETED",
+      email: valid.normalizedEmail,
+      leadAction: leadActionResult?.action,
+      lead: leadActionResult?.lead,
+      source: "neon_climate_survey",
+      sourceId: String(submission.id),
+      campaignSlug: "mobile-climate-adaptation",
+      metadata: {
+        surveyId: SURVEY_ID,
+        formId: FORM_ID,
+        climateSurveySubmissionId: submission.id,
+        membershipOutcome: outcome,
+        status,
+        activityFailureMessage
+      }
+    }).catch((error) => console.error("climate-survey-point-event", safeError(error)));
+    await sendLifecycleEmail({
+      templateKey: "survey-thank-you",
+      recipientEmail: valid.normalizedEmail,
+      neonAccountId,
+      eventType: "survey_completed",
+      sourceType: "neon_climate_survey",
+      sourceId: String(submission.id),
+      idempotencyKey: `survey-thank-you:${submission.id}`,
+      category: "public_form_followup",
+      variables: {
+        firstName: valid.firstName,
+        surveyName: "Mobile Climate Survey",
+        communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
+        hubUrl: "https://members.girlplusenvironment.org"
+      }
+    }).catch((error) => console.error("climate-survey-lifecycle-email", safeError(error)));
     return jsonResponse({
       submissionId: submission.id,
       membershipOutcome: outcome,
@@ -401,6 +464,7 @@ Deno.serve(async (req) => {
       hubLoginUrl: getEnv("GPE_HUB_LOGIN_URL", false)
     }, 200, origin);
   } catch (error) {
+    if (error instanceof Response) return error;
     const message = error instanceof ValidationError ? error.message : "Survey submission could not be completed.";
     if (submission?.id) {
       await updateSubmission(String(submission.id), {

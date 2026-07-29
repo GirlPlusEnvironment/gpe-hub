@@ -102,36 +102,116 @@ function shortId(value: string | null | undefined) {
 }
 
 function statusAccent(value: string | null | undefined): "cyan" | "yellow" | "orange" | "pink" {
-  if (value === "succeeded" || value === "awarded" || value === "active") return "cyan";
+  if (value === "succeeded" || value === "awarded" || value === "active" || value === "success") return "cyan";
   if (value === "pending" || value === "pending_identity" || value === "pending_membership") return "yellow";
   if (value === "failed") return "orange";
   return "pink";
 }
 
+function pipelineStatus(row: PetitionReconciliationRow, key: string) {
+  const value = row.pipelineStatus?.[key];
+  if (typeof value === "string" && value) return value;
+  if (key === "petition" || key === "actionNetwork") return row.leadActionId || row.submissionId ? "success" : "pending";
+  if (key === "neon") return row.neonSyncStatus === "succeeded" ? "success" : row.neonSyncStatus;
+  if (key === "hub") return row.hubIdentityStatus === "succeeded" ? "success" : row.hubIdentityStatus;
+  if (key === "points") return row.pointsStatus === "awarded" ? "success" : row.pointsStatus;
+  if (key === "camp") return row.pointsStatus === "awarded" ? "success" : "pending";
+  if (key === "automation") return row.invitationStatus === "succeeded" ? "success" : row.invitationStatus;
+  return "pending";
+}
+
+function statusSymbol(value: string) {
+  if (value === "success" || value === "succeeded" || value === "awarded") return "✅";
+  if (value === "failed") return "❌";
+  return "⚠";
+}
+
 function PetitionReconciliationRowView({ row }: { row: PetitionReconciliationRow }) {
+  const [open, setOpen] = useState(false);
+  const steps = [
+    ["Petition", "petition"],
+    ["Action Network", "actionNetwork"],
+    ["Neon", "neon"],
+    ["Hub", "hub"],
+    ["Points", "points"],
+    ["Camp", "camp"],
+    ["Automation", "automation"],
+  ];
   return (
-    <div className="grid gap-3 border-t-[3px] border-black px-4 py-3 text-sm md:grid-cols-12 md:items-start">
-      <div className="md:col-span-3">
-        <div className="font-black">{redactEmail(row.email)}</div>
-        <div className="mt-1 font-mono text-[11px] uppercase text-black/50">{shortId(row.submissionId || row.leadActionId)}</div>
+    <div className="border-t-[3px] border-black">
+      <button type="button" onClick={() => setOpen((current) => !current)} className="grid w-full gap-3 px-4 py-3 text-left text-sm md:grid-cols-12 md:items-start">
+        <div className="md:col-span-3">
+          <div className="font-black">{redactEmail(row.email)}</div>
+          <div className="mt-1 font-mono text-[11px] uppercase text-black/50">{shortId(row.submissionId || row.leadActionId)}</div>
+        </div>
+        <div className="md:col-span-3">
+          <div className="font-black">{row.petitionTitle || row.actionSlug}</div>
+          <div className="mt-1 break-words font-mono text-[11px] text-black/55">{row.actionSlug}</div>
+        </div>
+        <div className="flex flex-wrap gap-2 md:col-span-4">
+          <Sticker accent={statusAccent(row.neonSyncStatus)}>Neon {row.neonSyncStatus}</Sticker>
+          <Sticker accent={statusAccent(row.membershipStatus)}>Member {row.membershipStatus}</Sticker>
+          <Sticker accent={statusAccent(row.hubIdentityStatus)}>Hub {row.hubIdentityStatus}</Sticker>
+          <Sticker accent={statusAccent(row.pointsStatus)}>Points {row.pointsStatus}</Sticker>
+          <Sticker accent={statusAccent(row.invitationStatus)}>Invite {row.invitationStatus}</Sticker>
+        </div>
+        <div className="break-words font-mono text-[11px] md:col-span-2">
+          <div>Neon: {shortId(row.neonAccountId)}</div>
+          <div>Hub: {shortId(row.hubProfileId)}</div>
+          <div className="mt-1 font-bold uppercase">{open ? "Hide pipeline" : "Show pipeline"}</div>
+          {row.reconciliationError ? <div className="mt-1 text-red-700">{row.reconciliationError}</div> : null}
+        </div>
+      </button>
+      {open ? (
+        <div className="grid gap-2 border-t-2 border-black bg-[#f6f1e7] p-4 md:grid-cols-7">
+          {steps.map(([label, key]) => {
+            const value = pipelineStatus(row, key);
+            return (
+              <div key={key} className="rounded-lg border-2 border-black bg-white p-2 text-xs font-black">
+                <div>{statusSymbol(value)} {label}</div>
+                <div className="mt-1 break-words font-mono text-[11px] uppercase text-black/55">{value}</div>
+              </div>
+            );
+          })}
+          <div className="rounded-lg border-2 border-black bg-white p-2 text-xs font-bold md:col-span-7">
+            Signed {formatDate(row.occurredAt)} · Campaign {formatValue(row.campaignSlug)} · Signature {shortId(row.providerSignatureId)}
+          </div>
+          <div className="rounded-lg border-2 border-black bg-white p-3 text-xs font-bold md:col-span-7">
+            <div className="mb-2 font-black uppercase">Point Events</div>
+            {row.pointEvents && row.pointEvents.length > 0 ? (
+              <div className="grid gap-2">
+                {row.pointEvents.map((event) => (
+                  <div key={event.id} className="grid gap-2 rounded-md border-2 border-black bg-[#f6f1e7] p-2 md:grid-cols-12">
+                    <div className="md:col-span-3">
+                      <div className="font-black">{event.eventType}</div>
+                      <div className="font-mono text-[11px] text-black/55">{event.rule}</div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Sticker accent={statusAccent(event.status)}>{event.status}</Sticker>
+                    </div>
+                    <div className="font-mono md:col-span-2">
+                      Points {event.points}<br />
+                      Awarded {event.awardedPoints}<br />
+                      Pending {event.pendingPoints}
+                    </div>
+                    <div className="break-words font-mono text-[11px] md:col-span-5">
+                      <div>Transaction: {shortId(event.transactionId)}</div>
+                      <div>Pending award: {shortId(event.pendingAwardId)}</div>
+                      <div>Ledger: {shortId(event.ledgerId)}</div>
+                      <div>At: {formatDate(event.occurredAt)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border-2 border-black bg-[#fff7cc] p-2">
+                No point events found for this petition action.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
       </div>
-      <div className="md:col-span-3">
-        <div className="font-black">{row.petitionTitle || row.actionSlug}</div>
-        <div className="mt-1 break-words font-mono text-[11px] text-black/55">{row.actionSlug}</div>
-      </div>
-      <div className="flex flex-wrap gap-2 md:col-span-4">
-        <Sticker accent={statusAccent(row.neonSyncStatus)}>Neon {row.neonSyncStatus}</Sticker>
-        <Sticker accent={statusAccent(row.membershipStatus)}>Member {row.membershipStatus}</Sticker>
-        <Sticker accent={statusAccent(row.hubIdentityStatus)}>Hub {row.hubIdentityStatus}</Sticker>
-        <Sticker accent={statusAccent(row.pointsStatus)}>Points {row.pointsStatus}</Sticker>
-        <Sticker accent={statusAccent(row.invitationStatus)}>Invite {row.invitationStatus}</Sticker>
-      </div>
-      <div className="break-words font-mono text-[11px] md:col-span-2">
-        <div>Neon: {shortId(row.neonAccountId)}</div>
-        <div>Hub: {shortId(row.hubProfileId)}</div>
-        {row.reconciliationError ? <div className="mt-1 text-red-700">{row.reconciliationError}</div> : null}
-      </div>
-    </div>
   );
 }
 
@@ -371,9 +451,9 @@ export default function AdminMembershipDiagnostics() {
           <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <Tape>Action Network</Tape>
-              <h2 className="mt-3 font-header text-3xl uppercase">Petition Reconciliation</h2>
+              <h2 className="mt-3 font-header text-3xl uppercase">Petition Pipeline</h2>
               <p className="mt-2 max-w-3xl text-sm font-bold text-black/70">
-                Audit petition signers that need Neon nonmember constituent records, Hub action attachment, invitation activity, and point reconciliation.
+                Audit the normal petition lifecycle across Action Network, Neon, Hub linking, points, Camp, and automation. Reconciliation is for historical cleanup only.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

@@ -109,6 +109,20 @@ export type PetitionReconciliationRow = {
   pointsStatus: string;
   invitationStatus: string;
   reconciliationError: string | null;
+  pipelineStatus?: Record<string, unknown> | null;
+  pointEvents?: Array<{
+    id: string;
+    eventType: string;
+    rule: string;
+    status: string;
+    points: number;
+    awardedPoints: number;
+    pendingPoints: number;
+    transactionId: string | null;
+    pendingAwardId: string | null;
+    ledgerId: string | null;
+    occurredAt: string;
+  }>;
 };
 
 export type PetitionReconciliationReport = {

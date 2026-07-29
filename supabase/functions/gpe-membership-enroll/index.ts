@@ -1,5 +1,6 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createFormSubmission, publicConfig, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
+import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
 import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
 import { CANONICAL_MEMBERSHIP_FIELDS, normalizeCanonicalMembershipInput } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
     }
 
     const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, canonicalMembership, source: FORM_KEY } });
-    await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId }).catch(() => undefined);
+    await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId, source: "become_member" }).catch(() => undefined);
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",
       neon_sync_status: "succeeded",
@@ -95,6 +96,22 @@ Deno.serve(async (req) => {
       hubIdentityStatus: "pending",
       pointsStatus: "not_applicable",
       rawPayload: { ...membershipResult, membershipOutcome: "active_member_needs_hub_invite" }
+    }).catch(() => undefined);
+    await sendLifecycleEmail({
+      templateKey: "member-welcome",
+      recipientEmail: email,
+      neonAccountId: account.neonAccountId,
+      eventType: "membership_confirmed",
+      sourceType: "membership",
+      sourceId: String(submission.id),
+      idempotencyKey: `member-welcome:${membershipResult.membershipId}`,
+      category: "membership_lifecycle",
+      variables: {
+        firstName: String(fields.firstName),
+        hubUrl: "https://members.girlplusenvironment.org",
+        membershipId: membershipResult.membershipId,
+        membershipTermId: String(submission.id)
+      }
     }).catch(() => undefined);
     return jsonResponse({ submissionId: submission.id, ...membershipResult, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
   } catch (error) {

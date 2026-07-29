@@ -1,0 +1,6 @@
+Your GPE membership is currently overdue.
+
+Renew below to restore your active membership.
+
+Renew my membership:
+[[NEON_MEMBERSHIP_RENEWAL_URL_TOKEN]]

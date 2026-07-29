@@ -1,0 +1,3 @@
+A donation was connected to your GPE record.
+
+[[NEON_SOFT_CREDIT_DETAILS_BLOCK]]

@@ -46,10 +46,16 @@ function anonKey() {
   return key;
 }
 
-function hubRedirectUrl() {
+function hubResetUrl() {
   const configured = Deno.env.get("GPE_HUB_RESET_URL") || Deno.env.get("GPE_HUB_LOGIN_URL");
   if (configured) return configured.replace(/\/login\/?$/, "/reset-password");
   return "https://members.girlplusenvironment.org/reset-password";
+}
+
+function hubInviteUrl() {
+  const configured = Deno.env.get("GPE_HUB_INVITE_URL") || Deno.env.get("GPE_HUB_LOGIN_URL");
+  if (configured) return configured.replace(/\/login\/?$/, "/accept-invite");
+  return "https://members.girlplusenvironment.org/accept-invite";
 }
 
 function safeRedirectLog(url: string) {
@@ -90,7 +96,7 @@ async function authUsersByEmail(email: string): Promise<AuthUser[]> {
 }
 
 async function sendPasswordRecovery(email: string) {
-  const redirectUrl = hubRedirectUrl();
+  const redirectUrl = hubResetUrl();
   const res = await fetch(`${supabaseUrl()}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectUrl)}`, {
     method: "POST",
     headers: {
@@ -106,7 +112,7 @@ async function sendPasswordRecovery(email: string) {
 }
 
 async function sendInvite(email: string, membership: ReturnType<typeof pickMembershipSummary>, neonAccountId: string) {
-  const res = await fetch(`${supabaseUrl()}/auth/v1/invite?redirect_to=${encodeURIComponent(hubRedirectUrl())}`, {
+  const res = await fetch(`${supabaseUrl()}/auth/v1/invite?redirect_to=${encodeURIComponent(hubInviteUrl())}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -162,18 +168,17 @@ Deno.serve(async (req) => {
 
     const users = await authUsersByEmail(email);
     const confirmedUser = users.find((user) => Boolean(user.email_confirmed_at || user.confirmed_at));
-    const redirectUrl = hubRedirectUrl();
     if (confirmedUser) {
       await sendPasswordRecovery(email);
       console.info("hub activation sent password recovery", {
         action: "recover",
-        redirect: safeRedirectLog(redirectUrl),
+        redirect: safeRedirectLog(hubResetUrl()),
       });
     } else {
       await sendInvite(email, pickMembershipSummary(memberships), match.neonAccountId);
       console.info("hub activation sent invite", {
         action: "invite",
-        redirect: safeRedirectLog(redirectUrl),
+        redirect: safeRedirectLog(hubInviteUrl()),
       });
     }
 

@@ -39,6 +39,8 @@ export type MembershipCheckResult = {
   requiresManualReview: boolean;
   reason?: string;
   databaseWriteFailed?: boolean;
+  lookupSource?: "local_cache" | "neon_live" | "validation";
+  cacheAgeSeconds?: number;
 };
 
 export type MembershipLookupInput = {
@@ -286,13 +288,15 @@ async function neonFetchTraceable(path: string, init: RequestInit, operation: st
 }
 
 async function accountSearchFields(): Promise<string[]> {
+  if (cachedAccountSearchFields) return cachedAccountSearchFields;
   try {
     const result = await neonFetchTraceable("/accounts/search/searchFields?searchKey=email", { method: "GET" }, "account_search_fields_email");
     const data = result as Json;
-    return uniqueStrings([
+    cachedAccountSearchFields = uniqueStrings([
       ...(((data.standardFields || []) as unknown[]).map(fieldName)),
       ...(((data.customFields || []) as unknown[]).map(fieldName))
     ]).filter(isLikelyEmailValueField);
+    return cachedAccountSearchFields;
   } catch (error) {
     logDependencyFailure("account_search_fields_email", error);
     return [];
@@ -300,6 +304,7 @@ async function accountSearchFields(): Promise<string[]> {
 }
 
 async function accountOutputFields(): Promise<string[]> {
+  if (cachedAccountOutputFields) return cachedAccountOutputFields;
   try {
     const result = await neonFetchTraceable("/accounts/search/outputFields?searchKey=email", { method: "GET" }, "account_output_fields_email");
     const data = result as Json;
@@ -310,7 +315,8 @@ async function accountOutputFields(): Promise<string[]> {
     const preferred = fields.filter((name) =>
       /account\s*id|first\s*name|last\s*name/i.test(name) || isLikelyEmailValueField(name)
     );
-    return preferred.length > 0 ? preferred : fields.slice(0, 12);
+    cachedAccountOutputFields = preferred.length > 0 ? preferred : fields.slice(0, 12);
+    return cachedAccountOutputFields;
   } catch (error) {
     logDependencyFailure("account_output_fields_email", error);
     return [];
@@ -318,6 +324,9 @@ async function accountOutputFields(): Promise<string[]> {
 }
 
 type NeonLookupTrace = (step: string, detail?: MembershipTraceDetail) => void;
+
+let cachedAccountSearchFields: string[] | null = null;
+let cachedAccountOutputFields: string[] | null = null;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -375,6 +384,7 @@ export async function findNeonAccountsByEmail(email: string, trace?: NeonLookupT
   const listMatches = await listNeonAccountsByEmail(email, trace);
   if (listMatches.length > 0) return listMatches;
 
+  const exhaustiveSearch = /^true$/i.test(Deno.env.get("NEON_EXHAUSTIVE_ACCOUNT_SEARCH") || "");
   const discoveredSearchFields = await accountSearchFields();
   const discoveredOutputFields = await accountOutputFields();
   const searchFields = uniqueStrings([
@@ -385,14 +395,14 @@ export async function findNeonAccountsByEmail(email: string, trace?: NeonLookupT
     "Individual Email",
     "Company Email",
     ...discoveredSearchFields
-  ]).slice(0, 16);
+  ]).slice(0, exhaustiveSearch ? 16 : 6);
   const outputFields = uniqueStrings([
     ...discoveredOutputFields,
     "Account ID",
     "First Name",
     "Last Name",
     "Email 1"
-  ]).slice(0, 12);
+  ]).slice(0, exhaustiveSearch ? 12 : 8);
   const searchBody = (emailField: string, operator: "EQUAL" | "CONTAIN") => ({
     searchFields: [{ field: emailField, operator: "EQUAL", value: email }],
     outputFields,
@@ -413,7 +423,8 @@ export async function findNeonAccountsByEmail(email: string, trace?: NeonLookupT
   });
 
   let lastError: unknown = null;
-  for (const operator of ["EQUAL", "CONTAIN"] as const) {
+  const operators = exhaustiveSearch ? ["EQUAL", "CONTAIN"] as const : ["EQUAL"] as const;
+  for (const operator of operators) {
     for (const field of searchFields) {
       const init = initFor(field, operator);
       const payload = JSON.parse(String(init.body));
@@ -620,7 +631,12 @@ const HUB_PROFILE_FIELDS = [
   "id",
   "email",
   "neon_account_id",
-  "member_status"
+  "member_status",
+  "membership_level",
+  "membership_start_date",
+  "membership_end_date",
+  "membership_last_synced_at",
+  "membership_access_state"
 ].join(",");
 
 async function profileById(userId: string): Promise<HubProfileRecord | null> {
@@ -869,6 +885,221 @@ export async function existingHubProfile(email: string) {
   return profileByEmail(email);
 }
 
+function configuredCacheMs(): number {
+  const hours = Number(Deno.env.get("MEMBERSHIP_LOOKUP_CACHE_HOURS") || 6);
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  return hours * 60 * 60 * 1000;
+}
+
+function configuredNegativeCacheMs(): number {
+  const minutes = Number(Deno.env.get("MEMBERSHIP_LOOKUP_NEGATIVE_CACHE_MINUTES") || 30);
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  return minutes * 60 * 1000;
+}
+
+function freshAgeSeconds(value: unknown, maxAgeMs = configuredCacheMs()): number | null {
+  if (maxAgeMs <= 0) return null;
+  const timestamp = Date.parse(String(value || ""));
+  if (!Number.isFinite(timestamp)) return null;
+  const ageMs = Date.now() - timestamp;
+  if (ageMs < 0 || ageMs > maxAgeMs) return null;
+  return Math.max(0, Math.round(ageMs / 1000));
+}
+
+function cachedSummaryFromAccess(row: Json) {
+  return {
+    membershipStatus: nestedString(row.membership_status) || null,
+    membershipLevel: nestedString(row.membership_level) || null,
+    membershipStartAt: isoDate(nestedString(row.starts_at)),
+    membershipEndAt: isoDate(nestedString(row.expires_at))
+  };
+}
+
+function cachedSummaryFromProfile(profile: HubProfileRecord) {
+  return {
+    membershipStatus: profile.member_status || null,
+    membershipLevel: profile.membership_level || null,
+    membershipStartAt: isoDate(profile.membership_start_date || null),
+    membershipEndAt: isoDate(profile.membership_end_date || null)
+  };
+}
+
+function cachedOutcome(args: {
+  email: string;
+  neonAccountId: string | null;
+  isActive: boolean;
+  hasHubUser: boolean;
+  summary: ReturnType<typeof cachedSummaryFromAccess>;
+  cacheAgeSeconds: number;
+}): MembershipCheckResult {
+  const hasNeon = Boolean(args.neonAccountId);
+  if (args.isActive) {
+    return {
+      matched: true,
+      isActiveMember: true,
+      neonAccountId: args.neonAccountId,
+      membershipStatus: args.summary.membershipStatus || "Active",
+      membershipLevel: args.summary.membershipLevel,
+      membershipStartAt: args.summary.membershipStartAt,
+      membershipEndAt: args.summary.membershipEndAt,
+      hubAccess: args.hasHubUser ? "allowed" : "invite_required",
+      outcome: args.hasHubUser ? "active_member_existing_hub_user" : "active_member_needs_hub_invite",
+      publicState: args.hasHubUser ? "hub_user_active_member" : "neon_member_needs_hub_activation",
+      hubUserLinked: args.hasHubUser,
+      requiresManualReview: false,
+      lookupSource: "local_cache",
+      cacheAgeSeconds: args.cacheAgeSeconds
+    };
+  }
+  return {
+    matched: hasNeon,
+    isActiveMember: false,
+    neonAccountId: args.neonAccountId,
+    membershipStatus: args.summary.membershipStatus,
+    membershipLevel: args.summary.membershipLevel,
+    membershipStartAt: args.summary.membershipStartAt,
+    membershipEndAt: args.summary.membershipEndAt,
+    hubAccess: "membership_required",
+    outcome: args.summary.membershipEndAt ? "inactive_or_expired_member" : "nonmember",
+    publicState: args.summary.membershipEndAt ? "expired_member" : args.hasHubUser ? "hub_user_no_active_membership" : "existing_constituent_no_membership",
+    hubUserLinked: args.hasHubUser,
+    requiresManualReview: false,
+    lookupSource: "local_cache",
+    cacheAgeSeconds: args.cacheAgeSeconds
+  };
+}
+
+async function cachedMembershipByEmail(email: string, profile: HubProfileRecord | null, authenticatedUserId?: string, trace?: NeonLookupTrace): Promise<MembershipCheckResult | null> {
+  const profileAge = profile ? freshAgeSeconds(profile.membership_last_synced_at) : null;
+  if (profile && profile.neon_account_id && profileAge !== null) {
+    const accessState = lower(profile.membership_access_state || profile.member_status);
+    trace?.("local_membership_profile_cache_hit", {
+      cacheAgeSeconds: profileAge,
+      isActive: accessState === "active",
+      hasHubUser: true
+    });
+    return cachedOutcome({
+      email,
+      neonAccountId: profile.neon_account_id,
+      isActive: accessState === "active",
+      hasHubUser: true,
+      summary: cachedSummaryFromProfile(profile),
+      cacheAgeSeconds: profileAge
+    });
+  }
+
+  const rows = await supabaseRows<Json>(
+    `membership_access?select=*&normalized_email=eq.${encodeURIComponent(email)}&order=last_verified_at.desc&limit=1`,
+    "membership_access_cache_lookup_by_email"
+  );
+  const row = rows[0];
+  const accessAge = row ? freshAgeSeconds(row.last_verified_at) : null;
+  if (row && row.neon_account_id && accessAge !== null) {
+    const rowUserId = nestedString(row.user_id) || null;
+    const hasHubUser = Boolean(rowUserId && (!authenticatedUserId || rowUserId === authenticatedUserId));
+    trace?.("local_membership_access_cache_hit", {
+      cacheAgeSeconds: accessAge,
+      isActive: Boolean(row.is_active),
+      hasHubUser
+    });
+    return cachedOutcome({
+      email,
+      neonAccountId: nestedString(row.neon_account_id),
+      isActive: Boolean(row.is_active),
+      hasHubUser,
+      summary: cachedSummaryFromAccess(row),
+      cacheAgeSeconds: accessAge
+    });
+  }
+
+  trace?.("local_membership_cache_miss", {
+    profileFound: Boolean(profile),
+    membershipAccessFound: Boolean(row),
+    profileAgeSeconds: profileAge,
+    accessAgeSeconds: accessAge
+  });
+  return null;
+}
+
+async function cachedLookupByEmail(email: string, trace?: NeonLookupTrace): Promise<MembershipCheckResult | null> {
+  const rows = await supabaseRows<Json>(
+    `membership_lookup_cache?select=*&normalized_email=eq.${encodeURIComponent(email)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&limit=1`,
+    "membership_lookup_cache_lookup_by_email"
+  ).catch((error) => {
+    logDependencyFailure("membership_lookup_cache_lookup_by_email", error);
+    return [];
+  });
+  const row = rows[0];
+  if (!row) return null;
+  const age = freshAgeSeconds(row.last_verified_at, Math.max(configuredCacheMs(), configuredNegativeCacheMs()));
+  trace?.("membership_lookup_cache_hit", {
+    cacheAgeSeconds: age,
+    outcome: row.outcome,
+    matched: row.matched
+  });
+  return {
+    matched: Boolean(row.matched),
+    isActiveMember: Boolean(row.is_active_member),
+    neonAccountId: nestedString(row.neon_account_id) || null,
+    membershipStatus: nestedString(row.membership_status) || null,
+    membershipLevel: nestedString(row.membership_level) || null,
+    membershipStartAt: isoDate(nestedString(row.membership_start_at)),
+    membershipEndAt: isoDate(nestedString(row.membership_end_at)),
+    hubAccess: (nestedString(row.hub_access) as HubAccess) || "membership_required",
+    outcome: (nestedString(row.outcome) as MembershipCheckOutcome) || "nonmember",
+    publicState: (nestedString(row.public_state) as PublicIdentityState) || "new_person",
+    hubUserLinked: Boolean(row.hub_user_linked),
+    requiresManualReview: Boolean(row.requires_manual_review),
+    lookupSource: "local_cache",
+    cacheAgeSeconds: age || undefined
+  };
+}
+
+async function rememberLookup(email: string, result: MembershipCheckResult, trace?: NeonLookupTrace) {
+  const ttlMs = result.matched ? configuredCacheMs() : configuredNegativeCacheMs();
+  if (ttlMs <= 0 || result.outcome === "lookup_failed") return;
+  const now = new Date();
+  const body = {
+    normalized_email: email,
+    outcome: result.outcome,
+    public_state: result.publicState,
+    matched: result.matched,
+    is_active_member: result.isActiveMember,
+    neon_account_id: result.neonAccountId,
+    membership_status: result.membershipStatus,
+    membership_level: result.membershipLevel,
+    membership_start_at: result.membershipStartAt,
+    membership_end_at: result.membershipEndAt,
+    hub_access: result.hubAccess,
+    hub_user_linked: result.hubUserLinked,
+    requires_manual_review: result.requiresManualReview,
+    source: result.lookupSource || "neon_live",
+    last_verified_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + ttlMs).toISOString(),
+    metadata: {
+      cache_ttl_seconds: Math.round(ttlMs / 1000)
+    }
+  };
+  const res = await supabaseFetch("membership_lookup_cache?on_conflict=normalized_email", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(body)
+  }).catch((error) => {
+    logDependencyFailure("membership_lookup_cache_upsert", error);
+    return null;
+  });
+  if (!res) return;
+  if (!res.ok) {
+    logDependencyFailure("membership_lookup_cache_upsert", new SupabaseRestError("membership_lookup_cache_upsert", res.status, await res.text().catch(() => "")));
+    return;
+  }
+  trace?.("membership_lookup_cache_upsert", {
+    ttlSeconds: Math.round(ttlMs / 1000),
+    outcome: result.outcome,
+    matched: result.matched
+  });
+}
+
 export async function resolveMembership(input: MembershipLookupInput): Promise<MembershipCheckResult> {
   const traceId = crypto.randomUUID();
   const suppressTrace = Boolean(input.suppressTrace);
@@ -910,7 +1141,8 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       publicState: "lookup_unavailable",
       hubUserLinked: false,
       requiresManualReview: false,
-      reason: "A valid email is required."
+      reason: "A valid email is required.",
+      lookupSource: "validation"
     };
   }
 
@@ -924,12 +1156,41 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
         found: Boolean(hubProfile),
         matchedAuthenticatedUser: Boolean(authenticatedUserId && hubProfile?.id === authenticatedUserId),
         profileHasNeonAccountId: Boolean(hubProfile?.neon_account_id),
-        memberStatus: hubProfile?.member_status || null
+        memberStatus: hubProfile?.member_status || null,
+        membershipLastSyncedAt: hubProfile?.membership_last_synced_at || null
       });
     } catch (error) {
       logDependencyFailure("hub_profile_lookup", error);
       throw error;
     }
+
+    const cached = await cachedMembershipByEmail(email, hubProfile, authenticatedUserId || undefined, trace);
+    if (cached) {
+      trace("final_decision", {
+        outcome: cached.outcome,
+        hubAccess: cached.hubAccess,
+        source: "local_cache",
+        cacheAgeSeconds: cached.cacheAgeSeconds
+      });
+      return cached;
+    }
+
+    const cachedLookup = await cachedLookupByEmail(email, trace);
+    if (cachedLookup) {
+      trace("final_decision", {
+        outcome: cachedLookup.outcome,
+        hubAccess: cachedLookup.hubAccess,
+        source: "local_cache",
+        cacheAgeSeconds: cachedLookup.cacheAgeSeconds
+      });
+      return cachedLookup;
+    }
+
+    const rememberAndReturn = async (decision: MembershipCheckResult) => {
+      await rememberLookup(email, decision, trace);
+      return decision;
+    };
+
     let neonAccountId = suppliedAccountId;
     if (!neonAccountId) {
       let accounts: Json[] = [];
@@ -966,7 +1227,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           liveLookupCompleted: true,
           databaseWriteFailed
         });
-        return {
+        return await rememberAndReturn({
           matched: false,
           isActiveMember: false,
           neonAccountId: null,
@@ -979,8 +1240,9 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           publicState: hubProfile ? "hub_user_no_active_membership" : "new_person",
           hubUserLinked: Boolean(hubProfile),
           requiresManualReview: false,
-          databaseWriteFailed
-        };
+          databaseWriteFailed,
+          lookupSource: "neon_live"
+        });
       }
       if (match.status === "ambiguous") {
         let databaseWriteFailed = false;
@@ -999,7 +1261,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           liveLookupCompleted: true,
           databaseWriteFailed
         });
-        return {
+        return await rememberAndReturn({
           matched: true,
           isActiveMember: false,
           neonAccountId: null,
@@ -1013,8 +1275,9 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
           hubUserLinked: Boolean(hubProfile),
           requiresManualReview: true,
           databaseWriteFailed,
-          reason: "Multiple Neon accounts matched the submitted email."
-        };
+          reason: "Multiple Neon accounts matched the submitted email.",
+          lookupSource: "neon_live"
+        });
       }
       neonAccountId = match.neonAccountId || "";
     }
@@ -1076,7 +1339,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
         liveLookupCompleted: true,
         databaseWriteFailed
       });
-      return {
+      return await rememberAndReturn({
         matched: true,
         isActiveMember: false,
         neonAccountId,
@@ -1089,8 +1352,9 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
         publicState: memberships.length > 0 ? "expired_member" : hubProfile ? "hub_user_no_active_membership" : "existing_constituent_no_membership",
         hubUserLinked: Boolean(hubProfile),
         requiresManualReview: false,
-        databaseWriteFailed
-      };
+        databaseWriteFailed,
+        lookupSource: "neon_live"
+      });
     }
 
     let hubAccess = null;
@@ -1106,7 +1370,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       liveLookupCompleted: true,
       hubUserLinked: Boolean(hubAccess || hubProfile)
     });
-    return {
+    return await rememberAndReturn({
       matched: true,
       isActiveMember: true,
       neonAccountId,
@@ -1118,8 +1382,9 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       outcome: hubAccess ? "active_member_existing_hub_user" : "active_member_needs_hub_invite",
       publicState: hubAccess ? "hub_user_active_member" : "neon_member_needs_hub_activation",
       hubUserLinked: Boolean(hubAccess || hubProfile),
-      requiresManualReview: false
-    };
+      requiresManualReview: false,
+      lookupSource: "neon_live"
+    });
   } catch (error) {
     console.error("neon-membership-resolver", safeError(error));
     const reason = error instanceof NeonApiError
@@ -1145,7 +1410,8 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       publicState: "lookup_unavailable",
       hubUserLinked: false,
       requiresManualReview: false,
-      reason
+      reason,
+      lookupSource: "neon_live"
     };
   }
 }

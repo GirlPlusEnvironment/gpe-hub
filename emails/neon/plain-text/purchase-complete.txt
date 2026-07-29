@@ -1,0 +1,3 @@
+Your GPE purchase is complete.
+
+[[NEON_PURCHASE_RECEIPT_BLOCK]]

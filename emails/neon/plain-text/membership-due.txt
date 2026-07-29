@@ -1,0 +1,6 @@
+Your GPE membership is coming up for renewal.
+
+Renew below to keep your membership active.
+
+Renew my membership:
+[[NEON_MEMBERSHIP_RENEWAL_URL_TOKEN]]

@@ -13,6 +13,8 @@ dist-ssr
 playwright-report
 test-results
 *.local
+.env.local
+supabase/.env.local
 
 # Editor directories and files
 .vscode/*

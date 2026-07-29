@@ -30,6 +30,10 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
 const Login = lazy(() => import("./pages/Login"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const Invite = lazy(() => import("./pages/Invite"));
+const MembershipHelp = lazy(() => import("./pages/MembershipHelp"));
+const EmailPreferences = lazy(() => import("./pages/EmailPreferences"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminMembershipDiagnostics = lazy(() => import("./pages/AdminMembershipDiagnostics"));
 const CampAdmin = lazy(() => import("./pages/CampAdmin"));
@@ -289,6 +293,11 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/sign-up" element={<Navigate to="/login?mode=signup" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/accept-invite/" element={<AcceptInvite />} />
+            <Route path="/invite" element={<Invite />} />
+            <Route path="/membership-help" element={<MembershipHelp />} />
+            <Route path="/email-preferences" element={<EmailPreferences />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route
               path="*"

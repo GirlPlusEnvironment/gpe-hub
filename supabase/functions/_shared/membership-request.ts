@@ -37,21 +37,30 @@ export async function createMembershipRequestActivity(neonAccountId: string, req
   return String(data.id || data.activityId || "");
 }
 
-export async function queueHubInvitation(args: { submissionId: string; email: string; neonAccountId: string }) {
+export async function queueHubInvitation(args: { submissionId: string; email: string; neonAccountId: string; source?: string }) {
+  const queuedInvitation = {
+    source: args.source || "membership_enrollment",
+    source_id: args.submissionId,
+    normalized_email: sanitizeText(args.email, 320).toLowerCase(),
+    neon_account_id: args.neonAccountId,
+    status: "pending"
+  };
   const invitationUrl = getEnv("HUB_INVITATION_FUNCTION_URL", false);
   if (!invitationUrl) {
     await supabaseFetch("hub_invitations", {
       method: "POST",
-      body: JSON.stringify({
-        submission_id: args.submissionId,
-        normalized_email: sanitizeText(args.email, 320).toLowerCase(),
-        neon_account_id: args.neonAccountId,
-        status: "pending"
-      })
+      body: JSON.stringify(queuedInvitation)
     });
     return false;
   }
-  const secret = getEnv("HUB_INVITATION_SECRET");
+  const secret = getEnv("HUB_INVITATION_SECRET", false);
+  if (!secret) {
+    await supabaseFetch("hub_invitations", {
+      method: "POST",
+      body: JSON.stringify(queuedInvitation)
+    });
+    return false;
+  }
   const res = await fetch(invitationUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secret}` },
@@ -79,7 +88,12 @@ export async function createMembershipServerSide(args: { neonAccountId: string; 
     body: JSON.stringify({
       accountId: args.neonAccountId,
       membershipLevel: { id: levelId },
+      membershipTerm: { id: termId },
       term: { id: termId },
+      transactionDate: new Date().toISOString(),
+      fee: 0,
+      totalCharge: 0,
+      autoRenewal: false,
       status: "Active"
     })
   });

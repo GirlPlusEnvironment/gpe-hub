@@ -1,0 +1,6 @@
+Your GPE membership has been renewed.
+
+Thanks for continuing to make space with us.
+
+View my membership:
+[[NEON_MEMBERSHIP_ACCOUNT_URL_TOKEN]]

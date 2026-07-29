@@ -1,0 +1,6 @@
+We received your GPE membership registration.
+
+Complete the payment below so we can activate your membership.
+
+Complete my membership:
+[[NEON_MEMBERSHIP_PAYMENT_URL_TOKEN]]

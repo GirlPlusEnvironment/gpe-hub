@@ -67,6 +67,7 @@ export async function recordLeadAction(args: {
   city?: string;
   state?: string;
   neonAccountId?: string | null;
+  userId?: string | null;
   actionType: string;
   actionSlug: string;
   provider: string;
@@ -80,6 +81,15 @@ export async function recordLeadAction(args: {
   neonSyncStatus?: string;
   hubIdentityStatus?: string;
   pointsStatus?: string;
+  pointsResult?: Json | null;
+  neonActivityId?: string | null;
+  campSubmissionId?: string | null;
+  campSubmissionActionId?: string | null;
+  seasonId?: string | null;
+  seasonMemberId?: string | null;
+  challengeId?: string | null;
+  completedAt?: string | null;
+  pipelineStatus?: Json | null;
 }) {
   const email = normalizeEmail(args.email);
   if (!email) return null;
@@ -99,14 +109,15 @@ export async function recordLeadAction(args: {
       state: sanitizeText(args.state, 80) || null,
       action_network_person_id: sanitizeText(args.providerPersonId, 160) || null,
       neon_account_id: args.neonAccountId || null,
+      hub_profile_id: args.userId || null,
       source: sanitizeText(args.sourceUrl || args.actionSlug, 500) || null,
       membership_interest: membershipChoice,
       eligibility_affirmed: canonical.eligibilityAffirmed === true,
       consent_email: canonical.emailConsent === true,
       consent_sms: canonical.smsConsent === true,
-      account_state: "lead",
+      account_state: args.userId ? "hub_linked" : "lead",
       membership_state: membershipChoice === "accepted" ? "pending" : "nonmember",
-      hub_access: "restricted",
+      hub_access: args.userId ? "linked" : "restricted",
       metadata: {
         latestActionSlug: args.actionSlug,
         latestCampaignSlug: args.campaignSlug || null,
@@ -122,6 +133,7 @@ export async function recordLeadAction(args: {
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       lead_id: leadId,
+      user_id: args.userId || null,
       action_type: args.actionType,
       action_slug: args.actionSlug,
       provider: args.provider,
@@ -135,21 +147,87 @@ export async function recordLeadAction(args: {
       neon_sync_status: args.neonSyncStatus || "not_attempted",
       hub_identity_status: args.hubIdentityStatus || "not_attempted",
       points_status: args.pointsStatus || "not_applicable",
+      points_result: args.pointsResult || {},
+      neon_activity_id: args.neonActivityId || null,
+      camp_submission_id: args.campSubmissionId || null,
+      camp_submission_action_id: args.campSubmissionActionId || null,
+      season_id: args.seasonId || null,
+      season_member_id: args.seasonMemberId || null,
+      challenge_id: args.challengeId || null,
+      completed_at: args.completedAt || null,
+      pipeline_status: args.pipelineStatus || {},
       raw_payload: args.rawPayload || {}
     })
   });
-  if (!action.ok && !args.submissionId) throw new Error("Could not save lead action.");
+  if (!action.ok && !args.submissionId && !args.providerSignatureId) throw new Error("Could not save lead action.");
   if (args.submissionId) {
     await updateFormSubmission(args.submissionId, {
       lead_id: leadId,
       action_slug: args.actionSlug,
       action_type: args.actionType,
       membership_choice: membershipChoice,
-      points_status: args.pointsStatus || "not_applicable"
+      points_status: args.pointsStatus || "not_applicable",
+      points_result: args.pointsResult || {}
     }).catch(() => undefined);
   }
-  const rows = action.ok ? await action.json() : [];
+  let rows = action.ok ? await action.json() : [];
+  if (!action.ok && args.submissionId) {
+    const existing = await supabaseFetch(`lead_actions?select=*&form_submission_id=eq.${encodeURIComponent(args.submissionId)}&limit=1`);
+    rows = existing.ok ? await existing.json() : [];
+  }
+  if (!action.ok && rows.length === 0 && args.providerSignatureId) {
+    const existing = await supabaseFetch(`lead_actions?select=*&provider=eq.${encodeURIComponent(args.provider)}&provider_signature_id=eq.${encodeURIComponent(args.providerSignatureId)}&limit=1`);
+    rows = existing.ok ? await existing.json() : [];
+  }
   return { lead, action: rows[0] || null };
+}
+
+export async function recordPointEventForLeadAction(args: {
+  eventType: string;
+  email: string;
+  leadAction?: Record<string, unknown> | null;
+  lead?: Record<string, unknown> | null;
+  source: string;
+  sourceId: string;
+  campaignSlug?: string | null;
+  metadata?: Json | null;
+  occurredAt?: string | null;
+}) {
+  const actionId = args.leadAction?.id ? String(args.leadAction.id) : "";
+  const leadId = args.lead?.id ? String(args.lead.id) : "";
+  const userId = args.leadAction?.user_id ? String(args.leadAction.user_id) : null;
+  const res = await supabaseFetch("rpc/service_record_point_event", {
+    method: "POST",
+    body: JSON.stringify({
+      p_event_type: args.eventType,
+      p_subject_email: normalizeEmail(args.email),
+      p_user_id: userId,
+      p_lead_action_id: actionId || null,
+      p_lead_id: leadId || null,
+      p_source: args.source,
+      p_source_id: args.sourceId,
+      p_campaign_slug: args.campaignSlug || null,
+      p_metadata: args.metadata || {},
+      p_occurred_at: args.occurredAt || new Date().toISOString()
+    })
+  });
+  if (!res.ok) throw new Error(`Could not record point event: ${await res.text()}`);
+  const result = await res.json();
+  if (actionId) {
+    await supabaseFetch(`lead_actions?id=eq.${encodeURIComponent(actionId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        points_status: result.status || "not_applicable",
+        points_result: result,
+        pipeline_status: {
+          ...((args.leadAction?.pipeline_status || {}) as Record<string, unknown>),
+          points: result.status === "awarded" ? "success" : result.status === "pending_identity" ? "pending" : result.status || "not_applicable"
+        }
+      })
+    });
+  }
+  return result;
 }
 
 export async function logSync(args: {

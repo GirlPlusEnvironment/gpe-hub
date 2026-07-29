@@ -163,7 +163,15 @@ export type HubPointRule = {
   counts_for_season: boolean;
   counts_for_cabin: boolean;
   requires_approval: boolean;
+  max_awards_per_user: number | null;
+  season_override: string | null;
+  season_override_id: string | null;
+  lifetime_cap: number | null;
+  daily_cap: number | null;
   duplicate_strategy: string;
+  duplicate_policy: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 export type AdminPointMember = {
@@ -199,12 +207,17 @@ export type AdminPointTransaction = {
   season_id: string | null;
   season_member_id: string | null;
   challenge_id: string | null;
+  challenge_title?: string | null;
   cabin_id: string | null;
+  campaign_slug?: string | null;
+  petition_slug?: string | null;
+  rule_used?: string | null;
   occurred_at: string;
   created_at: string;
   awarded_by: string | null;
   reversed_by_transaction_id: string | null;
   reverses_transaction_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type AdminAwardResult = {
@@ -505,10 +518,36 @@ export async function searchPointMembers(params: {
 export async function getPointRules() {
   const { data, error } = await supabase
     .from("hub_point_rules")
-    .select("action_type,display_name,point_value,active,counts_for_ongoing,counts_for_season,counts_for_cabin,requires_approval,duplicate_strategy")
+    .select("action_type,display_name,point_value,active,counts_for_ongoing,counts_for_season,counts_for_cabin,requires_approval,max_awards_per_user,season_override,season_override_id,lifetime_cap,daily_cap,duplicate_strategy,duplicate_policy,notes,metadata")
     .order("display_name", { ascending: true });
   if (error) throw error;
   return (data || []) as HubPointRule[];
+}
+
+export async function updatePointRule(actionType: string, patch: Partial<HubPointRule>) {
+  const allowedPatch = Object.fromEntries(Object.entries({
+    display_name: patch.display_name,
+    point_value: patch.point_value,
+    active: patch.active,
+    counts_for_ongoing: patch.counts_for_ongoing,
+    counts_for_season: patch.counts_for_season,
+    counts_for_cabin: patch.counts_for_cabin,
+    requires_approval: patch.requires_approval,
+    lifetime_cap: patch.lifetime_cap,
+    daily_cap: patch.daily_cap,
+    duplicate_policy: patch.duplicate_policy,
+    duplicate_strategy: patch.duplicate_strategy,
+    season_override_id: patch.season_override_id,
+    notes: patch.notes,
+  }).filter(([, value]) => value !== undefined));
+  const { data, error } = await supabase
+    .from("hub_point_rules")
+    .update(allowedPatch)
+    .eq("action_type", actionType)
+    .select("action_type,display_name,point_value,active,counts_for_ongoing,counts_for_season,counts_for_cabin,requires_approval,max_awards_per_user,season_override,season_override_id,lifetime_cap,daily_cap,duplicate_strategy,duplicate_policy,notes,metadata")
+    .single();
+  if (error) throw error;
+  return data as HubPointRule;
 }
 
 export async function getAdminMemberPointHistory(params: {
@@ -516,7 +555,7 @@ export async function getAdminMemberPointHistory(params: {
   seasonId?: string | null;
   limit?: number;
 }) {
-  const { data, error } = await supabase.rpc("admin_get_member_point_history", {
+  const { data, error } = await supabase.rpc("admin_get_member_point_history_v2", {
     p_profile_id: params.profileId,
     p_season_id: params.seasonId ?? null,
     p_limit: params.limit ?? 25,

@@ -1,0 +1,3 @@
+Your refund for [[NEON_EVENT_NAME_TOKEN]] has been processed.
+
+[[NEON_REFUND_DETAILS_BLOCK]]

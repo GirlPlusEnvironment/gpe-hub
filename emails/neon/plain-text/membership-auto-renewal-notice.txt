@@ -1,0 +1,4 @@
+Your GPE membership is scheduled to renew soon.
+
+View my membership:
+[[NEON_MEMBERSHIP_ACCOUNT_URL_TOKEN]]

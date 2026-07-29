@@ -1,0 +1,4 @@
+We received your registration for [[NEON_EVENT_NAME_TOKEN]].
+
+Complete payment:
+[[NEON_EVENT_PAYMENT_URL_TOKEN]]

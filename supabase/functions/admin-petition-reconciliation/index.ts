@@ -79,6 +79,19 @@ type PetitionCandidate = {
   pointsStatus: string;
   invitationStatus: string;
   reconciliationError: string | null;
+  pointEvents?: Array<{
+    id: string;
+    eventType: string;
+    rule: string;
+    status: string;
+    points: number;
+    awardedPoints: number;
+    pendingPoints: number;
+    transactionId: string | null;
+    pendingAwardId: string | null;
+    ledgerId: string | null;
+    occurredAt: string;
+  }>;
   rawPayload: Json;
 };
 
@@ -396,6 +409,7 @@ async function candidateRows(limit = 100) {
       pointsStatus: existing?.points_status || submission.points_status || "pending_identity",
       invitationStatus: existing?.invitation_status || "not_attempted",
       reconciliationError: existing?.reconciliation_error || null,
+      pipelineStatus: existing?.pipeline_status || null,
       rawPayload: submission.submission_payload || {},
     };
     const reg = registryFor(registry, seed);
@@ -433,11 +447,43 @@ async function candidateRows(limit = 100) {
       pointsStatus: action.points_status,
       invitationStatus: action.invitation_status || "not_attempted",
       reconciliationError: action.reconciliation_error || null,
+      pipelineStatus: action.pipeline_status || null,
       rawPayload: action.raw_payload || {},
     });
   }
 
-  return rows.slice(0, limit);
+  const limitedRows = rows.slice(0, limit);
+  const actionIds = limitedRows.map((row) => row.leadActionId).filter(Boolean) as string[];
+  if (actionIds.length > 0) {
+    const eventsRes = await supabaseFetch(
+      `gpe_point_events?select=id,lead_action_id,event_type,rule_action_type,points_status,points_result,point_transaction_id,pending_award_id,camp_ledger_id,occurred_at&lead_action_id=in.(${actionIds.join(",")})&order=occurred_at.asc`
+    );
+    const events = eventsRes.ok ? await eventsRes.json() as Json[] : [];
+    for (const row of limitedRows) {
+      row.pointEvents = events
+        .filter((event) => String(event.lead_action_id || "") === row.leadActionId)
+        .map((event) => {
+          const result = event.points_result && typeof event.points_result === "object" && !Array.isArray(event.points_result)
+            ? event.points_result as Json
+            : {};
+          return {
+            id: String(event.id || ""),
+            eventType: String(event.event_type || ""),
+            rule: String(event.rule_action_type || result.rule || ""),
+            status: String(result.status || event.points_status || "not_applicable"),
+            points: Number(result.points || 0),
+            awardedPoints: Number(result.awardedPoints || 0),
+            pendingPoints: Number(result.pendingPoints || 0),
+            transactionId: event.point_transaction_id ? String(event.point_transaction_id) : null,
+            pendingAwardId: event.pending_award_id ? String(event.pending_award_id) : null,
+            ledgerId: event.camp_ledger_id ? String(event.camp_ledger_id) : null,
+            occurredAt: String(event.occurred_at || ""),
+          };
+        });
+    }
+  }
+
+  return limitedRows;
 }
 
 async function reconcileCandidate(candidate: PetitionCandidate, registry: Awaited<ReturnType<typeof loadRegistry>>) {
@@ -506,6 +552,15 @@ async function reconcileCandidate(candidate: PetitionCandidate, registry: Awaite
     pointsStatus: points.status,
     invitationStatus: invitation.status,
     reconciliationError: error || invitation.error,
+    pipelineStatus: {
+      petition: "success",
+      actionNetwork: "success",
+      neon: neonSyncStatus === "succeeded" ? "success" : neonSyncStatus,
+      hub: hubProfileId ? "success" : "pending",
+      points: points.status === "awarded" ? "success" : points.status,
+      camp: "historical_cleanup",
+      automation: invitation.status === "succeeded" ? "success" : invitation.status,
+    },
   };
 }
 

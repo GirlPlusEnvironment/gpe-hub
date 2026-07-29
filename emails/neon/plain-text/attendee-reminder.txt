@@ -1,0 +1,3 @@
+[[NEON_EVENT_NAME_TOKEN]] is coming up soon.
+
+[[NEON_EVENT_DETAILS_BLOCK]]

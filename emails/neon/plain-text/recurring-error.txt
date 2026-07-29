@@ -1,0 +1,4 @@
+Your recurring gift payment did not go through.
+
+Update payment:
+[[NEON_PAYMENT_UPDATE_URL_TOKEN]]

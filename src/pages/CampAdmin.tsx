@@ -37,6 +37,7 @@ import {
   reversePointTransaction,
   searchPointMembers,
   applyModerationAction,
+  updatePointRule,
   updateCampChallengePublishState,
   updateCampChallengeContent,
   updateCampSeasonContent,
@@ -859,6 +860,40 @@ export default function CampAdmin() {
   function updateSeasonSettingsForm<K extends keyof SeasonSettingsForm>(key: K, value: SeasonSettingsForm[K]) {
     setSeasonSettingsForm((current) => current ? { ...current, [key]: value } : current);
     setSeasonSettingsDirty(true);
+  }
+
+  function updateLocalPointRule(actionType: string, patch: Partial<HubPointRule>) {
+    setPointRules((current) => current.map((rule) => (
+      rule.action_type === actionType ? { ...rule, ...patch } : rule
+    )));
+  }
+
+  async function savePointRule(rule: HubPointRule) {
+    setBusyId(`point-rule-${rule.action_type}`);
+    setError(null);
+    try {
+      const saved = await updatePointRule(rule.action_type, {
+        display_name: rule.display_name,
+        point_value: Number(rule.point_value) || 0,
+        active: rule.active,
+        counts_for_ongoing: rule.counts_for_ongoing,
+        counts_for_season: rule.counts_for_season,
+        counts_for_cabin: rule.counts_for_cabin,
+        requires_approval: rule.requires_approval,
+        daily_cap: rule.daily_cap === null ? null : Number(rule.daily_cap) || 0,
+        lifetime_cap: rule.lifetime_cap === null ? null : Number(rule.lifetime_cap) || 0,
+        duplicate_policy: rule.duplicate_policy || rule.duplicate_strategy,
+        duplicate_strategy: rule.duplicate_strategy,
+        season_override_id: rule.season_override_id || null,
+        notes: rule.notes || null,
+      });
+      updateLocalPointRule(rule.action_type, saved);
+      toast({ title: "Point rule saved", description: `${saved.display_name} is now configurable from this rule.` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save point rule.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function updateSubmissionFields(mutator: (fields: ChallengeSubmissionField[]) => ChallengeSubmissionField[]) {
@@ -2247,15 +2282,82 @@ export default function CampAdmin() {
                   {rewardsTab === "rules" && (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {pointRules.map((rule) => (
-                        <div key={rule.action_type} className="rounded-xl border-2 border-black bg-white p-3">
-                          <div className="font-black">{rule.display_name}</div>
-                          <div className="mt-1 text-xs font-bold uppercase text-black/55">{rule.action_type} · +{rule.point_value} · {rule.duplicate_strategy}</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
+                        <div key={rule.action_type} className="space-y-3 rounded-xl border-2 border-black bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-black">{rule.display_name}</div>
+                              <div className="mt-1 break-all text-xs font-bold uppercase text-black/55">{rule.action_type}</div>
+                            </div>
                             <Badge variant={rule.active ? "default" : "outline"}>{rule.active ? "Enabled" : "Disabled"}</Badge>
-                            {rule.counts_for_ongoing ? <Badge variant="outline">Ongoing</Badge> : null}
-                            {rule.counts_for_season ? <Badge variant="outline">Seasonal</Badge> : null}
-                            {rule.counts_for_cabin ? <Badge variant="outline">Cabin</Badge> : null}
                           </div>
+                          <label className="flex items-center gap-3 rounded-lg border-2 border-black bg-gpe-yellow/30 p-2 text-sm font-black">
+                            <input type="checkbox" checked={rule.active} onChange={(event) => updateLocalPointRule(rule.action_type, { active: event.target.checked })} />
+                            Enabled
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label htmlFor={`rule-points-${rule.action_type}`}>Points</Label>
+                              <Input id={`rule-points-${rule.action_type}`} type="number" min="0" value={rule.point_value} onChange={(event) => updateLocalPointRule(rule.action_type, { point_value: Number(event.target.value) })} />
+                            </div>
+                            <div>
+                              <Label htmlFor={`rule-policy-${rule.action_type}`}>Duplicate policy</Label>
+                              <select
+                                id={`rule-policy-${rule.action_type}`}
+                                value={rule.duplicate_policy || rule.duplicate_strategy}
+                                onChange={(event) => updateLocalPointRule(rule.action_type, {
+                                  duplicate_policy: event.target.value,
+                                  duplicate_strategy: event.target.value === "lifetime_cap" ? "source_once" : event.target.value,
+                                })}
+                                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                <option value="source_once">Source once</option>
+                                <option value="daily_cap">Daily cap</option>
+                                <option value="lifetime_cap">Lifetime cap</option>
+                                <option value="manual_review">Manual review</option>
+                                <option value="unlimited">Unlimited</option>
+                              </select>
+                            </div>
+                            <div>
+                              <Label htmlFor={`rule-daily-${rule.action_type}`}>Daily cap</Label>
+                              <Input id={`rule-daily-${rule.action_type}`} type="number" min="0" value={rule.daily_cap ?? ""} placeholder="None" onChange={(event) => updateLocalPointRule(rule.action_type, { daily_cap: event.target.value === "" ? null : Number(event.target.value) })} />
+                            </div>
+                            <div>
+                              <Label htmlFor={`rule-life-${rule.action_type}`}>Lifetime cap</Label>
+                              <Input id={`rule-life-${rule.action_type}`} type="number" min="0" value={rule.lifetime_cap ?? ""} placeholder="None" onChange={(event) => updateLocalPointRule(rule.action_type, { lifetime_cap: event.target.value === "" ? null : Number(event.target.value) })} />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor={`rule-season-${rule.action_type}`}>Season override</Label>
+                            <select
+                              id={`rule-season-${rule.action_type}`}
+                              value={rule.season_override_id || rule.season_override || ""}
+                              onChange={(event) => updateLocalPointRule(rule.action_type, { season_override_id: event.target.value || null })}
+                              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="">Use active/request season</option>
+                              {season && <option value={season.id}>{season.name}</option>}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs font-black uppercase">
+                            {[
+                              ["counts_for_ongoing", "Ongoing"],
+                              ["counts_for_season", "Season"],
+                              ["counts_for_cabin", "Cabin"],
+                              ["requires_approval", "Approval"],
+                            ].map(([key, label]) => (
+                              <label key={key} className="flex items-center gap-2 rounded-lg border-2 border-black bg-white p-2">
+                                <input type="checkbox" checked={Boolean(rule[key as keyof HubPointRule])} onChange={(event) => updateLocalPointRule(rule.action_type, { [key]: event.target.checked } as Partial<HubPointRule>)} />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                          <div>
+                            <Label htmlFor={`rule-notes-${rule.action_type}`}>Notes</Label>
+                            <Textarea id={`rule-notes-${rule.action_type}`} value={rule.notes || ""} onChange={(event) => updateLocalPointRule(rule.action_type, { notes: event.target.value })} rows={2} />
+                          </div>
+                          <Button size="sm" className="w-full" disabled={busyId === `point-rule-${rule.action_type}`} onClick={() => savePointRule(rule)}>
+                            {busyId === `point-rule-${rule.action_type}` ? "Saving" : "Save rule"}
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -2525,6 +2627,14 @@ export default function CampAdmin() {
                                       transaction.counts_for_season ? "season" : null,
                                       transaction.counts_for_cabin ? "cabin" : null,
                                     ].filter(Boolean).join(" + ")}
+                                  </div>
+                                  <div className="mt-2 grid gap-1 text-xs font-bold text-black/60 md:grid-cols-2">
+                                    <div>Rule: {transaction.rule_used || transaction.action_type || "Unknown"}</div>
+                                    <div>Source: {transaction.source || "Unknown"}</div>
+                                    <div>Campaign: {transaction.campaign_slug || transaction.season_id || "None"}</div>
+                                    <div>Petition: {transaction.petition_slug || "None"}</div>
+                                    <div>Challenge: {transaction.challenge_title || transaction.challenge_id || "None"}</div>
+                                    <div>Created: {new Date(transaction.created_at).toLocaleString()}</div>
                                   </div>
                                   {transaction.admin_note && <div className="mt-1 text-sm font-bold text-black/70">Note: {transaction.admin_note}</div>}
                                   <div className="mt-1 break-all text-xs text-black/40">{transaction.transaction_id}</div>

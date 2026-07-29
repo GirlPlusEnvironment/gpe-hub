@@ -1,0 +1,6 @@
+We saved your membership renewal.
+
+Complete the payment below to keep your GPE membership active.
+
+Finish renewal:
+[[NEON_MEMBERSHIP_PAYMENT_URL_TOKEN]]

@@ -12,6 +12,14 @@ declare const Deno: {
 };
 
 const MAX_BODY_BYTES = 20_000;
+function nowMs() {
+  return performance.now();
+}
+
+function elapsedSince(start: number) {
+  return Math.max(0, Math.round(nowMs() - start));
+}
+
 async function readBody(req: Request): Promise<Json> {
   const contentType = req.headers.get("content-type") || "";
   if (!contentType.toLowerCase().includes("application/json")) throw new Error("Content-Type must be application/json.");
@@ -50,18 +58,58 @@ Deno.serve(async (req) => {
   assertAllowedOrigin(origin);
   if (req.method !== "POST") return jsonResponse({ message: "Method not allowed." }, 405, origin);
 
+  const startedAt = nowMs();
+  const timings: Record<string, number> = {};
+  const traceTimings = new Map<string, number>();
+  const mark = (key: string, start: number) => {
+    timings[key] = (timings[key] || 0) + elapsedSince(start);
+  };
+  const traceCollector = (step: string) => {
+    const current = nowMs();
+    const previous = traceTimings.get("last") || startedAt;
+    const delta = Math.max(0, Math.round(current - previous));
+    traceTimings.set("last", current);
+    const bucket =
+      step.startsWith("hub_profile") || step.startsWith("membership_access") || step.startsWith("profile_membership") || step.startsWith("local_membership")
+        ? "supabaseLookupMs"
+        : step.startsWith("neon_account") || step.startsWith("neon_constituent")
+        ? "neonAccountLookupMs"
+        : step.startsWith("neon_membership") || step.startsWith("eligibility")
+        ? "neonMembershipLookupMs"
+        : "resolverOtherMs";
+    timings[bucket] = (timings[bucket] || 0) + delta;
+  };
+
   try {
+    const validationStarted = nowMs();
     const body = await readBody(req);
+    mark("requestValidationMs", validationStarted);
+    const authStarted = nowMs();
     const user = await authenticatedUser(req);
+    mark("supabaseAuthMs", authStarted);
     const result = await resolveMembership({
       email: sanitizeText(body.email, 320),
       firstName: sanitizeText(body.firstName, 120),
       lastName: sanitizeText(body.lastName, 120),
       authenticatedUserId: user?.id,
-      authenticatedEmail: user?.email || undefined
+      authenticatedEmail: user?.email || undefined,
+      traceCollector
     });
 
-    return jsonResponse({
+    const serializationStarted = nowMs();
+    const responseBody = {
+      lookupTimings: {
+        totalMs: 0,
+        requestValidationMs: timings.requestValidationMs || 0,
+        supabaseAuthMs: timings.supabaseAuthMs || 0,
+        supabaseLookupMs: timings.supabaseLookupMs || 0,
+        neonAccountLookupMs: timings.neonAccountLookupMs || 0,
+        neonMembershipLookupMs: timings.neonMembershipLookupMs || 0,
+        resolverOtherMs: timings.resolverOtherMs || 0,
+        responseSerializationMs: 0
+      },
+      lookupSource: result.lookupSource || "neon_live",
+      cacheAgeSeconds: result.cacheAgeSeconds,
       authenticatedUserLinked: Boolean(user?.id),
       matched: result.matched,
       isActiveMember: result.isActiveMember,
@@ -76,9 +124,27 @@ Deno.serve(async (req) => {
       requiresManualReview: result.requiresManualReview,
       neonAccountLinked: Boolean(result.neonAccountId),
       failureReason: result.outcome === "lookup_failed" ? result.reason : undefined
+    };
+    responseBody.lookupTimings.responseSerializationMs = elapsedSince(serializationStarted);
+    responseBody.lookupTimings.totalMs = elapsedSince(startedAt);
+    return jsonResponse({
+      ...responseBody
     }, result.outcome === "lookup_failed" ? 502 : 200, origin);
   } catch (error) {
     console.error("neon-membership-check", safeError(error));
-    return jsonResponse({ message: "Membership lookup could not be completed.", outcome: "lookup_failed" }, 400, origin);
+    return jsonResponse({
+      message: "Membership lookup could not be completed.",
+      outcome: "lookup_failed",
+      lookupTimings: {
+        totalMs: elapsedSince(startedAt),
+        requestValidationMs: timings.requestValidationMs || 0,
+        supabaseAuthMs: timings.supabaseAuthMs || 0,
+        supabaseLookupMs: timings.supabaseLookupMs || 0,
+        neonAccountLookupMs: timings.neonAccountLookupMs || 0,
+        neonMembershipLookupMs: timings.neonMembershipLookupMs || 0,
+        resolverOtherMs: timings.resolverOtherMs || 0,
+        responseSerializationMs: 0
+      }
+    }, 400, origin);
   }
 });

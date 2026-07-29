@@ -1,0 +1,6 @@
+We saved your spot for [[NEON_EVENT_NAME_TOKEN]].
+
+View my registration:
+[[NEON_EVENT_REGISTRATION_URL_TOKEN]]
+
+[[NEON_EVENT_DETAILS_BLOCK]]

@@ -1,0 +1,4 @@
+We received your donation commitment.
+
+Complete payment:
+[[NEON_DONATION_PAYMENT_URL_TOKEN]]

@@ -1,0 +1,4 @@
+Your GPE membership renewal payment did not go through.
+
+Update your payment information:
+[[NEON_PAYMENT_UPDATE_URL_TOKEN]]

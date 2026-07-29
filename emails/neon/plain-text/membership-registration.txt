@@ -1,0 +1,7 @@
+You can sit with us, girlie!
+
+Thanks for becoming a GPE member, [[NEON_FIRST_NAME_TOKEN]].
+Your membership helps make space for black + brown femmes to lead this climate and environmental justice movement.
+
+View my membership:
+[[NEON_MEMBERSHIP_ACCOUNT_URL_TOKEN]]

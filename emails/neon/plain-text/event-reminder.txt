@@ -1,0 +1,4 @@
+Just a reminder that [[NEON_EVENT_NAME_TOKEN]] is almost here.
+
+View event details:
+[[NEON_EVENT_LINK_TOKEN]]

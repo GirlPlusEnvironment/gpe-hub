@@ -1,0 +1,3 @@
+Your exchange has been processed.
+
+[[NEON_EXCHANGE_DETAILS_BLOCK]]

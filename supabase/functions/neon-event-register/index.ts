@@ -1,7 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
 import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
-import { recordLeadAction } from "../_shared/form-submission.ts";
+import { recordLeadAction, recordPointEventForLeadAction } from "../_shared/form-submission.ts";
 import { logEventSync } from "../_shared/neon-events.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { extractRows, neonFetch, resolveMembership, safeError, supabaseFetch } from "../_shared/neon-membership.ts";
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
         } else {
           const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: "event_registration" } });
           membershipCreationStatus = membershipResult.membershipCreationStatus;
-          await queueHubInvitation({ submissionId: String(intent.id), email, neonAccountId: account.neonAccountId }).catch(() => {
+          await queueHubInvitation({ submissionId: String(intent.id), email, neonAccountId: account.neonAccountId, source: "neon_event_registration" }).catch(() => {
             membershipPartialSuccess = true;
             return undefined;
           });
@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
         p_payload: { neonEventId: event.neon_event_id, membershipOutcome: membership.outcome }
       })
     }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "notification", operation: "event_registration_intent", success: false, errorSummary: safeError(error) }));
-    await recordLeadAction({
+    const leadActionResult = await recordLeadAction({
       email,
       firstName: String(fields.firstName),
       lastName: String(fields.lastName),
@@ -273,6 +273,24 @@ Deno.serve(async (req) => {
       pointsStatus: status === "registered" ? "pending_membership" : "not_applicable",
       rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membershipCreationStatus === "failed" ? "membership_creation_failed" : membership.outcome, membershipCreationStatus, membershipFailureMessage }
     }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
+    if (status === "registered") {
+      await recordPointEventForLeadAction({
+        eventType: "EVENT_REGISTERED",
+        email,
+        leadAction: leadActionResult?.action,
+        lead: leadActionResult?.lead,
+        source: "neon_event_registration",
+        sourceId: String(intent.id),
+        campaignSlug: String(event.campaign_slug || ""),
+        metadata: {
+          eventId: event.id,
+          neonEventId: event.neon_event_id,
+          registrationIntentId: intent.id,
+          neonRegistrationId,
+          membershipOutcome: membership.outcome
+        }
+      }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "points", operation: "event_registered_point_event", success: false, errorSummary: safeError(error) }));
+    }
 
     if (membershipCreationStatus === "failed") {
       return jsonResponse({

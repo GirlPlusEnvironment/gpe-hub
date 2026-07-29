@@ -1,0 +1,3 @@
+Your donation match was recorded.
+
+[[NEON_MATCHED_DONATION_DETAILS_BLOCK]]

@@ -1,0 +1,4 @@
+Your pledge payment is overdue.
+
+Pay my pledge:
+[[NEON_PLEDGE_PAYMENT_URL_TOKEN]]

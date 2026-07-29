@@ -15,7 +15,7 @@ import {
 
 const INVITE_LINK_ERROR =
   "This invitation link is invalid or has expired. Request a new Hub access link from the login page.";
-const GRACE_DAYS = 7;
+const GRACE_DAYS = 35;
 
 const SENSITIVE_INVITE_PARAMS = [
   "access_token",

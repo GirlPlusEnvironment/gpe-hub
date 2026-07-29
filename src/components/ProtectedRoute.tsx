@@ -33,7 +33,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   if (
-    profile?.account_status === "deactivated" ||
+    (profile?.account_status && profile.account_status !== "active") ||
     profile?.membership_access_state === "membership_grace_expired"
   ) {
     return (

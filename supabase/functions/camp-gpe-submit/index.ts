@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
         throw new ValidationError("Complete the membership questions before creating a GPE membership.");
       }
       if (membershipRequest && membership.outcome !== "active_member_existing_hub_user" && membership.outcome !== "active_member_needs_hub_invite" && account.neonAccountId) {
-        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: FORM_KEY } });
+        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { membershipRequest, fields, source: FORM_KEY } });
         membershipCreationStatus = membershipResult.membershipCreationStatus;
         membership = { ...membership, outcome: "active_member_needs_hub_invite", neonAccountId: account.neonAccountId };
       }

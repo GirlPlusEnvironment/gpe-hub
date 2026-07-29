@@ -25,6 +25,7 @@ const ALLOWED_TEMPLATES = new Set([
   "member-welcome",
   "existing-member-hub-invite",
   "hub-user-nonmember",
+  "membership-required",
   "hub-activated",
   "pending-points",
   "points-earned",

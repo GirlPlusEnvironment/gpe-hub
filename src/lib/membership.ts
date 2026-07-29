@@ -153,6 +153,7 @@ export const updateCurrentHubMembershipState = async (args: {
       email: userData.user.email?.toLowerCase() ?? null,
       neon_account_id: args.neonAccountId ?? null,
       member_status: args.membershipAccessState === "active" ? "active" : "pending",
+      membership_status: args.membershipAccessState === "active" ? "active" : "pending",
       membership_access_state: args.membershipAccessState,
       membership_level: args.membershipLevel ?? null,
       membership_start_date: args.membershipStartDate ?? null,
@@ -161,11 +162,17 @@ export const updateCurrentHubMembershipState = async (args: {
       account_status: "active",
       membership_pending_started_at: pending ? now.toISOString() : null,
       membership_grace_expires_at: pending
-        ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        ? new Date(now.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString()
+        : null,
+      membership_grace_started_at: pending ? now.toISOString() : null,
+      membership_deadline_at: pending
+        ? new Date(now.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString()
         : null,
       membership_reminder_sent_at: null,
       membership_deactivated_at: null,
       membership_deactivation_reason: null,
+      deletion_scheduled_at: null,
+      deleted_at: null,
       updated_at: now.toISOString(),
     },
     { onConflict: "id" },

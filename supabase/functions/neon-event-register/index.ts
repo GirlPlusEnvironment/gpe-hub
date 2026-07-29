@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
           membershipCreationStatus = "failed";
           membershipFailureMessage = "Membership could not be created because the Neon account match requires manual review.";
         } else {
-          const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { membershipRequest, fields, source: "event_registration" } });
+          const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { membershipRequest, fields, source: "event_registration" } });
           membershipCreationStatus = membershipResult.membershipCreationStatus;
           await queueHubInvitation({ submissionId: String(intent.id), email, neonAccountId: account.neonAccountId, source: "neon_event_registration" }).catch(() => {
             membershipPartialSuccess = true;

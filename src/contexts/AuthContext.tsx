@@ -19,7 +19,7 @@ type AuthProviderProps = {
 };
 
 const PROFILE_FIELDS =
-  "id, email, username, full_name, first_name, last_name, avatar_url, bio, neon_account_id, member_status, membership_level, membership_start_date, membership_end_date, membership_last_synced_at, membership_access_state, account_status, membership_pending_started_at, membership_grace_expires_at, membership_reminder_sent_at, membership_deactivated_at, membership_deactivation_reason, points, created_at, updated_at";
+  "id, email, username, full_name, first_name, last_name, avatar_url, bio, neon_account_id, member_status, membership_status, membership_level, membership_start_date, membership_end_date, membership_last_synced_at, membership_access_state, account_status, membership_pending_started_at, membership_grace_expires_at, membership_reminder_sent_at, membership_deactivated_at, membership_deactivation_reason, membership_grace_started_at, membership_deadline_at, deletion_scheduled_at, deleted_at, points, created_at, updated_at";
 
 const syncProfileFieldsFromMetadata = async (
   targetUser: User,
@@ -40,10 +40,10 @@ const syncProfileFieldsFromMetadata = async (
   const nextMembershipAccessState = metadataMembershipAccessState || existingProfile?.membership_access_state || null;
   const isPending = nextMembershipAccessState === "membership_pending";
   const pendingStartedAt = isPending
-    ? existingProfile?.membership_pending_started_at || now
+    ? existingProfile?.membership_grace_started_at || existingProfile?.membership_pending_started_at || now
     : null;
   const pendingExpiresAt = isPending
-    ? existingProfile?.membership_grace_expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    ? existingProfile?.membership_deadline_at || existingProfile?.membership_grace_expires_at || new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString()
     : null;
 
   const nextFullName = existingProfile?.full_name?.trim() || metadataFullName || null;
@@ -87,6 +87,7 @@ const syncProfileFieldsFromMetadata = async (
         bio: existingProfile?.bio ?? null,
         neon_account_id: existingProfile?.neon_account_id ?? metadataNeonAccountId,
         member_status: metadataMembershipAccessState === "active" ? "active" : existingProfile?.member_status ?? (metadataMembershipAccessState === "membership_pending" ? "pending" : null),
+        membership_status: metadataMembershipAccessState === "active" ? "active" : existingProfile?.membership_status ?? (metadataMembershipAccessState === "membership_pending" ? "pending" : null),
         membership_level: metadataMembershipLevel ?? existingProfile?.membership_level,
         membership_start_date: metadataMembershipStartDate ?? existingProfile?.membership_start_date,
         membership_end_date: metadataMembershipEndDate ?? existingProfile?.membership_end_date,
@@ -98,6 +99,10 @@ const syncProfileFieldsFromMetadata = async (
         membership_reminder_sent_at: existingProfile?.membership_reminder_sent_at ?? null,
         membership_deactivated_at: existingProfile?.membership_deactivated_at ?? null,
         membership_deactivation_reason: existingProfile?.membership_deactivation_reason ?? null,
+        membership_grace_started_at: pendingStartedAt,
+        membership_deadline_at: pendingExpiresAt,
+        deletion_scheduled_at: existingProfile?.deletion_scheduled_at ?? null,
+        deleted_at: existingProfile?.deleted_at ?? null,
         points: existingProfile?.points ?? 0,
         updated_at: now,
       },
@@ -188,6 +193,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         neon_account_id:
           (targetUser.user_metadata?.neon_account_id as string | undefined) ?? null,
         member_status: membershipAccessState === "active" ? "active" : isMembershipPending ? "pending" : null,
+        membership_status: membershipAccessState === "active" ? "active" : isMembershipPending ? "pending" : null,
         membership_level:
           (targetUser.user_metadata?.membership_level as string | undefined) ?? null,
         membership_start_date:
@@ -199,11 +205,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         account_status: "active",
         membership_pending_started_at: isMembershipPending ? createdAt.toISOString() : null,
         membership_grace_expires_at: isMembershipPending
-          ? new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          ? new Date(createdAt.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString()
           : null,
         membership_reminder_sent_at: null,
         membership_deactivated_at: null,
         membership_deactivation_reason: null,
+        membership_grace_started_at: isMembershipPending ? createdAt.toISOString() : null,
+        membership_deadline_at: isMembershipPending
+          ? new Date(createdAt.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString()
+          : null,
+        deletion_scheduled_at: null,
+        deleted_at: null,
         points: 0,
       })
       .select(PROFILE_FIELDS)

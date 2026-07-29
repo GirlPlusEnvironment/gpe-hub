@@ -154,13 +154,14 @@ const Index = () => {
     if (
       dismissedPendingNotice ||
       profile?.membership_access_state !== "membership_pending" ||
-      !profile.membership_grace_expires_at
+      !(profile.membership_deadline_at || profile.membership_grace_expires_at)
     ) {
       return null;
     }
-    const diffMs = new Date(profile.membership_grace_expires_at).getTime() - Date.now();
+    const deadline = profile.membership_deadline_at || profile.membership_grace_expires_at;
+    const diffMs = new Date(deadline).getTime() - Date.now();
     return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
-  }, [dismissedPendingNotice, profile?.membership_access_state, profile?.membership_grace_expires_at]);
+  }, [dismissedPendingNotice, profile?.membership_access_state, profile?.membership_deadline_at, profile?.membership_grace_expires_at]);
 
   return (
     <div className="gpe-page">

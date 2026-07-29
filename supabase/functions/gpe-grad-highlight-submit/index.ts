@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         membershipOutcome !== "active_member_existing_hub_user" &&
         membershipOutcome !== "active_member_needs_hub_invite"
       ) {
-        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { request, fields, source: FORM_KEY } });
+        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { request, fields, source: FORM_KEY } });
         await queueHubInvitation({ submissionId, email, neonAccountId: account.neonAccountId, source: FORM_KEY }).catch((error) =>
           logSync({ submissionId, integration: "hub", operation: "invite", success: false, errorSummary: safeError(error) })
         );

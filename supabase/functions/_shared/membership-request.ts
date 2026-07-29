@@ -70,7 +70,60 @@ export async function queueHubInvitation(args: { submissionId: string; email: st
   return true;
 }
 
-export async function createMembershipServerSide(args: { neonAccountId: string; request: Json }) {
+async function claimPendingAwards(profileId: string) {
+  await supabaseFetch("rpc/service_claim_pending_point_awards_for_profile", {
+    method: "POST",
+    body: JSON.stringify({ p_profile_id: profileId }),
+  }).catch(() => undefined);
+}
+
+async function resolvePendingHubProfileAfterMembership(args: {
+  email?: string;
+  neonAccountId: string;
+  membershipId: string;
+}) {
+  const email = sanitizeText(args.email, 320).toLowerCase();
+  if (!email) return;
+  const now = new Date().toISOString();
+  await supabaseFetch(`membership_lookup_cache?normalized_email=eq.${encodeURIComponent(email)}`, {
+    method: "DELETE",
+  }).catch(() => undefined);
+
+  const profileRes = await supabaseFetch(
+    `profiles?select=id,email,membership_access_state,account_status&email=eq.${encodeURIComponent(email)}&membership_access_state=eq.membership_pending&limit=1`,
+  );
+  if (!profileRes.ok) return;
+  const rows = await profileRes.json().catch(() => []) as Json[];
+  const profile = rows[0];
+  const profileId = typeof profile?.id === "string" ? profile.id : "";
+  if (!profileId) return;
+
+  await supabaseFetch(`profiles?id=eq.${encodeURIComponent(profileId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      neon_account_id: args.neonAccountId,
+      member_status: "active",
+      membership_status: "active",
+      membership_access_state: "active",
+      account_status: "active",
+      membership_last_synced_at: now,
+      membership_pending_started_at: null,
+      membership_grace_expires_at: null,
+      membership_reminder_sent_at: null,
+      membership_deactivated_at: null,
+      membership_deactivation_reason: null,
+      membership_grace_started_at: null,
+      membership_deadline_at: null,
+      deletion_scheduled_at: null,
+      deleted_at: null,
+      updated_at: now,
+    }),
+  }).catch(() => undefined);
+
+  await claimPendingAwards(profileId);
+}
+
+export async function createMembershipServerSide(args: { neonAccountId: string; request: Json; email?: string }) {
   const levelId = getEnv("DEFAULT_MEMBERSHIP_LEVEL_ID", false);
   const termId = getEnv("DEFAULT_MEMBERSHIP_TERM_ID", false);
   if (!levelId || !termId) {
@@ -102,6 +155,11 @@ export async function createMembershipServerSide(args: { neonAccountId: string; 
   if (!membershipId) {
     throw new MembershipCreationError("membership_id_missing", "Neon did not return a membership ID.");
   }
+  await resolvePendingHubProfileAfterMembership({
+    email: args.email,
+    neonAccountId: args.neonAccountId,
+    membershipId,
+  });
   return {
     membershipId,
     membershipCreationStatus: "confirmed" as const

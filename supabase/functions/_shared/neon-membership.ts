@@ -50,6 +50,7 @@ export type MembershipLookupInput = {
   neonAccountId?: string;
   authenticatedUserId?: string;
   authenticatedEmail?: string;
+  bypassCache?: boolean;
   suppressTrace?: boolean;
   traceCollector?: (step: string, detail: MembershipTraceDetail) => void;
 };
@@ -696,6 +697,11 @@ async function syncHubProfileMembership(args: {
     body.membership_reminder_sent_at = null;
     body.membership_deactivated_at = null;
     body.membership_deactivation_reason = null;
+    body.membership_status = "active";
+    body.membership_grace_started_at = null;
+    body.membership_deadline_at = null;
+    body.deletion_scheduled_at = null;
+    body.deleted_at = null;
   }
   if (!protectedStatuses.has(currentStatus)) {
     legacyBody.member_status = args.isActive
@@ -1120,6 +1126,7 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
   const lastName = sanitizeText(input.lastName, 120);
   const suppliedAccountId = sanitizeText(input.neonAccountId, 80);
   const authenticatedUserId = sanitizeText(input.authenticatedUserId, 80);
+  const bypassCache = Boolean(input.bypassCache);
 
   trace("email_normalization", {
     receivedEmail: redactEmail(sanitizeText(input.email, 320)),
@@ -1172,26 +1179,32 @@ export async function resolveMembership(input: MembershipLookupInput): Promise<M
       throw error;
     }
 
-    const cached = await cachedMembershipByEmail(email, hubProfile, authenticatedUserId || undefined, trace);
-    if (cached) {
-      trace("final_decision", {
-        outcome: cached.outcome,
-        hubAccess: cached.hubAccess,
-        source: "local_cache",
-        cacheAgeSeconds: cached.cacheAgeSeconds
-      });
-      return cached;
-    }
+    if (!bypassCache) {
+      const cached = await cachedMembershipByEmail(email, hubProfile, authenticatedUserId || undefined, trace);
+      if (cached) {
+        trace("final_decision", {
+          outcome: cached.outcome,
+          hubAccess: cached.hubAccess,
+          source: "local_cache",
+          cacheAgeSeconds: cached.cacheAgeSeconds
+        });
+        return cached;
+      }
 
-    const cachedLookup = await cachedLookupByEmail(email, trace);
-    if (cachedLookup) {
-      trace("final_decision", {
-        outcome: cachedLookup.outcome,
-        hubAccess: cachedLookup.hubAccess,
-        source: "local_cache",
-        cacheAgeSeconds: cachedLookup.cacheAgeSeconds
+      const cachedLookup = await cachedLookupByEmail(email, trace);
+      if (cachedLookup) {
+        trace("final_decision", {
+          outcome: cachedLookup.outcome,
+          hubAccess: cachedLookup.hubAccess,
+          source: "local_cache",
+          cacheAgeSeconds: cachedLookup.cacheAgeSeconds
+        });
+        return cachedLookup;
+      }
+    } else {
+      trace("local_membership_cache_bypassed", {
+        reason: "fresh_lookup_required"
       });
-      return cachedLookup;
     }
 
     const rememberAndReturn = async (decision: MembershipCheckResult) => {

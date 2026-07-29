@@ -194,6 +194,9 @@ verify_jwt = false
 [functions.hub-membership-grace-period]
 verify_jwt = false
 
+[functions.hub-membership-account-deletion]
+verify_jwt = false
+
 [functions.admin-crm-configuration]
 verify_jwt = true
 

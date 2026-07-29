@@ -13,6 +13,7 @@ export type Profile = {
   bio: string | null;
   neon_account_id: string | null;
   member_status: string | null;
+  membership_status?: string | null;
   membership_level?: string | null;
   membership_start_date?: string | null;
   membership_end_date?: string | null;
@@ -24,6 +25,10 @@ export type Profile = {
   membership_reminder_sent_at?: string | null;
   membership_deactivated_at?: string | null;
   membership_deactivation_reason?: string | null;
+  membership_grace_started_at?: string | null;
+  membership_deadline_at?: string | null;
+  deletion_scheduled_at?: string | null;
+  deleted_at?: string | null;
   points: number | null;
   created_at: string | null;
   updated_at: string | null;

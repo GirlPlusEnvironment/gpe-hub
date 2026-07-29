@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ submissionId: submission.id, membershipOutcome: "ambiguous_account", requiresManualReview: true, ...publicConfig() }, 200, origin);
     }
 
-    const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, request: { fields, canonicalMembership, source: FORM_KEY } });
+    const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { fields, canonicalMembership, source: FORM_KEY } });
     await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId, source: "become_member" }).catch(() => undefined);
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",

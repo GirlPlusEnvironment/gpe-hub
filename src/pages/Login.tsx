@@ -36,7 +36,7 @@ const ACTIVATION_SENT_MESSAGE =
   "If that email belongs to an active GPE member, we’ll send secure Hub access instructions.";
 const LOGIN_CREDENTIALS_MESSAGE =
   "We couldn’t sign you in with those credentials. Use Activate or reset Hub access if you need a new password or account setup link.";
-const GRACE_DAYS = 7;
+const GRACE_DAYS = 35;
 
 const AGE_OPTIONS = [
   ["under_18", "Under 18"],
@@ -110,7 +110,7 @@ const splitDisplayName = (value: string) => {
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
 const isPendingProfileAllowed = (profile: Profile | null | undefined) => {
-  if (!profile || profile.account_status === "deactivated") return false;
+  if (!profile || (profile.account_status && profile.account_status !== "active")) return false;
   if (profile.membership_access_state !== "membership_pending") return false;
   if (!profile.membership_grace_expires_at) return true;
   return new Date(profile.membership_grace_expires_at).getTime() > Date.now();
@@ -755,7 +755,7 @@ const Login = () => {
       <div className="rounded-[1.25rem] border-[3px] border-black bg-white p-4 text-sm font-bold text-black">
         {signupAccessState === "active"
           ? "Membership confirmed. Finish creating your Hub login."
-          : "Membership pending. Finish creating your Hub login and complete membership within seven days."}
+          : `Membership pending. Finish creating your Hub login and complete membership within ${GRACE_DAYS} days.`}
       </div>
       <div className="space-y-2">
         <Label htmlFor="displayName" className="text-xs font-bold uppercase">

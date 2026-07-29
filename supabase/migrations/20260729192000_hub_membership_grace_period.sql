@@ -29,7 +29,7 @@ create index if not exists profiles_membership_pending_reminder_idx
 update public.profiles
 set
   membership_pending_started_at = coalesce(membership_pending_started_at, created_at, now()),
-  membership_grace_expires_at = coalesce(membership_grace_expires_at, coalesce(created_at, now()) + interval '7 days'),
+  membership_grace_expires_at = coalesce(membership_grace_expires_at, coalesce(created_at, now()) + interval '35 days'),
   updated_at = now()
 where membership_access_state = 'membership_pending'
   and account_status = 'active'

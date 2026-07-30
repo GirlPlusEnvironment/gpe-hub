@@ -4,13 +4,18 @@ import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { reviewHubListing } from "@/lib/hub-listing-submissions";
 import { isAdmin } from "@/lib/roles";
 import { CampButton, EmptyState, LoadingCampCard, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 
 type Listing = {
   id: string;
+  category?: string | null;
   title?: string | null;
   description?: string | null;
+  status?: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at?: string;
   is_removed: boolean;
 };
@@ -24,6 +29,7 @@ type FlagRow = {
 };
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
@@ -50,7 +56,7 @@ export default function AdminDashboard() {
     // Admin sees removed + not removed because RLS policy allows admins
     const { data: listingsData, error: lErr } = await supabase
       .from("listings")
-      .select("id,title,description,created_at,is_removed")
+      .select("id,category,title,description,status,metadata,created_at,is_removed")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -116,6 +122,28 @@ export default function AdminDashboard() {
     const { error } = await supabase.rpc("restore_listing", { p_listing_id: listingId });
     if (error) return setError(error.message);
     await loadData();
+  }
+
+  async function reviewListing(listingId: string, decision: "approve" | "reject") {
+    const notes = prompt(decision === "approve" ? "Approval notes (optional)" : "Rejection reason") ?? "";
+    if (decision === "reject" && !notes.trim()) return;
+    setError(null);
+    try {
+      const result = await reviewHubListing({ listingId, decision, notes });
+      toast({
+        title: decision === "approve" ? "Listing approved" : "Listing rejected",
+        description: decision === "approve"
+          ? result.pointsAwarded
+            ? `+${result.pointsAwarded} points awarded.`
+            : result.pointsPending
+              ? `${result.pointsPending} points are pending membership.`
+              : "The listing is now published."
+          : "The listing remains out of the public queue.",
+      });
+      await loadData();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Review action failed.");
+    }
   }
 
   if (loading) {
@@ -194,10 +222,17 @@ export default function AdminDashboard() {
           {listings.map((l) => {
             const listingFlags = flagsByListing.get(l.id) ?? [];
             const openFlags = listingFlags.filter((f) => !f.resolved);
+            const review = (l.metadata?.hub_action_review || {}) as Record<string, unknown>;
+            const reviewStatus = String(review.status || l.status || "");
+            const suggestedPoints = Number(review.suggested_points || 0);
+            const pendingReview = l.status === "pending_review" || reviewStatus === "requires_review";
             return (
               <div key={l.id} className="grid gap-4 px-4 py-4 md:grid-cols-12 md:items-start md:gap-3">
                 <div className="md:col-span-4">
                   <div className="font-black">{l.title ?? "Untitled"}</div>
+                  <div className="mt-1 text-xs font-black uppercase text-black/55">
+                    {l.category || "listing"}{suggestedPoints ? ` · suggested ${suggestedPoints} pts` : ""}
+                  </div>
                   {l.description && (
                     <div className="text-sm text-muted-foreground line-clamp-2">
                       {l.description}
@@ -222,9 +257,17 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="md:col-span-2">
-                  {l.is_removed ? (
+                  {pendingReview ? (
+                    <span className="inline-flex items-center rounded-full border-[2px] border-black bg-yellow-100 px-3 py-1 text-xs font-black text-yellow-900">
+                      Pending review
+                    </span>
+                  ) : l.is_removed ? (
                     <span className="inline-flex items-center rounded-full border-[2px] border-black bg-red-100 px-3 py-1 text-xs font-black text-red-800">
                       Removed
+                    </span>
+                  ) : reviewStatus === "rejected" ? (
+                    <span className="inline-flex items-center rounded-full border-[2px] border-black bg-red-100 px-3 py-1 text-xs font-black text-red-800">
+                      Rejected
                     </span>
                   ) : (
                     <span className="inline-flex items-center rounded-full border-[2px] border-black bg-green-100 px-3 py-1 text-xs font-black text-green-800">
@@ -234,6 +277,16 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="flex flex-wrap justify-start gap-2 md:col-span-3 md:justify-end">
+                  {pendingReview && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => reviewListing(l.id, "approve")}>
+                        Approve
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => reviewListing(l.id, "reject")}>
+                        Reject
+                      </Button>
+                    </>
+                  )}
                     <Button variant="outline" size="sm" onClick={() => flagListing(l.id)}>
                       Flag
                     </Button>

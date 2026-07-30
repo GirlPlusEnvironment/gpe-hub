@@ -176,7 +176,7 @@ const Index = () => {
             </>
           }
           seasonName={activeSeason?.name || "GPE Hub"}
-          description="Your GPE Hub now works like a mission board: discover opportunities, join the conversation, complete seasonal actions, and track reviewed points."
+          description="Your GPE Hub is where you discover opportunities, join the conversation, complete seasonal actions, and track reviewed points."
           actionHref="/camp-gpe/challenges"
           actionLabel="Open Missions"
           stats={[

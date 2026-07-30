@@ -1,5 +1,7 @@
 import { type Json, getEnv, neonFetch, supabaseFetch } from "./neon-membership.ts";
 import { sanitizeText } from "./validation.ts";
+import { sendLifecycleEmail } from "./lifecycle-email.ts";
+import { recordMembershipProfileActivity } from "./membership-neon-mapping.ts";
 
 export class MembershipCreationError extends Error {
   code: string;
@@ -123,6 +125,30 @@ async function resolvePendingHubProfileAfterMembership(args: {
   await claimPendingAwards(profileId);
 }
 
+async function hasLinkedHubProfile(args: { email?: string; neonAccountId: string }) {
+  const email = sanitizeText(args.email, 320).toLowerCase();
+  if (args.neonAccountId) {
+    const byNeon = await supabaseFetch([
+      "profiles?select=id",
+      `neon_account_id=eq.${encodeURIComponent(args.neonAccountId)}`,
+      "limit=1",
+    ].join("&")).catch(() => null);
+    if (byNeon?.ok) {
+      const rows = await byNeon.json().catch(() => []) as Json[];
+      if (rows[0]?.id) return true;
+    }
+  }
+  if (!email) return false;
+  const byEmail = await supabaseFetch([
+    "profiles?select=id",
+    `email=ilike.${encodeURIComponent(email)}`,
+    "limit=1",
+  ].join("&")).catch(() => null);
+  if (!byEmail?.ok) return false;
+  const rows = await byEmail.json().catch(() => []) as Json[];
+  return Boolean(rows[0]?.id);
+}
+
 export async function createMembershipServerSide(args: { neonAccountId: string; request: Json; email?: string }) {
   const levelId = getEnv("DEFAULT_MEMBERSHIP_LEVEL_ID", false);
   const termId = getEnv("DEFAULT_MEMBERSHIP_TERM_ID", false);
@@ -164,4 +190,90 @@ export async function createMembershipServerSide(args: { neonAccountId: string; 
     membershipId,
     membershipCreationStatus: "confirmed" as const
   };
+}
+
+export async function createAndFinalizeMembership(args: {
+  neonAccountId: string;
+  email: string;
+  request: Json;
+  source: string;
+  submissionId: string;
+  firstName?: string;
+}) {
+  const membershipResult = await createMembershipServerSide({
+    neonAccountId: args.neonAccountId,
+    email: args.email,
+    request: args.request,
+  });
+  const finalization = {
+    membershipId: membershipResult.membershipId,
+    membershipCreationStatus: membershipResult.membershipCreationStatus,
+    membershipProfileActivityId: null as string | null,
+    membershipProfileMapped: false,
+    missingMembershipMappings: [] as Json[],
+    membershipEmailQueued: false,
+    membershipEmailStatus: "not_attempted",
+    hubInviteQueued: false,
+    hubInviteStatus: "not_required",
+  };
+
+  try {
+    const profileResult = await recordMembershipProfileActivity({
+      neonAccountId: args.neonAccountId,
+      membershipId: membershipResult.membershipId,
+      request: args.request,
+      source: args.source,
+    });
+    finalization.membershipProfileActivityId = profileResult.activityId || null;
+    finalization.membershipProfileMapped = true;
+    finalization.missingMembershipMappings = profileResult.missingMappings as Json[];
+  } catch (error) {
+    finalization.membershipProfileMapped = false;
+    finalization.missingMembershipMappings = [{ error: error instanceof Error ? error.message : "Membership profile activity could not be recorded." }];
+  }
+
+  try {
+    const linkedProfile = await hasLinkedHubProfile({ email: args.email, neonAccountId: args.neonAccountId });
+    if (linkedProfile) {
+      finalization.hubInviteQueued = false;
+      finalization.hubInviteStatus = "not_required_existing_hub_profile";
+    } else {
+      const invited = await queueHubInvitation({
+        submissionId: args.submissionId,
+        email: args.email,
+        neonAccountId: args.neonAccountId,
+        source: args.source,
+      });
+      finalization.hubInviteQueued = true;
+      finalization.hubInviteStatus = invited ? "sent" : "queued";
+    }
+  } catch (error) {
+    finalization.hubInviteStatus = error instanceof Error ? error.message : "failed";
+  }
+
+  try {
+    const emailResult = await sendLifecycleEmail({
+      templateKey: "member-welcome",
+      recipientEmail: args.email,
+      neonAccountId: args.neonAccountId,
+      eventType: "membership_confirmed",
+      sourceType: args.source,
+      sourceId: args.submissionId,
+      idempotencyKey: `member-welcome:${membershipResult.membershipId}`,
+      category: "membership_lifecycle",
+      variables: {
+        firstName: args.firstName || "there",
+        hubUrl: "https://members.girlplusenvironment.org",
+        invitePageUrl: "https://members.girlplusenvironment.org/invite",
+        membershipId: membershipResult.membershipId,
+        membershipTermId: args.submissionId,
+      },
+    });
+    finalization.membershipEmailQueued = Boolean(emailResult?.ok && ["sent", "already_sent"].includes(String(emailResult.status)));
+    finalization.membershipEmailStatus = String(emailResult?.status || "unknown");
+  } catch (error) {
+    finalization.membershipEmailStatus = error instanceof Error ? error.message : "failed";
+  }
+
+  return finalization;
 }

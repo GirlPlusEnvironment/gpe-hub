@@ -16,6 +16,7 @@ type ListingSubmission = {
   category: string;
   title: string;
   status: string;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -73,7 +74,7 @@ export default function MySubmissions() {
       if (user) {
         const { data, error: listingsError } = await supabase
           .from("listings")
-          .select("id,category,title,status,created_at")
+          .select("id,category,title,status,metadata,created_at")
           .eq("submitted_by", user.id)
           .order("created_at", { ascending: false });
         if (listingsError) throw listingsError;
@@ -107,15 +108,23 @@ export default function MySubmissions() {
       };
     });
 
-    const listingItems = listingSubmissions.map((listing) => ({
-      id: listing.id,
-      type: listing.category,
-      title: listing.title,
-      detail: "Community listing submission",
-      status: listing.status,
-      createdAt: listing.created_at,
-      href: `/listing/${listing.id}`,
-    }));
+    const listingItems = listingSubmissions.map((listing) => {
+      const review = (listing.metadata?.hub_action_review || {}) as Record<string, unknown>;
+      const suggestedPoints = Number(review.suggested_points || 0);
+      const awardedPoints = Number(review.approved_points || 0);
+      return {
+        id: listing.id,
+        type: listing.category,
+        title: listing.title,
+        detail: suggestedPoints && listing.status === "pending_review"
+          ? `Submitted for review. If approved, you'll earn ${suggestedPoints} points.`
+          : "Community listing submission",
+        status: String(review.status || listing.status),
+        points: awardedPoints || null,
+        createdAt: listing.created_at,
+        href: `/listing/${listing.id}`,
+      };
+    });
 
     return [...campItems, ...listingItems].sort(
       (first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),

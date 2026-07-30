@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Send, Trophy } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -32,6 +32,7 @@ function fieldInputType(field: ChallengeSubmissionField) {
 
 export default function CampChallengeSubmit() {
   const { challengeSlug } = useParams();
+  const location = useLocation();
   const { profile, user } = useAuth();
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [challenge, setChallenge] = useState<CampChallenge | null>(null);
@@ -87,6 +88,7 @@ export default function CampChallengeSubmit() {
       )
     : null;
   const submissionsEnabled = definition.submission?.enabled !== false;
+  const embedded = new URLSearchParams(location.search).get("embedded") === "1";
 
   function updateValue(field: ChallengeSubmissionField, value: unknown) {
     setValues((current) => ({ ...current, [field.id]: value }));
@@ -128,6 +130,11 @@ export default function CampChallengeSubmit() {
         message: data.message || "Your submission has been received and will be reviewed by Team GPE.",
       });
       await load();
+      window.parent?.postMessage({
+        type: "gpe:camp-challenge-submitted",
+        challengeSlug: challenge.slug,
+        submissionId: String(data.reviewSubmissionId || data.submissionId || ""),
+      }, window.location.origin);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Challenge submission failed.");
     } finally {
@@ -138,9 +145,9 @@ export default function CampChallengeSubmit() {
   if (loading) {
     return (
       <div className="gpe-page">
-        <Header />
+        {embedded ? null : <Header />}
         <main className="gpe-page-main"><LoadingCampCard label="Loading submission form" /></main>
-        <Footer />
+        {embedded ? null : <Footer />}
       </div>
     );
   }
@@ -148,19 +155,19 @@ export default function CampChallengeSubmit() {
   if (!season || !challenge) {
     return (
       <div className="gpe-page">
-        <Header />
+        {embedded ? null : <Header />}
         <main className="gpe-page-main">
           <EmptyState illustration="clipboard" title="Submission Not Available" description={error || "This challenge is not accepting submissions right now."} action={<Link to="/camp-gpe/challenges"><CampButton variant="outline">Back to Challenges</CampButton></Link>} />
         </main>
-        <Footer />
+        {embedded ? null : <Footer />}
       </div>
     );
   }
 
   return (
     <div className="gpe-page">
-      <Header />
-      <main className="gpe-page-main space-y-8">
+      {embedded ? null : <Header />}
+      <main className={`${embedded ? "p-4 sm:p-6" : "gpe-page-main"} space-y-8`}>
         <div className="mx-auto max-w-3xl space-y-6">
           <SectionHeader
             eyebrow={<Sticker accent="yellow">Submission</Sticker>}
@@ -290,7 +297,7 @@ export default function CampChallengeSubmit() {
           )}
         </div>
       </main>
-      <Footer />
+      {embedded ? null : <Footer />}
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
+import { clearListingSubmissionIdempotency, submitHubListingForReview } from "@/lib/hub-listing-submissions";
 import { validateListingContent } from "@/lib/listings";
 import { Building, MapPin, Briefcase, DollarSign, Clock, Mail, Link, FileText, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -135,17 +135,6 @@ export default function JobSubmissionForm() {
       setIsSubmitting(false);
       return;
     }
-    // Get authenticated user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      toast({ title: "You must be logged in", description: "You must be logged in to submit a job." });
-      setIsSubmitting(false);
-      return;
-    }
-
     // Prepare data for Supabase
     const jobData = {
       category: "jobs",
@@ -155,8 +144,6 @@ export default function JobSubmissionForm() {
       image_url: form.image,
       location: form.state,
       tags: [],
-      status: "pending_review",
-      submitted_by: user.id,
       metadata: {
         location: form.state,
         job_type: Array.isArray(form.workArrangements) && form.workArrangements.length > 0
@@ -190,21 +177,31 @@ export default function JobSubmissionForm() {
       return;
     }
 
-    const { data, error } = await supabase.from("listings").insert([jobData]).select();
-    if (error) {
-      toast({ title: "Error submitting job", description: "We couldn't submit your job listing. Please try again." });
-      setIsSubmitting(false);
-    } else if (data && data.length > 0) {
-      const newListingId = data[0].id;
+    try {
+      const result = await submitHubListingForReview({
+        draftStorageKey: STORAGE_KEY,
+        listing: jobData,
+      });
+      const newListingId = result.listingId;
       // Clear the draft after successful submission
       localStorage.removeItem(STORAGE_KEY);
+      clearListingSubmissionIdempotency(STORAGE_KEY);
       setErrors({});
       
       toast({
-        title: "Job submitted!",
-        description: "Your job listing is under Team GPE review.",
+        title: result.duplicate ? "Job already in review" : "Job submitted!",
+        description: result.suggestedPoints
+          ? `Your job listing is under Team GPE review. If approved, you'll earn ${result.suggestedPoints} points.`
+          : "Your job listing is under Team GPE review.",
       });
       navigate(`/listing/${newListingId}`);
+    } catch (error) {
+      toast({
+        title: "Error submitting job",
+        description: error instanceof Error ? error.message : "We couldn't submit your job listing. Please try again.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
     }
   };
 

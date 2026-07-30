@@ -1,5 +1,5 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { createAndFinalizeMembership } from "../_shared/membership-request.ts";
 import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
 import { recordLeadAction, recordPointEventForLeadAction } from "../_shared/form-submission.ts";
 import { logEventSync } from "../_shared/neon-events.ts";
@@ -194,6 +194,7 @@ Deno.serve(async (req) => {
 
     let membershipPartialSuccess = false;
     let membershipCreationStatus = membershipRequest?.requested === true && membershipRequest?.consent === true ? "not_attempted" : "not_requested";
+    let membershipFinalization: Record<string, unknown> | null = null;
     let membershipFailureMessage = "";
     if (
       membershipRequest?.requested === true &&
@@ -214,12 +215,18 @@ Deno.serve(async (req) => {
           membershipCreationStatus = "failed";
           membershipFailureMessage = "Membership could not be created because the Neon account match requires manual review.";
         } else {
-          const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { membershipRequest, fields, source: "event_registration" } });
-          membershipCreationStatus = membershipResult.membershipCreationStatus;
-          await queueHubInvitation({ submissionId: String(intent.id), email, neonAccountId: account.neonAccountId, source: "neon_event_registration" }).catch(() => {
-            membershipPartialSuccess = true;
-            return undefined;
+          const membershipResult = await createAndFinalizeMembership({
+            neonAccountId: account.neonAccountId,
+            email,
+            request: { membershipRequest, fields, source: "event_registration" },
+            source: "event_registration",
+            submissionId: String(intent.id),
+            firstName: String(fields.firstName)
           });
+          membershipFinalization = membershipResult;
+          membershipCreationStatus = membershipResult.membershipCreationStatus;
+          const hubInviteOk = membershipResult.hubInviteQueued || String(membershipResult.hubInviteStatus || "").startsWith("not_required");
+          if (!membershipResult.membershipEmailQueued || !hubInviteOk) membershipPartialSuccess = true;
           membership = { ...membership, outcome: "active_member_needs_hub_invite", neonAccountId: account.neonAccountId };
         }
       } catch (error) {
@@ -271,7 +278,7 @@ Deno.serve(async (req) => {
       neonSyncStatus: status === "registered" ? "succeeded" : "pending",
       hubIdentityStatus: hubUserId ? "succeeded" : "not_attempted",
       pointsStatus: status === "registered" ? "pending_membership" : "not_applicable",
-      rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membershipCreationStatus === "failed" ? "membership_creation_failed" : membership.outcome, membershipCreationStatus, membershipFailureMessage }
+      rawPayload: { registrationIntentId: intent.id, registrationStatus: status, membershipOutcome: membershipCreationStatus === "failed" ? "membership_creation_failed" : membership.outcome, membershipCreationStatus, membershipFailureMessage, membershipFinalization }
     }).catch((error) => logEventSync({ registrationIntentId: String(intent.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
     if (status === "registered") {
       await recordPointEventForLeadAction({
@@ -301,6 +308,7 @@ Deno.serve(async (req) => {
         membershipOutcome: "membership_creation_failed",
         membershipCreationStatus,
         partialSuccess: true,
+        membershipFinalization,
         hubUserLinked: Boolean(hubUserId),
         neonAccountLinked: Boolean(membership.neonAccountId),
         message: "Your event registration intent was saved, but membership could not be created yet. Continue to Neon for event registration; Team GPE can retry membership from the saved record."
@@ -314,6 +322,7 @@ Deno.serve(async (req) => {
       registrationUrl,
       membershipOutcome: membership.outcome,
       membershipCreationStatus,
+      membershipFinalization,
       partialSuccess: membershipPartialSuccess,
       hubUserLinked: Boolean(hubUserId),
       neonAccountLinked: Boolean(membership.neonAccountId),

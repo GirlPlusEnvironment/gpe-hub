@@ -1,5 +1,5 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createFormSubmission, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
+import { createFormSubmission, logSync, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
 import { createActivity } from "../_shared/neon-activity.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
@@ -17,6 +17,20 @@ type ChallengeRow = {
   action_type_id: string | null;
   title: string;
 };
+
+function recipientFirstName(body: Json, email: string) {
+  const explicit = sanitizeText(body.firstName || body.first_name, 120);
+  if (explicit) return explicit;
+  const fullName = sanitizeText(body.name || body.fullName || body.full_name, 240);
+  if (fullName) return fullName.split(/\s+/)[0] || "there";
+  return email.split("@")[0]?.split(/[._-]/)[0] || "there";
+}
+
+function productionUrl(candidate: string, fallback: string) {
+  if (!/^https:\/\//i.test(candidate)) return fallback;
+  if (/localhost|127\.0\.0\.1|supabase\.co\/functions|staging|example\.com/i.test(candidate)) return fallback;
+  return candidate;
+}
 
 function awardsFromPoints(points: Json) {
   return ["petition", "camp"].flatMap((key) => {
@@ -147,6 +161,7 @@ async function finalizePetitionPoints(args: {
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
+  let submissionId: string | null = null;
   try {
     if (origin) assertAllowedOrigin(origin);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
@@ -159,6 +174,7 @@ Deno.serve(async (req) => {
     const sourcePage = sanitizeText(body.sourcePage || body.source_page, 180);
     const completionSignal = sanitizeText(body.completionSignal || body.completion_signal || "dom", 80);
     const completedAt = sanitizeText(body.completedAt || body.completed_at, 80) || new Date().toISOString();
+    const firstName = recipientFirstName(body, email);
 
     if (!email) throw new ValidationError("Email is required.");
     if (!actionSlug) throw new ValidationError("Petition action is required.");
@@ -183,32 +199,67 @@ Deno.serve(async (req) => {
         completedAt
       }
     });
+    submissionId = String(submission.id);
+    await logSync({
+      submissionId,
+      integration: "pipeline",
+      operation: duplicate ? "submission_duplicate" : "submission_received",
+      success: true,
+      responseSummary: `action=${actionSlug}; source=${completionSignal}`
+    });
 
     let neonAccountId: string | null = null;
     let neonSyncStatus: "pending" | "succeeded" | "failed" = "pending";
     let neonMatchStatus = "pending";
     let neonActivityId: string | null = null;
+    let neonActivityFailureMessage = "";
 
     try {
       const account = await resolveOrCreateAccount({ email, allowCreate: true });
       neonAccountId = account.neonAccountId || null;
       neonMatchStatus = account.status;
-      neonSyncStatus = neonAccountId ? "succeeded" : "pending";
+      neonSyncStatus = neonAccountId ? "pending" : "failed";
+      await logSync({
+        submissionId,
+        integration: "neon",
+        operation: "account_resolution",
+        success: Boolean(neonAccountId),
+        responseSummary: neonAccountId ? `account=${neonAccountId}; status=${account.status}` : `status=${account.status}`,
+        errorSummary: neonAccountId ? undefined : "No Neon account ID was returned."
+      });
     } catch (error) {
       neonSyncStatus = "failed";
       neonMatchStatus = "failed";
-      console.error("action-network-completion-bridge neon account", safeError(error));
+      const message = safeError(error);
+      await logSync({ submissionId, integration: "neon", operation: "account_resolution", success: false, errorSummary: message });
+      console.error("action-network-completion-bridge neon account", message);
     }
 
     const membership = await resolveMembership({ email, neonAccountId: neonAccountId || undefined }).catch((error) => {
-      console.error("action-network-completion-bridge membership", safeError(error));
+      const message = safeError(error);
+      if (submissionId) void logSync({ submissionId, integration: "membership", operation: "lookup", success: false, errorSummary: message });
+      console.error("action-network-completion-bridge membership", message);
       return { outcome: "lookup_unavailable", neonAccountId: null } as { outcome: string; neonAccountId: string | null };
+    });
+    await logSync({
+      submissionId,
+      integration: "membership",
+      operation: "lookup",
+      success: membership.outcome !== "lookup_unavailable",
+      responseSummary: String(membership.outcome || "unknown")
     });
     neonAccountId = neonAccountId || membership.neonAccountId || null;
 
     const profile = await profileByEmail(email, neonAccountId);
     const userId = profile?.id || null;
     const seasonMember = challenge ? await upsertSeasonMember({ seasonId: season.id, email, userId, neonAccountId }) : null;
+    await logSync({
+      submissionId,
+      integration: "hub",
+      operation: "identity_link",
+      success: Boolean(userId),
+      responseSummary: userId ? `profile=${userId}` : "No linked Hub profile; points may remain pending identity."
+    });
 
     if (neonAccountId) {
       try {
@@ -225,10 +276,36 @@ Deno.serve(async (req) => {
             formSubmissionId: submission.id
           }
         });
+        neonSyncStatus = "succeeded";
+        await logSync({
+          submissionId,
+          integration: "neon",
+          operation: "petition_activity",
+          success: true,
+          responseSummary: `activity=${neonActivityId}`
+        });
       } catch (error) {
-        console.error("action-network-completion-bridge neon activity", safeError(error));
+        neonSyncStatus = "failed";
+        neonActivityFailureMessage = safeError(error);
+        await logSync({
+          submissionId,
+          integration: "neon",
+          operation: "petition_activity",
+          success: false,
+          errorSummary: neonActivityFailureMessage
+        });
+        console.error("action-network-completion-bridge neon activity", neonActivityFailureMessage);
       }
+    } else {
+      await logSync({
+        submissionId,
+        integration: "neon",
+        operation: "petition_activity",
+        success: false,
+        errorSummary: "Skipped because no Neon account ID was available."
+      });
     }
+    const formSubmissionStatus = neonActivityId ? "created" : neonAccountId ? "neon_sync_failed" : "neon_account_unresolved";
 
     const leadActionResult = await recordLeadAction({
       submissionId: String(submission.id),
@@ -249,7 +326,10 @@ Deno.serve(async (req) => {
         completionSignal,
         sourcePage,
         completedAt,
-        duplicate
+        duplicate,
+        formSubmissionStatus,
+        formRecordId: neonActivityId,
+        formRecordError: neonActivityFailureMessage || null
       },
       neonSyncStatus,
       hubIdentityStatus: userId ? "succeeded" : "pending",
@@ -265,7 +345,7 @@ Deno.serve(async (req) => {
         verification: "pending_webhook",
         neon: neonSyncStatus === "succeeded" ? "success" : neonSyncStatus,
         neonMatchStatus,
-        neonActivity: neonActivityId ? "success" : neonAccountId ? "pending" : "not_applicable",
+        neonActivity: neonActivityId ? "success" : neonAccountId ? "failed" : "not_applicable",
         hub: userId ? "success" : "pending",
         camp: challenge ? "pending" : "not_applicable",
         points: userId ? "pending" : "pending_identity",
@@ -275,37 +355,89 @@ Deno.serve(async (req) => {
 
     const leadActionId = String(leadActionResult?.action?.id || "");
     if (!leadActionId) throw new Error("Could not save petition action.");
-
-    const points = await finalizePetitionPoints({
-      userId,
-      leadActionId,
-      seasonId: season.id,
-      seasonMemberId: seasonMember?.id || null,
-      challengeId: challenge?.id || null,
-      campaignSlug: season.slug,
-      petitionSlug: actionSlug,
-      metadata: {
-        source: "action_network_dom",
-        verification_status: "pending_webhook",
-        completionSignal,
-        formSubmissionId: submission.id,
-        neonAccountId,
-        neonActivityId,
-        membershipOutcome: membership.outcome
-      }
+    await logSync({
+      submissionId,
+      integration: "supabase",
+      operation: "lead_action",
+      success: true,
+      responseSummary: `lead_action=${leadActionId}`
     });
+
+    let points: Json;
+    try {
+      points = await finalizePetitionPoints({
+        userId,
+        leadActionId,
+        seasonId: season.id,
+        seasonMemberId: seasonMember?.id || null,
+        challengeId: challenge?.id || null,
+        campaignSlug: season.slug,
+        petitionSlug: actionSlug,
+        metadata: {
+          source: "action_network_dom",
+          verification_status: "pending_webhook",
+          completionSignal,
+          formSubmissionId: submission.id,
+          neonAccountId,
+          neonActivityId,
+          membershipOutcome: membership.outcome
+        }
+      });
+      await logSync({
+        submissionId,
+        integration: "points",
+        operation: "finalize_petition_points",
+        success: true,
+        responseSummary: `status=${String(points.status || "unknown")}; awarded=${String(points.awardedPoints || 0)}; pending=${String(points.pendingPoints || 0)}`
+      });
+    } catch (error) {
+      const message = safeError(error);
+      await logSync({ submissionId, integration: "points", operation: "finalize_petition_points", success: false, errorSummary: message });
+      throw error;
+    }
 
     const awardedPoints = Number(points.awardedPoints || points.total || 0);
     await updateFormSubmission(String(submission.id), {
-      submission_status: "completed",
+      submission_status: neonActivityId ? "completed" : "partial_failure",
       membership_outcome: membership.outcome,
       neon_account_id: neonAccountId,
       neon_sync_status: neonSyncStatus,
       points_status: userId ? (awardedPoints > 0 ? "awarded" : "not_applicable") : "pending_identity",
       points_result: points,
-      completed_at: completedAt
+      completed_at: completedAt,
+      submission_payload: {
+        source: "action_network_dom",
+        verification_status: "pending_webhook",
+        actionSlug,
+        actionUrl,
+        sourcePage,
+        completionSignal,
+        completedAt,
+        formSubmissionStatus,
+        formRecordId: neonActivityId,
+        formRecordError: neonActivityFailureMessage || null
+      }
     });
-    await sendLifecycleEmail({
+    const hasActiveMembership =
+      membership.outcome === "active_member_existing_hub_user" ||
+      membership.outcome === "active_member_needs_hub_invite";
+    const hasLinkedHubProfile = Boolean(userId);
+    const membershipPending = membership.outcome === "lookup_unavailable";
+    const hubUrl = "https://members.girlplusenvironment.org/";
+    const membershipUrl = "https://www.girlplusenvironment.org/become-a-member";
+    const moreActionsUrl = productionUrl(actionUrl, "https://www.girlplusenvironment.org/take-action");
+    const resourcesUrl = "https://www.girlplusenvironment.org/resources";
+    const primaryCtaLabel = hasActiveMembership || hasLinkedHubProfile
+      ? "Access the Hub"
+      : "Become a Member";
+    const primaryCtaUrl = hasActiveMembership || hasLinkedHubProfile ? hubUrl : membershipUrl;
+    const petitionFollowupCopy = membershipPending
+      ? "Check your inbox for membership confirmation before using Hub access links. You can still keep taking action today."
+      : hasActiveMembership || hasLinkedHubProfile
+        ? "Access jobs, resources, funding opportunities, mentors, events, and community created for Black + Brown femmes in climate."
+        : "Explore more ways to get involved with Girl Plus Environment. GPE Hub access is available after membership is active.";
+
+    const petitionEmailResult = await sendLifecycleEmail({
       templateKey: "action-network-petition-thank-you",
       recipientEmail: email,
       recipientUserId: userId,
@@ -316,14 +448,37 @@ Deno.serve(async (req) => {
       idempotencyKey: `action-network-petition-thank-you:${actionSlug}:${email}`,
       category: "advocacy_followup",
       variables: {
-        firstName: names.firstName || "there",
+        firstName,
         petitionName: actionSlug,
         campaignName: season.name || season.slug,
         awardedPoints: String(awardedPoints),
         pendingPoints: String(points.pendingPoints || 0),
-        hubUrl: "https://members.girlplusenvironment.org"
+        petitionFollowupCopy,
+        primaryCtaLabel,
+        primaryCtaUrl,
+        moreActionsUrl,
+        resourcesUrl
       }
-    }).catch((error) => console.error("action-network-completion-bridge lifecycle email", safeError(error)));
+    }).catch((error) => {
+      const message = safeError(error);
+      void logSync({ submissionId: String(submission.id), integration: "email", operation: "resend_petition_confirmation", success: false, errorSummary: message });
+      console.error("action-network-completion-bridge lifecycle email", message);
+      return { ok: false, status: "failed", deliveryId: null };
+    });
+    await logSync({
+      submissionId,
+      integration: "email",
+      operation: "resend_petition_confirmation",
+      success: Boolean(petitionEmailResult.ok && ["sent", "already_sent"].includes(String(petitionEmailResult.status))),
+      responseSummary: `status=${String(petitionEmailResult.status || "unknown")}; delivery=${String(petitionEmailResult.deliveryId || "")}`
+    });
+    await logSync({
+      submissionId,
+      integration: "pipeline",
+      operation: neonActivityId && Boolean(petitionEmailResult.ok) ? "completed" : "completed_with_warnings",
+      success: Boolean(neonActivityId && petitionEmailResult.ok),
+      responseSummary: `neon=${neonSyncStatus}; points=${String(points.status || "unknown")}; email=${String(petitionEmailResult.status || "unknown")}`
+    });
 
     return jsonResponse({
       ok: true,
@@ -332,6 +487,10 @@ Deno.serve(async (req) => {
       verificationStatus: "pending_webhook",
       status: "completed",
       submissionId: submission.id,
+      formSubmissionStatus,
+      formRecordId: neonActivityId,
+      formRecordError: neonActivityFailureMessage || null,
+      neonSyncStatus,
       leadActionId,
       actionSlug,
       challengeMatched: Boolean(challenge),
@@ -341,10 +500,26 @@ Deno.serve(async (req) => {
       pendingPoints: Number(points.pendingPoints || 0),
       awards: awardsFromPoints(points),
       points,
+      petitionEmailAccepted: Boolean(petitionEmailResult.ok && ["sent", "already_sent"].includes(String(petitionEmailResult.status))),
+      petitionEmailStatus: petitionEmailResult.status,
+      petitionEmailDeliveryId: petitionEmailResult.deliveryId || null,
       message: "Submission Complete"
     }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
+    if (submissionId) {
+      await logSync({
+        submissionId,
+        integration: "pipeline",
+        operation: "failed",
+        success: false,
+        errorSummary: safeError(error)
+      });
+      await updateFormSubmission(submissionId, {
+        submission_status: "partial_failure",
+        last_error_summary: safeError(error)
+      }).catch(() => undefined);
+    }
     console.error("action-network-completion-bridge", safeError(error));
     return jsonResponse({
       message: error instanceof ValidationError ? error.message : "Petition completion could not be saved."

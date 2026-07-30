@@ -203,6 +203,15 @@ verify_jwt = true
 [functions.admin-petition-reconciliation]
 verify_jwt = true
 
+[functions.hub-invitation-request]
+verify_jwt = true
+
+[functions.hub-listing-submit]
+verify_jwt = true
+
+[functions.hub-listing-review]
+verify_jwt = true
+
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

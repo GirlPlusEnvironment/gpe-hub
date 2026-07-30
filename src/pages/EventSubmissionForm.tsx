@@ -5,9 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { supabase } from "@/lib/supabaseClient";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
+import { clearListingSubmissionIdempotency, submitHubListingForReview } from "@/lib/hub-listing-submissions";
 import { validateListingContent } from "@/lib/listings";
 import { Calendar, MapPin, Clock, Link, FileText, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -123,21 +123,6 @@ export default function EventSubmissionForm() {
 
     setIsSubmitting(true);
 
-    // Get authenticated user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      toast({
-        title: "Sign in required",
-        description: "You must be logged in to submit an event.",
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
     // Prepare data for Supabase
     const eventData = {
       category: "events",
@@ -146,8 +131,6 @@ export default function EventSubmissionForm() {
       description: form.description || form.registrationUrl || "Details to be completed during Team GPE review.",
       image_url: form.image,
       tags: [],
-      submitted_by: user.id,
-      status: "pending_review",
       metadata: {
         organizer: form.organizer,
         event_type: form.eventType,
@@ -173,24 +156,30 @@ export default function EventSubmissionForm() {
       return;
     }
 
-    const { data: insertData, error } = await supabase.from("listings").insert([eventData]).select();
-    if (error) {
+    try {
+      const result = await submitHubListingForReview({
+        draftStorageKey: STORAGE_KEY,
+        listing: eventData,
+      });
+      const newListingId = result.listingId;
+      // Clear the draft after successful submission
+      localStorage.removeItem(STORAGE_KEY);
+      clearListingSubmissionIdempotency(STORAGE_KEY);
+
+      toast({
+        title: result.duplicate ? "Event already in review" : "Event submitted!",
+        description: result.suggestedPoints
+          ? `Your event is under Team GPE review. If approved, you'll earn ${result.suggestedPoints} points.`
+          : "Your event is under Team GPE review.",
+      });
+      navigate(`/listing/${newListingId}`);
+    } catch (error) {
       toast({
         title: "Error submitting event",
-        description: "We couldn't submit your event. Please try again.",
+        description: error instanceof Error ? error.message : "We couldn't submit your event. Please try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
-    } else if (insertData && insertData.length > 0) {
-      const newListingId = insertData[0].id;
-      // Clear the draft after successful submission
-      localStorage.removeItem(STORAGE_KEY);
-      
-      toast({
-        title: "Event submitted!",
-        description: "Your event is under Team GPE review.",
-      });
-      navigate(`/listing/${newListingId}`);
     }
   };
 

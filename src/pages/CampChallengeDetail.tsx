@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   CampButton,
   EmptyState,
@@ -24,6 +25,9 @@ import {
   getMyCampHistory,
 } from "@/lib/camp";
 import { challengeMetadata, resolveChallengeOpenFlow } from "@/lib/challenge-definition";
+
+const CAMP_CHALLENGE_FORM_URL = "https://www.girlplusenvironment.org/camp-gpe#challenge";
+const CAMP_CHALLENGE_FORM_ORIGIN = "https://www.girlplusenvironment.org";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return null;
@@ -89,9 +93,23 @@ export default function CampChallengeDetail() {
   const [ledger, setLedger] = useState<CampPointsLedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submissionOpen, setSubmissionOpen] = useState(false);
 
   useEffect(() => {
     void load();
+  }, [challengeSlug]);
+
+  useEffect(() => {
+    function handleSubmissionMessage(event: MessageEvent) {
+      if (![window.location.origin, CAMP_CHALLENGE_FORM_ORIGIN].includes(event.origin)) return;
+      if (!["gpe:camp-challenge-submitted", "gpe:camp-submission-complete"].includes(event.data?.type)) return;
+      if (event.data?.challengeSlug && event.data.challengeSlug !== challengeSlug) return;
+      setSubmissionOpen(false);
+      void load();
+    }
+
+    window.addEventListener("message", handleSubmissionMessage);
+    return () => window.removeEventListener("message", handleSubmissionMessage);
   }, [challengeSlug]);
 
   async function load() {
@@ -146,6 +164,11 @@ export default function CampChallengeDetail() {
   const longDescription = metadataString(metadata, "long_description");
   const successMessage = metadataString(metadata, "success_message");
   const faq = metadataFaq(metadata);
+
+  function updateSubmissionDialog(open: boolean) {
+    setSubmissionOpen(open);
+    if (!open) void load();
+  }
 
   return (
     <div className="gpe-page">
@@ -300,12 +323,14 @@ export default function CampChallengeDetail() {
                           {openFlow?.external ? <ExternalLink className="ml-2 h-4 w-4" /> : null}
                         </CampButton>
                       </Link>
-                      <Link to={openFlow?.secondaryHref || "/camp-gpe/challenges"}>
-                        <CampButton className="w-full justify-center" variant="outline">
+                      <CampButton
+                        className="w-full justify-center"
+                        variant="outline"
+                        onClick={() => setSubmissionOpen(true)}
+                      >
                           <Trophy className="mr-2 h-4 w-4" />
                           {openFlow?.secondaryLabel || "Submit for Points"}
-                        </CampButton>
-                      </Link>
+                      </CampButton>
                       <Link to="/camp-gpe/challenges">
                         <CampButton className="w-full justify-center" variant="yellow">
                           Back to Challenges
@@ -328,6 +353,18 @@ export default function CampChallengeDetail() {
           )}
         </div>
       </main>
+      <Dialog open={submissionOpen} onOpenChange={updateSubmissionDialog}>
+        <DialogContent className="h-[90vh] max-w-4xl overflow-hidden p-0">
+          <DialogHeader className="border-b-[3px] border-black px-5 py-4">
+            <DialogTitle className="font-header text-2xl uppercase">Submit for Points</DialogTitle>
+          </DialogHeader>
+          <iframe
+            title="Camp GPE challenge submission form"
+            src={CAMP_CHALLENGE_FORM_URL}
+            className="h-[calc(90vh-73px)] w-full border-0"
+          />
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );

@@ -1,5 +1,6 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { createFormSubmission, publicConfig, updateFormSubmission } from "../_shared/form-submission.ts";
+import { createFormSubmission, logSync, publicConfig, updateFormSubmission } from "../_shared/form-submission.ts";
+import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
 import { safeError } from "../_shared/neon-membership.ts";
 import { readJson, sanitizeText, validateFields, validateIdempotencyKey, ValidationError } from "../_shared/validation.ts";
 
@@ -55,6 +56,29 @@ Deno.serve(async (req) => {
     });
     await updateFormSubmission(String(submission.id), { submission_status: "completed", neon_sync_status: "skipped", membership_outcome: "not_checked" });
     const nextPaymentUrl = paymentUrl(Deno.env.get("GPE_DONATION_PAYMENT_URL"), fields, String(submission.id));
+    const emailResult = await sendLifecycleEmail({
+      templateKey: "donation-confirmation",
+      recipientEmail: email,
+      eventType: "donation_intake_submitted",
+      sourceType: FORM_KEY,
+      sourceId: String(submission.id),
+      idempotencyKey: `donation-confirmation:${submission.id}`,
+      category: "donation_followup",
+      variables: {
+        firstName: String(fields.firstName || "there"),
+        donationAmount: String(fields.otherAmount || fields.amount || "your selected amount"),
+        donationFrequency: String(fields.frequency || "").replace("_", " "),
+        paymentUrl: nextPaymentUrl || "https://www.girlplusenvironment.org/donate"
+      }
+    });
+    await logSync({
+      submissionId: String(submission.id),
+      integration: "email",
+      operation: "donation_confirmation",
+      success: emailResult.ok && emailResult.status === "sent",
+      responseSummary: emailResult.deliveryId ? `delivery:${emailResult.deliveryId}` : emailResult.status,
+      errorSummary: emailResult.ok && emailResult.status === "sent" ? undefined : emailResult.status
+    }).catch(() => undefined);
     return jsonResponse({
       duplicate,
       submissionId: submission.id,
@@ -62,6 +86,8 @@ Deno.serve(async (req) => {
       partialSuccess: false,
       paymentStatus: nextPaymentUrl ? "payment_required" : "payment_configuration_required",
       paymentUrl: nextPaymentUrl,
+      confirmationEmailStatus: emailResult.status,
+      confirmationEmailDeliveryId: emailResult.deliveryId || null,
       ...publicConfig()
     }, 200, origin);
   } catch (error) {

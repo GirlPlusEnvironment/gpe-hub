@@ -1,7 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createFormSubmission, logSync, publicConfig, recordLeadAction, recordPointEventForLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
-import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { createAndFinalizeMembership } from "../_shared/membership-request.ts";
 import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { createActivity } from "../_shared/neon-activity.ts";
@@ -46,7 +46,9 @@ Deno.serve(async (req) => {
 
     let membershipOutcome = "lookup_failed";
     let membershipCreationStatus = membershipRequest ? "not_attempted" : "not_requested";
+    let membershipFinalization: Json | null = null;
     let membershipFailureMessage = "";
+    let formActivityId = "";
     let activityFailureMessage = "";
     try {
       const account = await resolveOrCreateAccount({
@@ -59,7 +61,7 @@ Deno.serve(async (req) => {
         resolvedNeonAccountId = account.neonAccountId;
         await updateFormSubmission(submissionId, { neon_account_id: account.neonAccountId, neon_sync_status: "succeeded" });
         try {
-          await createActivity({ neonAccountId: account.neonAccountId, subject: "GPE Grad Highlight Submission", type: "Highlight", note: { formKey: FORM_KEY, fields } });
+          formActivityId = await createActivity({ neonAccountId: account.neonAccountId, subject: "GPE Grad Highlight Submission", type: "Highlight", note: { formKey: FORM_KEY, fields } });
           await logSync({ submissionId, integration: "neon", operation: "grad_highlight_activity", success: true });
         } catch (error) {
           activityFailureMessage = safeError(error);
@@ -77,10 +79,18 @@ Deno.serve(async (req) => {
         membershipOutcome !== "active_member_existing_hub_user" &&
         membershipOutcome !== "active_member_needs_hub_invite"
       ) {
-        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { request, fields, source: FORM_KEY } });
-        await queueHubInvitation({ submissionId, email, neonAccountId: account.neonAccountId, source: FORM_KEY }).catch((error) =>
-          logSync({ submissionId, integration: "hub", operation: "invite", success: false, errorSummary: safeError(error) })
-        );
+        const membershipResult = await createAndFinalizeMembership({
+          neonAccountId: account.neonAccountId,
+          email,
+          request: { request, fields, source: FORM_KEY },
+          source: FORM_KEY,
+          submissionId,
+          firstName: String(fields.firstName)
+        });
+        membershipFinalization = membershipResult;
+        await logSync({ submissionId, integration: "email", operation: "member_welcome", success: membershipResult.membershipEmailQueued, errorSummary: membershipResult.membershipEmailQueued ? undefined : membershipResult.membershipEmailStatus });
+        const hubInviteOk = membershipResult.hubInviteQueued || String(membershipResult.hubInviteStatus || "").startsWith("not_required");
+        await logSync({ submissionId, integration: "hub", operation: "invite", success: hubInviteOk, errorSummary: hubInviteOk ? undefined : membershipResult.hubInviteStatus });
         membershipCreationStatus = membershipResult.membershipCreationStatus;
         membershipOutcome = "active_member_needs_hub_invite";
       }
@@ -90,10 +100,23 @@ Deno.serve(async (req) => {
       await logSync({ submissionId, integration: "neon", operation: "grad_highlight_membership", success: false, errorSummary: membershipFailureMessage });
     }
     const membershipFailed = membershipRequest && membershipCreationStatus === "failed";
+    const formActivityCreated = Boolean(formActivityId);
+    const formSubmissionStatus = formActivityCreated ? "created" : resolvedNeonAccountId ? "neon_sync_failed" : "neon_account_unresolved";
+    const finalSubmissionStatus = membershipOutcome === "lookup_failed" || membershipFailed || !formActivityCreated ? "partial_failure" : "completed";
+    const finalNeonSyncStatus = formActivityCreated ? "succeeded" : "failed";
     await updateFormSubmission(submissionId, {
-      submission_status: membershipOutcome === "lookup_failed" || membershipFailed ? "partial_failure" : "completed",
+      submission_status: finalSubmissionStatus,
       membership_outcome: membershipFailed ? "membership_creation_failed" : membershipOutcome,
-      neon_sync_status: membershipOutcome === "lookup_failed" || membershipFailed ? "failed" : "succeeded"
+      neon_sync_status: finalNeonSyncStatus,
+      submission_payload: {
+        fields,
+        formSubmissionStatus,
+        formRecordId: formActivityId || null,
+        formRecordError: activityFailureMessage || null,
+        membershipCreationStatus,
+        membershipFailureMessage,
+        membershipFinalization
+      }
     });
     const leadActionResult = await recordLeadAction({
       submissionId,
@@ -107,10 +130,11 @@ Deno.serve(async (req) => {
       campaignSlug: "gpe-grad-highlight",
       sourceUrl: "https://www.girlplusenvironment.org/gpe-grad-highlight#submission",
       membershipRequest,
-      neonSyncStatus: membershipOutcome === "lookup_failed" || membershipFailed ? "failed" : "succeeded",
+      neonSyncStatus: finalNeonSyncStatus,
       hubIdentityStatus: membershipOutcome === "active_member_needs_hub_invite" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { membershipOutcome, membershipCreationStatus, membershipFailureMessage, activityFailureMessage }
+      neonActivityId: formActivityId || null,
+      rawPayload: { formSubmissionStatus, formRecordId: formActivityId || null, membershipOutcome, membershipCreationStatus, membershipFailureMessage, activityFailureMessage, membershipFinalization }
     }).catch((error) => logSync({ submissionId, integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
     await recordPointEventForLeadAction({
       eventType: "grad_highlight_submission",
@@ -128,7 +152,7 @@ Deno.serve(async (req) => {
         activityFailureMessage
       }
     }).catch((error) => logSync({ submissionId, integration: "points", operation: "grad_highlight_point_event", success: false, errorSummary: safeError(error) }));
-    await sendLifecycleEmail({
+    const confirmationEmailResult = await sendLifecycleEmail({
       templateKey: "graduate-highlight-submission",
       recipientEmail: email,
       neonAccountId: resolvedNeonAccountId,
@@ -142,18 +166,40 @@ Deno.serve(async (req) => {
         hubUrl: "https://members.girlplusenvironment.org",
         communityResourcesUrl: "https://www.girlplusenvironment.org/resources"
       }
-    }).catch((error) => logSync({ submissionId, integration: "email", operation: "grad_highlight_lifecycle_email", success: false, errorSummary: safeError(error) }));
+    }).catch((error) => {
+      void logSync({ submissionId, integration: "email", operation: "grad_highlight_lifecycle_email", success: false, errorSummary: safeError(error) });
+      return { ok: false, status: "failed", deliveryId: null };
+    });
     if (membershipFailed) {
       return jsonResponse({
         message: "Your Grad Highlight was saved, but membership could not be created yet. Team GPE can retry from the saved submission.",
         submissionId,
         membershipOutcome: "membership_creation_failed",
         membershipCreationStatus,
+        formSubmissionStatus,
+        formRecordId: formActivityId || null,
+        formRecordError: activityFailureMessage || null,
         partialSuccess: true,
+        confirmationEmailAccepted: Boolean(confirmationEmailResult.ok && ["sent", "already_sent"].includes(String(confirmationEmailResult.status))),
+        confirmationEmailStatus: confirmationEmailResult.status,
+        confirmationEmailDeliveryId: confirmationEmailResult.deliveryId || null,
+        membershipFinalization,
         ...publicConfig()
       }, 502, origin);
     }
-    return jsonResponse({ submissionId, membershipOutcome, membershipCreationStatus, ...publicConfig() }, 200, origin);
+    return jsonResponse({
+      submissionId,
+      formSubmissionStatus,
+      formRecordId: formActivityId || null,
+      formRecordError: activityFailureMessage || null,
+      membershipOutcome,
+      membershipCreationStatus,
+      membershipFinalization,
+      confirmationEmailAccepted: Boolean(confirmationEmailResult.ok && ["sent", "already_sent"].includes(String(confirmationEmailResult.status))),
+      confirmationEmailStatus: confirmationEmailResult.status,
+      confirmationEmailDeliveryId: confirmationEmailResult.deliveryId || null,
+      ...publicConfig()
+    }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     if (submissionId) await updateFormSubmission(submissionId, { submission_status: "partial_failure" }).catch(() => undefined);

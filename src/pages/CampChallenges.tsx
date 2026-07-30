@@ -245,7 +245,7 @@ export default function CampChallenges() {
             <EmptyState
               illustration="campfire"
               title="Between Seasons"
-              description="There is no active seasonal challenge configured yet. Check back when Team GPE opens the next mission board."
+              description="There is no active seasonal challenge configured yet. Check back when Team GPE opens the next season."
               action={<Link to="/leaderboard"><CampButton variant="outline">View Leaderboard</CampButton></Link>}
             />
           ) : (

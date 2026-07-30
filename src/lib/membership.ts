@@ -212,6 +212,61 @@ export const requestHubAccountActivation = async (args: {
   };
 };
 
+export type HubInvitationResult = {
+  status:
+    | "sent"
+    | "existing_account"
+    | "pending_invitation"
+    | "membership_required"
+    | "invalid_email"
+    | "failed";
+  message?: string;
+  recipientEmail?: string;
+  sentAt?: string | null;
+  invitationStatus?: string | null;
+  invitationLink?: string | null;
+  invitationId?: string | null;
+  pointEventStatus?: string | null;
+  pointsAwarded?: number | null;
+  membershipUrl?: string;
+  hubUrl?: string;
+  resetPasswordUrl?: string;
+  canSendAnyway?: boolean;
+  membershipOutcome?: string;
+};
+
+export const sendHubInvitation = async (args: {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  personalMessage?: string;
+  action?: "send" | "resend";
+  sendAnyway?: boolean;
+}) => {
+  const { data, error } = await supabase.functions.invoke<HubInvitationResult>("hub-invitation-request", {
+    body: {
+      email: args.email,
+      firstName: args.firstName || "",
+      lastName: args.lastName || "",
+      personalMessage: args.personalMessage || "",
+      action: args.action || "send",
+      sendAnyway: args.sendAnyway === true,
+    },
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: error.message || "Hub invitation could not be sent right now.",
+    };
+  }
+
+  return {
+    data: data ?? null,
+    error: null,
+  };
+};
+
 export const getMembershipGateMessage = (outcome: MembershipOutcome | null) => {
   switch (outcome) {
     case "active_member_existing_hub_user":

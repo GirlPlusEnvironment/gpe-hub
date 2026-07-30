@@ -3,6 +3,10 @@ import {
   recordPointEventForLeadAction
 } from "../_shared/form-submission.ts";
 import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
+import { createAndFinalizeMembership, queueHubInvitation } from "../_shared/membership-request.ts";
+import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
+import { recordMembershipDataFallbackActivity } from "../_shared/membership-neon-mapping.ts";
+import { createActivity } from "../_shared/neon-activity.ts";
 import {
   type Json,
   findNeonAccountsByEmail,
@@ -39,9 +43,19 @@ type SubmissionStatus =
   | "hub_invited"
   | "failed";
 
+type MembershipCreationStatus =
+  | "not_requested"
+  | "incomplete"
+  | "not_attempted"
+  | "attempted"
+  | "confirmed"
+  | "already_active"
+  | "failed";
+
 const MAX_BODY_BYTES = 120_000;
 const SURVEY_ID = 2;
 const FORM_ID = 47;
+const FORM_KEY = "neon_climate_survey";
 
 type FieldDef = {
   key: string;
@@ -156,6 +170,30 @@ function validatePayload(payload: Json, req: Request) {
   };
 }
 
+function responseConfig() {
+  return {
+    membershipUrl: getEnv("GPE_MEMBERSHIP_URL", false) || "https://www.girlplusenvironment.org/become-a-member",
+    hubLoginUrl: (getEnv("GPE_HUB_LOGIN_URL", false) || "https://members.girlplusenvironment.org").replace(/\/login\/?$/, "")
+  };
+}
+
+function normalizeSurveyMembershipRequest(rawRequest: unknown, valid: ReturnType<typeof validatePayload>) {
+  if (!rawRequest || typeof rawRequest !== "object" || Array.isArray(rawRequest)) return null;
+  const request = rawRequest as Json;
+  if (request.requested !== true) return null;
+  return normalizeMembershipRequest({
+    ...request,
+    firstName: request.firstName || valid.firstName,
+    lastName: request.lastName || valid.lastName,
+    email: request.email || valid.normalizedEmail,
+    phone: request.phone || valid.phone,
+    city: request.city || valid.address.city,
+    state: request.state || valid.address.stateOrProvince,
+    zip: request.zip || valid.address.zipCode,
+    source: FORM_KEY
+  }) as Json | null;
+}
+
 async function getExistingSubmission(idempotencyKey: string) {
   const res = await supabaseFetch(`neon_climate_survey_submissions?select=*&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&limit=1`);
   if (!res.ok) throw new Error("Could not check existing submission.");
@@ -240,20 +278,19 @@ function activityNote(valid: ReturnType<typeof validatePayload>): string {
 }
 
 async function createNeonActivity(accountId: string, valid: ReturnType<typeof validatePayload>) {
-  const result = await neonFetch("/activities", {
-    method: "POST",
-    body: JSON.stringify({
-      accountId,
-      subject: "Mobile Climate Adaptation Plan Survey",
-      type: "Survey",
-      status: "Completed",
-      priority: "Normal",
-      note: activityNote(valid),
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date().toISOString().slice(0, 10)
-    })
+  return await createActivity({
+    neonAccountId: accountId,
+    subject: "Mobile Climate Adaptation Plan Survey Response",
+    type: "Survey",
+    note: {
+      neonWriteTarget: "activity_fallback_not_native_survey_response",
+      surveyId: SURVEY_ID,
+      formId: FORM_ID,
+      email: valid.normalizedEmail,
+      answers: valid.sanitizedAnswers,
+      note: activityNote(valid)
+    }
   });
-  return String((result as Json).id || (result as Json).activityId || "");
 }
 
 async function createPendingConversion(submissionId: string, email: string, accountId: string | null) {
@@ -269,42 +306,18 @@ async function createPendingConversion(submissionId: string, email: string, acco
   });
 }
 
-async function invokeHubInvitation(submissionId: string, email: string, accountId: string): Promise<boolean> {
-  const queuedInvitation = {
-    submission_id: submissionId,
-    source: FORM_KEY,
-    source_id: submissionId,
-    neon_account_id: accountId,
-    normalized_email: email,
-    status: "pending"
-  };
-  const invitationUrl = Deno.env.get("HUB_INVITATION_FUNCTION_URL");
-  if (!invitationUrl) {
-    await supabaseFetch("hub_invitations", {
-      method: "POST",
-      body: JSON.stringify(queuedInvitation)
-    });
-    return false;
+async function hubProfileFound(email: string, neonAccountId: string | null) {
+  if (neonAccountId) {
+    const byNeon = await supabaseFetch(`profiles?select=id&neon_account_id=eq.${encodeURIComponent(neonAccountId)}&limit=1`);
+    if (byNeon.ok) {
+      const rows = await byNeon.json().catch(() => []);
+      if (rows[0]?.id) return true;
+    }
   }
-  const secret = getEnv("HUB_INVITATION_SECRET", false);
-  if (!secret) {
-    await supabaseFetch("hub_invitations", {
-      method: "POST",
-      body: JSON.stringify(queuedInvitation)
-    });
-    return false;
-  }
-  const res = await fetch(invitationUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secret}` },
-    body: JSON.stringify({ submissionId, email, neonAccountId: accountId })
-  });
-  if (!res.ok) throw new Error(`Hub invitation workflow failed (${res.status}).`);
-  await supabaseFetch("hub_invitations", {
-    method: "POST",
-    body: JSON.stringify({ ...queuedInvitation, status: "sent", sent_at: new Date().toISOString() })
-  });
-  return true;
+  const byEmail = await supabaseFetch(`profiles?select=id&email=ilike.${encodeURIComponent(email)}&limit=1`);
+  if (!byEmail.ok) return false;
+  const rows = await byEmail.json().catch(() => []);
+  return Boolean(rows[0]?.id);
 }
 
 Deno.serve(async (req) => {
@@ -317,45 +330,113 @@ Deno.serve(async (req) => {
 
     const payload = await readBody(req);
     const valid = validatePayload(payload, req);
+    const rawMembershipRequest = (payload as Json).membershipRequest;
+    const membershipRequested = Boolean(rawMembershipRequest && typeof rawMembershipRequest === "object" && !Array.isArray(rawMembershipRequest) && (rawMembershipRequest as Json).requested === true);
+    let membershipRequest: Json | null = null;
+    let membershipCreationStatus: MembershipCreationStatus = membershipRequested ? "not_attempted" : "not_requested";
+    let membershipFailureMessage = "";
+    if (membershipRequested) {
+      try {
+        membershipRequest = normalizeSurveyMembershipRequest(rawMembershipRequest, valid);
+        if (!membershipRequest) membershipCreationStatus = "incomplete";
+      } catch (error) {
+        membershipCreationStatus = "incomplete";
+        membershipFailureMessage = safeError(error);
+      }
+    }
     const existing = await getExistingSubmission(valid.idempotencyKey);
     if (existing?.membership_outcome) {
       return jsonResponse({
+        surveySubmitted: true,
         submissionId: existing.id,
+        membershipRequested: Boolean(existing.membership_status_detail?.membershipRequested),
+        membershipCreationStatus: existing.membership_creation_status || "not_attempted",
         membershipOutcome: existing.membership_outcome,
-        membershipUrl: getEnv("GPE_MEMBERSHIP_URL", false),
-        hubLoginUrl: getEnv("GPE_HUB_LOGIN_URL", false)
+        constituentCreated: existing.membership_status_detail?.constituentStatus === "created",
+        constituentFound: existing.membership_status_detail?.constituentStatus === "found",
+        membershipAttempted: Boolean(existing.membership_status_detail?.membershipAttempted),
+        membershipCreated: Boolean(existing.neon_membership_id),
+        membershipAlreadyActive: existing.membership_creation_status === "already_active",
+        membershipFailed: existing.membership_creation_status === "failed",
+        neonAccountId: existing.neon_account_id || null,
+        neonMembershipId: existing.neon_membership_id || null,
+        membershipEmailQueued: Boolean(existing.membership_email_queued),
+        hubInviteQueued: Boolean(existing.hub_invite_queued),
+        hubProfileFound: Boolean(existing.membership_status_detail?.hubProfileFound),
+        ...responseConfig()
       }, 200, origin);
     }
 
     submission = existing || await createSubmission(valid);
     let neonAccountId = sanitizeText((payload as Json).storedNeonAccountId, 80);
+    let constituentStatus: "created" | "found" | "ambiguous" | "failed" | "not_attempted" = "not_attempted";
     if (!neonAccountId) {
       const matches = await findNeonAccountsByEmail(valid.normalizedEmail);
       const match = resolveAccountMatch(matches, valid.firstName, valid.lastName);
       if (match.status === "ambiguous") {
+        constituentStatus = "ambiguous";
         await updateSubmission(String(submission.id), {
           status: "requires_manual_review" satisfies SubmissionStatus,
           membership_outcome: "ambiguous_account" satisfies MembershipOutcome,
-          manual_review_reason: "Multiple Neon accounts matched the submitted email."
+          manual_review_reason: "Multiple Neon accounts matched the submitted email.",
+          membership_creation_status: membershipCreationStatus,
+          membership_status_detail: { membershipRequested, constituentStatus, membershipFailureMessage }
         });
-        return jsonResponse({ submissionId: submission.id, membershipOutcome: "ambiguous_account" }, 200, origin);
+        return jsonResponse({
+          surveySubmitted: true,
+          submissionId: submission.id,
+          membershipRequested,
+          membershipCreationStatus,
+          membershipOutcome: "ambiguous_account",
+          constituentStatus,
+          constituentCreated: false,
+          constituentFound: false,
+          membershipAttempted: false,
+          membershipCreated: false,
+          membershipAlreadyActive: false,
+          membershipFailed: membershipCreationStatus === "failed",
+          membershipEmailQueued: false,
+          hubInviteQueued: false,
+          ...responseConfig()
+        }, 200, origin);
       }
       if (match.status === "matched") {
         neonAccountId = match.neonAccountId || "";
+        constituentStatus = "found";
       } else {
         neonAccountId = await createNeonAccount(valid);
+        constituentStatus = neonAccountId ? "created" : "failed";
       }
+    } else {
+      constituentStatus = "found";
     }
 
     if (!neonAccountId) throw new Error("Neon account could not be resolved.");
+    let membershipFallbackActivityId = "";
+    let membershipFallbackFailureMessage = "";
+    if (membershipRequest) {
+      try {
+        const fallback = await recordMembershipDataFallbackActivity({
+          neonAccountId,
+          request: { membershipRequest, surveyAnswers: valid.sanitizedAnswers, surveySubmissionId: submission.id },
+          source: FORM_KEY,
+          reason: "Inline survey membership data safety note before structured membership creation/custom field mapping.",
+        });
+        membershipFallbackActivityId = fallback.activityId || "";
+      } catch (error) {
+        membershipFallbackFailureMessage = safeError(error);
+        console.error("climate-survey-membership-fallback-activity", membershipFallbackFailureMessage);
+      }
+    }
     await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "started");
     let activitySynced = false;
+    let neonActivityId = "";
     let activityFailureMessage = "";
     try {
-      const activityId = await createNeonActivity(neonAccountId, valid);
+      neonActivityId = await createNeonActivity(neonAccountId, valid);
       await updateSubmission(String(submission.id), {
         neon_account_id: neonAccountId,
-        neon_activity_id: activityId || null,
+        neon_activity_id: neonActivityId || null,
         neon_sync_attempts: Number(submission.neon_sync_attempts || 0) + 1,
         neon_synced_at: new Date().toISOString(),
         status: "neon_synced" satisfies SubmissionStatus
@@ -373,7 +454,7 @@ Deno.serve(async (req) => {
       await logRetry(String(submission.id), "neon_activity", Number(submission.neon_sync_attempts || 0) + 1, "failed", activityFailureMessage);
     }
 
-    const membership = await resolveMembership({
+    let membership = await resolveMembership({
       email: valid.normalizedEmail,
       firstName: valid.firstName,
       lastName: valid.lastName,
@@ -388,10 +469,47 @@ Deno.serve(async (req) => {
         ? "submission_saved_neon_sync_pending"
         : "nonmember";
     let status: SubmissionStatus = activitySynced ? "neon_synced" : "neon_sync_pending";
-    if (membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
+    let neonMembershipId = "";
+    let membershipAttempted = false;
+    let membershipEmailQueued = false;
+    let hubInviteQueued = false;
+    let membershipFinalization: Json | null = null;
+    let profileFound = await hubProfileFound(valid.normalizedEmail, neonAccountId);
+    if (membership.outcome === "active_member_existing_hub_user" || membership.outcome === "active_member_needs_hub_invite") {
+      membershipCreationStatus = "already_active";
+    } else if (membershipRequested && membershipRequest && membershipCreationStatus !== "incomplete") {
+      membershipAttempted = true;
+      membershipCreationStatus = "attempted";
       try {
-        const invited = await invokeHubInvitation(String(submission.id), valid.normalizedEmail, membership.neonAccountId);
+        const membershipResult = await createAndFinalizeMembership({
+          neonAccountId,
+          email: valid.normalizedEmail,
+          request: { membershipRequest, surveySubmissionId: submission.id, source: FORM_KEY },
+          source: FORM_KEY,
+          submissionId: String(submission.id),
+          firstName: valid.firstName
+        });
+        membershipFinalization = membershipResult;
+        membershipCreationStatus = membershipResult.membershipCreationStatus;
+        neonMembershipId = membershipResult.membershipId;
+        membershipEmailQueued = membershipResult.membershipEmailQueued;
+        hubInviteQueued = membershipResult.hubInviteQueued;
+        outcome = "active_member_needs_hub_invite";
+        membership = { ...membership, outcome, neonAccountId };
+        profileFound = await hubProfileFound(valid.normalizedEmail, neonAccountId);
+      } catch (error) {
+        membershipCreationStatus = "failed";
+        membershipFailureMessage = safeError(error);
+        outcome = "nonmember";
+      }
+    }
+
+    if (!membershipFinalization && membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
+      try {
+        const invited = await queueHubInvitation({ submissionId: String(submission.id), email: valid.normalizedEmail, neonAccountId: membership.neonAccountId, source: FORM_KEY });
+        hubInviteQueued = true;
         status = invited ? "hub_invited" : "hub_invite_pending";
+        await updateSubmission(String(submission.id), invited ? { hub_invited_at: new Date().toISOString() } : {});
       } catch (error) {
         outcome = "submission_saved_neon_sync_pending";
         status = "hub_invite_pending";
@@ -402,7 +520,29 @@ Deno.serve(async (req) => {
       await createPendingConversion(String(submission.id), valid.normalizedEmail, neonAccountId);
     }
 
-    await updateSubmission(String(submission.id), { membership_outcome: outcome, status });
+    await updateSubmission(String(submission.id), {
+      membership_outcome: outcome,
+      status,
+      neon_membership_id: neonMembershipId || null,
+      membership_creation_status: membershipCreationStatus,
+      membership_email_queued: membershipEmailQueued,
+      hub_invite_queued: hubInviteQueued,
+      membership_status_detail: {
+        membershipRequested,
+        neonWriteTarget: "activity_fallback_not_native_survey_response",
+        membershipFallbackActivityId: membershipFallbackActivityId || null,
+        membershipFallbackFailureMessage,
+        constituentStatus,
+        membershipAttempted,
+        membershipCreated: membershipCreationStatus === "confirmed",
+        membershipAlreadyActive: membershipCreationStatus === "already_active",
+        membershipFailed: membershipCreationStatus === "failed",
+        hubProfileFound: profileFound,
+        hubInviteQueued,
+        membershipEmailQueued,
+        membershipFailureMessage
+      }
+    });
     const leadActionResult = await recordLeadAction({
       email: valid.normalizedEmail,
       firstName: valid.firstName,
@@ -418,11 +558,11 @@ Deno.serve(async (req) => {
       providerActionId: `survey:${SURVEY_ID}/form:${FORM_ID}`,
       campaignSlug: "mobile-climate-adaptation",
       sourceUrl: valid.sourceUrl,
-      membershipRequest: null,
+      membershipRequest,
       neonSyncStatus: status === "neon_synced" || status === "hub_invited" || status === "hub_invite_pending" ? "succeeded" : status === "neon_sync_pending" ? "pending" : "failed",
       hubIdentityStatus: status === "hub_invited" ? "succeeded" : status === "hub_invite_pending" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { climateSurveySubmissionId: submission.id, membershipOutcome: outcome, status, activityFailureMessage }
+      rawPayload: { climateSurveySubmissionId: submission.id, formSubmissionStatus: activitySynced ? "created" : "neon_sync_failed", formRecordId: neonActivityId || null, membershipOutcome: outcome, status, activityFailureMessage, membershipCreationStatus, neonMembershipId, membershipEmailQueued, hubInviteQueued, membershipFailureMessage, membershipFinalization }
     }).catch((error) => console.error("climate-survey-lead-action", safeError(error)));
     await recordPointEventForLeadAction({
       eventType: "SURVEY_COMPLETED",
@@ -438,10 +578,13 @@ Deno.serve(async (req) => {
         climateSurveySubmissionId: submission.id,
         membershipOutcome: outcome,
         status,
-        activityFailureMessage
+        activityFailureMessage,
+        neonWriteTarget: "activity_fallback_not_native_survey_response",
+        membershipFallbackActivityId: membershipFallbackActivityId || null,
+        membershipFallbackFailureMessage
       }
     }).catch((error) => console.error("climate-survey-point-event", safeError(error)));
-    await sendLifecycleEmail({
+    const surveyEmailResult = await sendLifecycleEmail({
       templateKey: "survey-thank-you",
       recipientEmail: valid.normalizedEmail,
       neonAccountId,
@@ -451,17 +594,59 @@ Deno.serve(async (req) => {
       idempotencyKey: `survey-thank-you:${submission.id}`,
       category: "public_form_followup",
       variables: {
-        firstName: valid.firstName,
+        firstName: valid.firstName || "there",
         surveyName: "Mobile Climate Survey",
+        resultTitle: membershipCreationStatus === "confirmed" || membershipCreationStatus === "already_active"
+          ? "Your survey response was received and your membership status is active."
+          : "Your survey response was received.",
+        resultSummary: membershipRequested && membershipCreationStatus === "failed"
+          ? "Membership was not completed from this submission. You can still become a member using the link below."
+          : "Use the links below to become a member, invite someone to the Hub, or explore the GPE Community Hub.",
+        membershipStatus: membershipCreationStatus === "confirmed"
+          ? "confirmed"
+          : membershipCreationStatus === "already_active"
+            ? "already_active"
+            : membershipCreationStatus === "failed"
+              ? "failed"
+              : "not_requested",
         communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
+        membershipUrl: "https://www.girlplusenvironment.org/become-a-member",
+        invitePageUrl: "https://members.girlplusenvironment.org/invite",
         hubUrl: "https://members.girlplusenvironment.org"
       }
-    }).catch((error) => console.error("climate-survey-lifecycle-email", safeError(error)));
+    }).catch((error) => {
+      console.error("climate-survey-lifecycle-email", safeError(error));
+      return { ok: false, status: "failed", deliveryId: null };
+    });
     return jsonResponse({
+      surveySubmitted: true,
       submissionId: submission.id,
-      membershipOutcome: outcome,
-      membershipUrl: getEnv("GPE_MEMBERSHIP_URL", false),
-      hubLoginUrl: getEnv("GPE_HUB_LOGIN_URL", false)
+      membershipRequested,
+      formSubmissionStatus: activitySynced ? "created" : "neon_sync_failed",
+      formRecordId: neonActivityId || null,
+      formRecordError: activityFailureMessage || null,
+      constituentStatus,
+      constituentCreated: constituentStatus === "created",
+      constituentFound: constituentStatus === "found",
+      membershipAttempted,
+      membershipCreationStatus,
+      membershipOutcome: membershipCreationStatus === "failed" ? "membership_not_created" : outcome,
+      membershipCreated: membershipCreationStatus === "confirmed",
+      membershipAlreadyActive: membershipCreationStatus === "already_active",
+      membershipFailed: membershipCreationStatus === "failed",
+      neonAccountId,
+      neonMembershipId: neonMembershipId || null,
+      hubProfileFound: profileFound,
+      membershipEmailQueued,
+      hubInviteQueued,
+      surveyEmailAccepted: Boolean(surveyEmailResult.ok && ["sent", "already_sent"].includes(String(surveyEmailResult.status))),
+      surveyEmailStatus: surveyEmailResult.status,
+      surveyEmailDeliveryId: surveyEmailResult.deliveryId || null,
+      neonWriteTarget: "activity_fallback_not_native_survey_response",
+      membershipFallbackActivityId: membershipFallbackActivityId || null,
+      membershipFallbackFailureMessage,
+      membershipFinalization,
+      ...responseConfig()
     }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;

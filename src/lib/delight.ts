@@ -48,7 +48,7 @@ export const seasonalThemes: Record<SeasonalTheme, {
 
 const morningMessages = [
   "Good morning, camper. Your next tiny climate win is waiting.",
-  "Morning mission board is open. Pick one action and make it count.",
+  "Morning actions are open. Pick one and make it count.",
   "Fresh day, fresh points, fresh community momentum.",
 ];
 
@@ -91,8 +91,8 @@ export function getEncouragementMessage({
       ? `${pendingSubmissions} submission${pendingSubmissions === 1 ? "" : "s"} waiting for Team GPE review.`
       : "No pending reviews right now. Your next action can change that.",
     activeChallenges > 0
-      ? `${activeChallenges} active challenge${activeChallenges === 1 ? "" : "s"} on the mission board.`
-      : "The mission board is ready for the next season update.",
+      ? `${activeChallenges} active challenge${activeChallenges === 1 ? "" : "s"} ready for review.`
+      : "The Hub is ready for the next season update.",
   ];
 
   return stablePick(messages, now.getDate() + now.getHours());

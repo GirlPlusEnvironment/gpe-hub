@@ -16,6 +16,7 @@ const ALLOWED_TEMPLATES = new Set([
   "action-network-petition-thank-you",
   "event-follow-up",
   "survey-thank-you",
+  "donation-confirmation",
   "volunteer-interest",
   "camp-gpe-submission",
   "graduate-highlight-submission",

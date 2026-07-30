@@ -1,7 +1,7 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createFormSubmission, logSync, publicConfig, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
 import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
-import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { createAndFinalizeMembership, queueHubInvitation } from "../_shared/membership-request.ts";
 import { normalizeMembershipRequest } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { createActivity } from "../_shared/neon-activity.ts";
@@ -161,14 +161,28 @@ Deno.serve(async (req) => {
     let membership = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName), neonAccountId: account.neonAccountId || undefined });
     let secondaryFailure = false;
     let membershipCreationStatus = membershipRequest ? "not_attempted" : "not_requested";
+    let membershipFinalization: Json | null = null;
     let membershipFailureMessage = "";
+    let formActivityId = "";
     let activityFailureMessage = "";
     try {
       if (Array.isArray(fields.membershipConsent) && fields.membershipConsent.includes("consent") && !membershipRequest) {
         throw new ValidationError("Complete the membership questions before creating a GPE membership.");
       }
       if (membershipRequest && membership.outcome !== "active_member_existing_hub_user" && membership.outcome !== "active_member_needs_hub_invite" && account.neonAccountId) {
-        const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { membershipRequest, fields, source: FORM_KEY } });
+        const membershipResult = await createAndFinalizeMembership({
+          neonAccountId: account.neonAccountId,
+          email,
+          request: { membershipRequest, fields, source: FORM_KEY },
+          source: FORM_KEY,
+          submissionId: String(submission.id),
+          firstName: String(fields.firstName)
+        });
+        membershipFinalization = membershipResult;
+        const hubInviteOk = membershipResult.hubInviteQueued || String(membershipResult.hubInviteStatus || "").startsWith("not_required");
+        if (!membershipResult.membershipEmailQueued || !hubInviteOk || !membershipResult.membershipProfileMapped) {
+          secondaryFailure = true;
+        }
         membershipCreationStatus = membershipResult.membershipCreationStatus;
         membership = { ...membership, outcome: "active_member_needs_hub_invite", neonAccountId: account.neonAccountId };
       }
@@ -180,24 +194,40 @@ Deno.serve(async (req) => {
     }
 
     try {
-      await createActivity({ neonAccountId: account.neonAccountId || "", subject: `${season.name} Registration`, type: season.name, note: { formKey: FORM_KEY, fields } });
+      formActivityId = await createActivity({ neonAccountId: account.neonAccountId || "", subject: `${season.name} Registration`, type: season.name, note: { formKey: FORM_KEY, fields } });
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_activity", success: true });
     } catch (error) {
+      secondaryFailure = true;
       activityFailureMessage = safeError(error);
       await logSync({ submissionId: String(submission.id), integration: "neon", operation: "camp_gpe_activity", success: false, errorSummary: activityFailureMessage });
     }
 
-    if (membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
+    if (!membershipFinalization && membership.outcome === "active_member_needs_hub_invite" && membership.neonAccountId) {
       await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: membership.neonAccountId, source: FORM_KEY }).catch((error) => {
         secondaryFailure = true;
         return logSync({ submissionId: String(submission.id), integration: "hub", operation: "invite", success: false, errorSummary: safeError(error) });
       });
     }
+    const formActivityCreated = Boolean(formActivityId);
+    const formSubmissionStatus = formActivityCreated ? "created" : account.neonAccountId ? "neon_sync_failed" : "neon_account_unresolved";
+    const finalNeonSyncStatus = formActivityCreated ? "succeeded" : "failed";
     await updateFormSubmission(String(submission.id), {
       submission_status: secondaryFailure ? "partial_failure" : "completed",
-      neon_sync_status: secondaryFailure ? "failed" : "succeeded",
+      neon_sync_status: finalNeonSyncStatus,
       neon_account_id: account.neonAccountId,
-      membership_outcome: membership.outcome
+      membership_outcome: membership.outcome,
+      submission_payload: {
+        fields,
+        registrationState: "registered",
+        seasonId: season.id,
+        seasonSlug: season.slug,
+        formSubmissionStatus,
+        formRecordId: formActivityId || null,
+        formRecordError: activityFailureMessage || null,
+        membershipCreationStatus,
+        membershipFailureMessage,
+        membershipFinalization
+      }
     });
     await recordLeadAction({
       submissionId: String(submission.id),
@@ -212,12 +242,13 @@ Deno.serve(async (req) => {
       campaignSlug: season.slug,
       sourceUrl: "https://www.girlplusenvironment.org/camp-gpe#submission",
       membershipRequest,
-      neonSyncStatus: secondaryFailure ? "failed" : "succeeded",
+      neonSyncStatus: finalNeonSyncStatus,
       hubIdentityStatus: membership.outcome === "active_member_needs_hub_invite" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
-      rawPayload: { registrationState: "registered", membershipOutcome: membership.outcome, membershipCreationStatus, membershipFailureMessage, activityFailureMessage, seasonId: season.id }
+      neonActivityId: formActivityId || null,
+      rawPayload: { registrationState: "registered", formSubmissionStatus, formRecordId: formActivityId || null, membershipOutcome: membership.outcome, membershipCreationStatus, membershipFailureMessage, activityFailureMessage, membershipFinalization, seasonId: season.id }
     }).catch((error) => logSync({ submissionId: String(submission.id), integration: "supabase", operation: "lead_action", success: false, errorSummary: safeError(error) }));
-    await sendLifecycleEmail({
+    const confirmationEmailResult = await sendLifecycleEmail({
       templateKey: "camp-gpe-submission",
       recipientEmail: email,
       neonAccountId: account.neonAccountId,
@@ -231,19 +262,42 @@ Deno.serve(async (req) => {
         submissionName: season.name,
         campUrl: "https://members.girlplusenvironment.org/camp-gpe"
       }
-    }).catch((error) => logSync({ submissionId: String(submission.id), integration: "email", operation: "camp_gpe_lifecycle_email", success: false, errorSummary: safeError(error) }));
+    }).catch((error) => {
+      void logSync({ submissionId: String(submission.id), integration: "email", operation: "camp_gpe_lifecycle_email", success: false, errorSummary: safeError(error) });
+      return { ok: false, status: "failed", deliveryId: null };
+    });
     if (membershipRequest && membershipCreationStatus === "failed") {
       return jsonResponse({
         submissionId: submission.id,
         registrationState: "registered",
+        formSubmissionStatus,
+        formRecordId: formActivityId || null,
+        formRecordError: activityFailureMessage || null,
         membershipOutcome: "membership_creation_failed",
         membershipCreationStatus,
         partialSuccess: true,
+        confirmationEmailAccepted: Boolean(confirmationEmailResult.ok && ["sent", "already_sent"].includes(String(confirmationEmailResult.status))),
+        confirmationEmailStatus: confirmationEmailResult.status,
+        confirmationEmailDeliveryId: confirmationEmailResult.deliveryId || null,
         message: `Your ${season.name} registration is saved, but membership could not be created yet. Team GPE can retry from the saved submission.`,
         ...publicConfig()
       }, 502, origin);
     }
-    return jsonResponse({ submissionId: submission.id, registrationState: "registered", membershipOutcome: membership.outcome, membershipCreationStatus, partialSuccess: secondaryFailure, ...publicConfig() }, 200, origin);
+    return jsonResponse({
+      submissionId: submission.id,
+      registrationState: "registered",
+      formSubmissionStatus,
+      formRecordId: formActivityId || null,
+      formRecordError: activityFailureMessage || null,
+      membershipOutcome: membership.outcome,
+      membershipCreationStatus,
+      membershipFinalization,
+      partialSuccess: secondaryFailure,
+      confirmationEmailAccepted: Boolean(confirmationEmailResult.ok && ["sent", "already_sent"].includes(String(confirmationEmailResult.status))),
+      confirmationEmailStatus: confirmationEmailResult.status,
+      confirmationEmailDeliveryId: confirmationEmailResult.deliveryId || null,
+      ...publicConfig()
+    }, 200, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("camp-gpe-submit", safeError(error));

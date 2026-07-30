@@ -1,7 +1,6 @@
 import { assertAllowedOrigin, corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { createFormSubmission, publicConfig, recordLeadAction, updateFormSubmission } from "../_shared/form-submission.ts";
-import { sendLifecycleEmail } from "../_shared/lifecycle-email.ts";
-import { createMembershipServerSide, queueHubInvitation } from "../_shared/membership-request.ts";
+import { createAndFinalizeMembership, queueHubInvitation } from "../_shared/membership-request.ts";
 import { CANONICAL_MEMBERSHIP_FIELDS, normalizeCanonicalMembershipInput } from "../_shared/membership-schema.ts";
 import { resolveOrCreateAccount } from "../_shared/neon-account.ts";
 import { resolveMembership, safeError } from "../_shared/neon-membership.ts";
@@ -44,8 +43,47 @@ Deno.serve(async (req) => {
 
     const before = await resolveMembership({ email, firstName: String(fields.firstName), lastName: String(fields.lastName) });
     if (before.outcome === "active_member_existing_hub_user" || before.outcome === "active_member_needs_hub_invite") {
-      await updateFormSubmission(String(submission.id), { submission_status: "duplicate", membership_outcome: before.outcome, neon_account_id: before.neonAccountId });
-      return jsonResponse({ submissionId: submission.id, membershipOutcome: before.outcome, alreadyMember: true, neonAccountId: before.neonAccountId, ...publicConfig() }, 200, origin);
+      let hubInviteQueued = false;
+      let hubInviteStatus = before.outcome === "active_member_existing_hub_user" ? "not_required_existing_hub_profile" : "not_attempted";
+      if (before.outcome === "active_member_needs_hub_invite" && before.neonAccountId) {
+        try {
+          const sent = await queueHubInvitation({
+            submissionId: String(submission.id),
+            email,
+            neonAccountId: before.neonAccountId,
+            source: FORM_KEY
+          });
+          hubInviteQueued = true;
+          hubInviteStatus = sent ? "sent" : "queued";
+        } catch (error) {
+          hubInviteStatus = safeError(error) || "failed";
+        }
+      }
+      await updateFormSubmission(String(submission.id), {
+        submission_status: hubInviteStatus === "failed" ? "partial_failure" : "duplicate",
+        neon_sync_status: "succeeded",
+        hub_invitation_status: hubInviteQueued ? hubInviteStatus : "not_required",
+        membership_outcome: before.outcome,
+        neon_account_id: before.neonAccountId,
+        submission_payload: {
+          fields,
+          canonicalMembership,
+          membershipCreationStatus: "already_active",
+          hubInviteQueued,
+          hubInviteStatus
+        }
+      });
+      return jsonResponse({
+        submissionId: submission.id,
+        membershipOutcome: before.outcome,
+        membershipCreationStatus: "already_active",
+        alreadyMember: true,
+        neonAccountId: before.neonAccountId,
+        membershipEmailQueued: false,
+        hubInviteQueued,
+        hubInviteStatus,
+        ...publicConfig()
+      }, 200, origin);
     }
     if (before.outcome === "ambiguous_account") {
       await updateFormSubmission(String(submission.id), { submission_status: "requires_manual_review", membership_outcome: before.outcome });
@@ -67,8 +105,14 @@ Deno.serve(async (req) => {
       return jsonResponse({ submissionId: submission.id, membershipOutcome: "ambiguous_account", requiresManualReview: true, ...publicConfig() }, 200, origin);
     }
 
-    const membershipResult = await createMembershipServerSide({ neonAccountId: account.neonAccountId, email, request: { fields, canonicalMembership, source: FORM_KEY } });
-    await queueHubInvitation({ submissionId: String(submission.id), email, neonAccountId: account.neonAccountId, source: "become_member" }).catch(() => undefined);
+    const membershipResult = await createAndFinalizeMembership({
+      neonAccountId: account.neonAccountId,
+      email,
+      request: { fields, canonicalMembership, source: FORM_KEY },
+      source: FORM_KEY,
+      submissionId: String(submission.id),
+      firstName: String(fields.firstName)
+    });
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",
       neon_sync_status: "succeeded",
@@ -96,22 +140,6 @@ Deno.serve(async (req) => {
       hubIdentityStatus: "pending",
       pointsStatus: "not_applicable",
       rawPayload: { ...membershipResult, membershipOutcome: "active_member_needs_hub_invite" }
-    }).catch(() => undefined);
-    await sendLifecycleEmail({
-      templateKey: "member-welcome",
-      recipientEmail: email,
-      neonAccountId: account.neonAccountId,
-      eventType: "membership_confirmed",
-      sourceType: "membership",
-      sourceId: String(submission.id),
-      idempotencyKey: `member-welcome:${membershipResult.membershipId}`,
-      category: "membership_lifecycle",
-      variables: {
-        firstName: String(fields.firstName),
-        hubUrl: "https://members.girlplusenvironment.org",
-        membershipId: membershipResult.membershipId,
-        membershipTermId: String(submission.id)
-      }
     }).catch(() => undefined);
     return jsonResponse({ submissionId: submission.id, neonAccountId: account.neonAccountId, ...membershipResult, membershipOutcome: "active_member_needs_hub_invite", ...publicConfig() }, 200, origin);
   } catch (error) {

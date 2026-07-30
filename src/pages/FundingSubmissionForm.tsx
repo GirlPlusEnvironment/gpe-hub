@@ -5,9 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { supabase } from "@/lib/supabaseClient";
 import { ImageUpload } from "@/components/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
+import { clearListingSubmissionIdempotency, submitHubListingForReview } from "@/lib/hub-listing-submissions";
 import { validateListingContent } from "@/lib/listings";
 import { DollarSign, Building, Calendar, Link, FileText, CheckCircle2, Loader2, Info } from "lucide-react";
 
@@ -122,20 +122,6 @@ export default function FundingSubmissionForm() {
 
     setIsSubmitting(true);
     
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      toast({
-        title: "Sign in required",
-        description: "You must be logged in to submit a funding opportunity.",
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
-      return;
-    }
-    
     const fundingData = {
       category: "fundraisers",
       title: form.title,
@@ -143,8 +129,6 @@ export default function FundingSubmissionForm() {
       description: form.description || form.link || "Details to be completed during Team GPE review.",
       image_url: form.image,
       tags: [],
-      submitted_by: user.id,
-      status: "pending_review",
       metadata: {
         organizer: form.source,
         source: form.source,
@@ -173,23 +157,29 @@ export default function FundingSubmissionForm() {
       return;
     }
     
-    const { data: insertData, error } = await supabase.from("listings").insert([fundingData]).select();
-    if (error) {
+    try {
+      const result = await submitHubListingForReview({
+        draftStorageKey: STORAGE_KEY,
+        listing: fundingData,
+      });
+      const newListingId = result.listingId;
+      localStorage.removeItem(STORAGE_KEY);
+      clearListingSubmissionIdempotency(STORAGE_KEY);
+
+      toast({
+        title: result.duplicate ? "Funding opportunity already in review" : "Funding opportunity submitted!",
+        description: result.suggestedPoints
+          ? `Your funding opportunity is under Team GPE review. If approved, you'll earn ${result.suggestedPoints} points.`
+          : "Your funding opportunity is under Team GPE review.",
+      });
+      navigate(`/listing/${newListingId}`);
+    } catch (error) {
       toast({
         title: "Error submitting funding opportunity",
-        description: "We couldn't submit your funding opportunity. Please try again.",
+        description: error instanceof Error ? error.message : "We couldn't submit your funding opportunity. Please try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
-    } else if (insertData && insertData.length > 0) {
-      const newListingId = insertData[0].id;
-      localStorage.removeItem(STORAGE_KEY);
-      
-      toast({
-        title: "Funding opportunity submitted!",
-        description: "Your funding opportunity is under Team GPE review.",
-      });
-      navigate(`/listing/${newListingId}`);
     }
   };
 

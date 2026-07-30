@@ -179,15 +179,56 @@ function neonHeaders(): HeadersInit {
 }
 
 export async function neonFetch(path: string, init: RequestInit = {}, operation = path) {
+  const method = init.method || "GET";
+  const requestBody = parseBodyForTrace(init.body);
+  const startedAt = Date.now();
   const res = await fetch(`${neonBaseUrl()}${path}`, {
     ...init,
     headers: { ...neonHeaders(), ...(init.headers || {}) }
   });
+  const responseText = await res.text();
+  const responseBody = parseTextForTrace(responseText);
+  const diagnostic = {
+    operation,
+    endpoint: path.replace(/email=[^&]+/i, "email=[redacted-email]"),
+    method,
+    durationMs: Date.now() - startedAt,
+    status: res.status,
+    ok: res.ok,
+    requestBodyRedacted: requestBody ? redactForTrace(requestBody) : null,
+    responseBodyRedacted: redactForTrace(responseBody),
+    createdIds: neonCreatedIds(responseBody),
+  };
+  console.info("neon-api-write", diagnostic);
   if (!res.ok) {
-    const text = await res.text();
-    throw new NeonApiError(operation, res.status, text.slice(0, 220));
+    throw new NeonApiError(operation, res.status, responseText.slice(0, 220));
   }
-  return res.json().catch(() => ({}));
+  return responseBody;
+}
+
+function parseBodyForTrace(body: BodyInit | null | undefined): unknown {
+  if (!body) return null;
+  if (typeof body !== "string") return "[non-string-body]";
+  return parseTextForTrace(body);
+}
+
+function parseTextForTrace(text: string): unknown {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return { rawText: text.slice(0, 1000) };
+  }
+}
+
+function neonCreatedIds(value: unknown) {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? value as Json : {};
+  return {
+    id: nestedString(record.id) || null,
+    accountId: extractAccountId(record) || null,
+    activityId: nestedString(record.activityId) || nestedString(record.id) || null,
+    membershipId: nestedString(record.membershipId) || nestedString(record.id) || null,
+  };
 }
 
 export function extractRows(result: unknown): Json[] {
@@ -252,7 +293,7 @@ function redactForTrace(value: unknown): unknown {
   const record = value as Json;
   const redacted: Json = {};
   for (const [key, item] of Object.entries(record)) {
-    if (/email|first\s*name|last\s*name|name|address|phone/i.test(key)) {
+    if (/email|first\s*name|last\s*name|name|address|phone|zip|postal|city|state|race|ethnicity|gender|pronoun|age|income|note|answer|survey|membership|profile|school|organization|profession|interest|referral|preference/i.test(key)) {
       redacted[key] = item ? "[redacted]" : item;
     } else {
       redacted[key] = redactForTrace(item);

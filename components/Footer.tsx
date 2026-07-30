@@ -11,8 +11,7 @@ const Footer = () => {
             className="h-auto w-full max-w-[180px] object-contain"
           />
           <p className="mt-3 max-w-xl break-words text-sm font-bold text-black/70">
-            A playful mission board for environmental justice opportunities, seasonal challenges,
-            community conversations, and member connection.
+           We've got those good jobs, resources, funding + mentors for black + brown femmes in climate. This is our place to share and make space for each other to lead this climate and environmental justice movement.
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap gap-3 text-sm font-bold uppercase">

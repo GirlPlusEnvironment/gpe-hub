@@ -214,13 +214,13 @@ begin
       updated_at = now()
   where id = resolved_season_member_id;
 
-  update public.gpe_camp_challenge_submissions
-  set user_id = coalesce(user_id, resolved_user_id),
-      season_member_id = coalesce(season_member_id, resolved_season_member_id),
-      neon_account_id = coalesce(neon_account_id, resolved_neon_account_id),
-      member_link_status = case when resolved_user_id is not null then 'linked' else member_link_status end,
+  update public.gpe_camp_challenge_submissions as s
+  set user_id = coalesce(s.user_id, resolved_user_id),
+      season_member_id = coalesce(s.season_member_id, resolved_season_member_id),
+      neon_account_id = coalesce(s.neon_account_id, resolved_neon_account_id),
+      member_link_status = case when resolved_user_id is not null then 'linked' else s.member_link_status end,
       updated_at = now()
-  where id = submission_row.id
+  where s.id = submission_row.id
   returning * into submission_row;
 
   select id into general_transaction_id
@@ -318,15 +318,15 @@ begin
     )
     returning id into ledger_id;
   elsif ledger_id is not null and general_transaction_id is not null then
-    update public.gpe_camp_points_ledger
-    set user_id = coalesce(user_id, resolved_user_id),
-        season_member_id = coalesce(season_member_id, resolved_season_member_id),
-        general_point_transaction_id = coalesce(general_point_transaction_id, general_transaction_id),
-        metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
+    update public.gpe_camp_points_ledger as l
+    set user_id = coalesce(l.user_id, resolved_user_id),
+        season_member_id = coalesce(l.season_member_id, resolved_season_member_id),
+        general_point_transaction_id = coalesce(l.general_point_transaction_id, general_transaction_id),
+        metadata = coalesce(l.metadata, '{}'::jsonb) || jsonb_build_object(
           'general_point_transaction_id', general_transaction_id,
           'reconciled_approval', true
         )
-    where id = ledger_id;
+    where l.id = ledger_id;
   end if;
 
   update public.gpe_camp_submission_actions

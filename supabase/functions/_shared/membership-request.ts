@@ -2,6 +2,7 @@ import { type Json, getEnv, neonFetch, supabaseFetch } from "./neon-membership.t
 import { sanitizeText } from "./validation.ts";
 import { sendLifecycleEmail } from "./lifecycle-email.ts";
 import { recordMembershipProfileActivity } from "./membership-neon-mapping.ts";
+import { createActivity } from "./neon-activity.ts";
 
 export class MembershipCreationError extends Error {
   code: string;
@@ -14,33 +15,61 @@ export class MembershipCreationError extends Error {
 }
 
 export async function createMembershipRequestActivity(neonAccountId: string, request: Json) {
-  const now = new Date().toISOString();
-  const statusId = getEnv("NEON_ACTIVITY_OPEN_STATUS_ID", false) || getEnv("NEON_ACTIVITY_STATUS_ID", false);
-  const timeZoneId = getEnv("NEON_ACTIVITY_TIMEZONE_ID", false);
-  if (!statusId || !timeZoneId) {
-    throw new Error("Neon activity status/timezone IDs are not configured.");
-  }
-  const result = await neonFetch("/activities", {
+  return await createActivity({
+    neonAccountId,
+    subject: "GPE Membership Request",
+    note: request,
+    statusKind: "open",
+  });
+}
+
+async function persistPendingHubInvitation(queuedInvitation: Json) {
+  const res = await supabaseFetch("hub_invitations", {
     method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(queuedInvitation)
+  });
+  if (!res.ok) throw new Error(`Could not save pending Hub invitation (${res.status}): ${(await res.text()).slice(0, 250)}`);
+}
+
+function edgeFunctionUrl(functionName: string) {
+  const base = (getEnv("GPE_SUPABASE_URL", false) || getEnv("SUPABASE_URL", false)).replace(/\/$/, "");
+  return base ? `${base}/functions/v1/${functionName}` : "";
+}
+
+async function postHubActivation(args: { url: string; email: string; neonAccountId: string; source?: string; submissionId: string }) {
+  const anonKey = getEnv("GPE_SUPABASE_ANON_KEY", false) || getEnv("SUPABASE_ANON_KEY", false);
+  if (!anonKey) throw new Error("Missing Supabase anon key for Hub activation.");
+  const res = await fetch(args.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": anonKey,
+      "Authorization": `Bearer ${anonKey}`,
+    },
     body: JSON.stringify({
-      subject: "GPE Membership Request",
-      note: JSON.stringify(request).slice(0, 10_000),
-      activityDates: {
-        startDate: now,
-        endDate: now,
-        timeZone: { id: timeZoneId }
-      },
-      clientAccount: [{ accountId: neonAccountId }],
-      status: { id: statusId },
-      priority: "Normal"
+      email: args.email,
+      neonAccountId: args.neonAccountId,
+      source: args.source || "membership_enrollment",
+      sourceId: args.submissionId,
     })
   });
-  const data = result as Json;
-  return String(data.id || data.activityId || "");
+  if (!res.ok) throw new Error(`Hub activation workflow failed (${res.status}): ${(await res.text()).slice(0, 250)}`);
+}
+
+async function postConfiguredHubInvitation(args: { url: string; secret: string; email: string; neonAccountId: string; source?: string; submissionId: string }) {
+  const { url, secret, ...body } = args;
+  const res = await fetch(args.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secret}` },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`Hub invitation workflow failed (${res.status}): ${(await res.text()).slice(0, 250)}`);
 }
 
 export async function queueHubInvitation(args: { submissionId: string; email: string; neonAccountId: string; source?: string }) {
   const queuedInvitation = {
+    submission_id: args.source === "neon_climate_survey" ? args.submissionId : null,
     source: args.source || "membership_enrollment",
     source_id: args.submissionId,
     normalized_email: sanitizeText(args.email, 320).toLowerCase(),
@@ -48,28 +77,33 @@ export async function queueHubInvitation(args: { submissionId: string; email: st
     status: "pending"
   };
   const invitationUrl = getEnv("HUB_INVITATION_FUNCTION_URL", false);
-  if (!invitationUrl) {
-    await supabaseFetch("hub_invitations", {
-      method: "POST",
-      body: JSON.stringify(queuedInvitation)
-    });
-    return false;
-  }
   const secret = getEnv("HUB_INVITATION_SECRET", false);
-  if (!secret) {
-    await supabaseFetch("hub_invitations", {
-      method: "POST",
-      body: JSON.stringify(queuedInvitation)
-    });
-    return false;
+  const errors: string[] = [];
+
+  const activationUrl = edgeFunctionUrl("hub-account-activation");
+  if (activationUrl) {
+    try {
+      await postHubActivation({ ...args, url: activationUrl });
+      return true;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Hub account activation failed.");
+    }
   }
-  const res = await fetch(invitationUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secret}` },
-    body: JSON.stringify(args)
+
+  if (invitationUrl && secret) {
+    try {
+      await postConfiguredHubInvitation({ ...args, url: invitationUrl, secret });
+      return true;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Configured Hub invitation failed.");
+    }
+  }
+
+  await persistPendingHubInvitation({
+    ...queuedInvitation,
+    last_error_summary: errors.slice(-3).join(" | ").slice(0, 500),
   });
-  if (!res.ok) throw new Error(`Hub invitation workflow failed (${res.status}).`);
-  return true;
+  return false;
 }
 
 async function claimPendingAwards(profileId: string) {
@@ -225,7 +259,7 @@ export async function createAndFinalizeMembership(args: {
       source: args.source,
     });
     finalization.membershipProfileActivityId = profileResult.activityId || null;
-    finalization.membershipProfileMapped = true;
+    finalization.membershipProfileMapped = profileResult.missingMappings.length === 0;
     finalization.missingMembershipMappings = profileResult.missingMappings as Json[];
   } catch (error) {
     finalization.membershipProfileMapped = false;

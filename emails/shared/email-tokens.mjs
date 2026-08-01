@@ -13,7 +13,7 @@ export const URLS = {
   communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
   hubUrl: "https://members.girlplusenvironment.org",
   membershipUrl: "https://www.girlplusenvironment.org/become-a-member",
-  invitePageUrl: "https://members.girlplusenvironment.org/invite",
+  invitePageUrl: "https://members.girlplusenvironment.org/invite/",
   membershipHelpUrl: "https://members.girlplusenvironment.org/membership-help",
   pointsUrl: "https://members.girlplusenvironment.org/leaderboard",
   supportUrl: "https://members.girlplusenvironment.org/membership-help",

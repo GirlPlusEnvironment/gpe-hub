@@ -264,7 +264,7 @@ export async function createAndFinalizeMembership(args: {
       variables: {
         firstName: args.firstName || "there",
         hubUrl: "https://members.girlplusenvironment.org",
-        invitePageUrl: "https://members.girlplusenvironment.org/invite",
+        invitePageUrl: "https://members.girlplusenvironment.org/invite/",
         membershipId: membershipResult.membershipId,
         membershipTermId: args.submissionId,
       },

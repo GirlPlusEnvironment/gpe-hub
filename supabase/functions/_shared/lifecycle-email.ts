@@ -375,7 +375,7 @@ function renderStandardCtaBlock(variables: Record<string, unknown>) {
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 28px;">
   <tr>
     <td width="50%" style="width:50%;padding:0 6px 12px 0;"><div style="${cellStyle}"><a href="${membershipUrl}" style="${buttonStyle}">Become a Member</a></div></td>
-    <td width="50%" style="width:50%;padding:0 0 12px 6px;"><div style="${cellStyle}"><a href="${invitePageUrl}" style="${buttonStyle}">Invite a Member</a></div></td>
+    <td width="50%" style="width:50%;padding:0 0 12px 6px;"><div style="${cellStyle}"><a href="${invitePageUrl}" target="_blank" rel="noopener noreferrer" style="${buttonStyle}">Invite a Member</a></div></td>
   </tr>
   <tr>
     <td colspan="2" style="padding:0;"><div style="background-color:#67e8f9;border:3px solid #000000;border-radius:18px;box-shadow:4px 4px 0 #000000;text-align:center;"><a href="${hubUrl}" style="${buttonStyle}">Enter the Hub</a></div></td>
@@ -406,7 +406,7 @@ export async function sendLifecycleEmail(input: LifecycleEmailInput) {
       hubUrl: env("GPE_HUB_LOGIN_URL")?.replace(/\/login\/?$/, "") || "https://members.girlplusenvironment.org",
       communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
       membershipUrl: "https://www.girlplusenvironment.org/become-a-member",
-      invitePageUrl: "https://members.girlplusenvironment.org/invite",
+      invitePageUrl: "https://members.girlplusenvironment.org/invite/",
       moreActionsUrl: "https://www.girlplusenvironment.org/take-action",
       resourcesUrl: "https://www.girlplusenvironment.org/resources",
       preferencesUrl: "https://members.girlplusenvironment.org/email-preferences",

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Copy, MailPlus, RotateCcw, Send, X } from "lucide-react";
@@ -44,6 +44,15 @@ const Invite = () => {
 
   const recipientEmail = result?.recipientEmail || form.email.trim().toLowerCase();
   const canSubmit = useMemo(() => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim()), [form.email]);
+
+  useEffect(() => {
+    if (window.self === window.top) return;
+    try {
+      window.top.location.href = window.location.href;
+    } catch {
+      window.open(window.location.href, "_blank", "noopener,noreferrer");
+    }
+  }, []);
 
   const updateField = (field: keyof InviteForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));

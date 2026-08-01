@@ -303,6 +303,14 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/invite/"
+              element={
+                <ProtectedRoute>
+                  <Invite />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/membership-help" element={<MembershipHelp />} />
             <Route path="/email-preferences" element={<EmailPreferences />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

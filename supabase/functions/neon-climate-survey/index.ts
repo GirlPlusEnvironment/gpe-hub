@@ -611,7 +611,7 @@ Deno.serve(async (req) => {
               : "not_requested",
         communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
         membershipUrl: "https://www.girlplusenvironment.org/become-a-member",
-        invitePageUrl: "https://members.girlplusenvironment.org/invite",
+        invitePageUrl: "https://members.girlplusenvironment.org/invite/",
         hubUrl: "https://members.girlplusenvironment.org"
       }
     }).catch((error) => {

@@ -112,7 +112,7 @@ We have more ways to take action. We also keep free community resources ready fo
   <p style="margin:0;font-size:14px;line-height:1.6;color:#000000;">
     <a href="{{joinHubUrl}}" style="font-weight:700;color:#000000;text-decoration:underline;">Join us</a>
     or
-    <a href="{{inviteUrl}}" style="font-weight:700;color:#000000;text-decoration:underline;">invite an eligible friend or colleague</a>.
+    <a href="{{inviteUrl}}" target="_blank" rel="noopener noreferrer" style="font-weight:700;color:#000000;text-decoration:underline;">invite an eligible friend or colleague</a>.
   </p>
 </div>`,
     closingNote: "Real environmental action led by us and for us.",
@@ -178,7 +178,7 @@ Your membership helps make room for Black + Brown femmes to lead this climate an
   <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#000000;">
     Know a Black or Brown femme who should be in this space?
   </p>
-  <a href="{{invitePageUrl}}" style="font-weight:700;color:#000000;text-decoration:underline;">
+  <a href="{{invitePageUrl}}" target="_blank" rel="noopener noreferrer" style="font-weight:700;color:#000000;text-decoration:underline;">
     Invite a friend or colleague →
   </a>
 </div>`,

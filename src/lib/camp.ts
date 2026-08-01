@@ -231,7 +231,10 @@ export type AdminAwardResult = {
 };
 
 export type CampReviewReconcileResult = {
+  ok?: boolean;
   status: string;
+  seasonMemberCreated?: boolean;
+  alreadyAwarded?: boolean;
   profileId: string;
   email: string | null;
   neonAccountId: string | null;
@@ -239,12 +242,15 @@ export type CampReviewReconcileResult = {
   campSubmissionId: string;
   campSubmissionActionId: string;
   reviewSubmissionId: string | null;
+  transactionId?: string | null;
+  ledgerId?: string | null;
   pointTransactionId: string | null;
   campLedgerId: string | null;
   pointEventIds: string[];
   pendingAwardIds: string[];
   leadActionIds: string[];
   points: number;
+  pointsAwarded?: number;
   claimResult?: Record<string, unknown>;
   attachResult?: Record<string, unknown>;
 };
@@ -656,7 +662,7 @@ export async function approveCampSubmissionAction(params: {
     p_points: params.points ?? null,
     p_notes: params.notes ?? null,
   });
-  if (error) throw error;
+  if (error) throw campRpcError("approve_camp_submission_action", error);
   return Array.isArray(data) ? data[0] : data;
 }
 
@@ -670,8 +676,22 @@ export async function reconcileCampReviewAward(params: {
     p_points: params.points ?? null,
     p_notes: params.notes ?? null,
   });
-  if (error) throw error;
+  if (error) throw campRpcError("admin_reconcile_camp_review_award", error);
   return data as CampReviewReconcileResult;
+}
+
+function campRpcError(operation: string, error: unknown) {
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const parts = [
+    `${operation} failed`,
+    typeof record.message === "string" ? record.message : null,
+    typeof record.details === "string" ? record.details : null,
+    typeof record.hint === "string" ? `Hint: ${record.hint}` : null,
+    typeof record.code === "string" ? `Code: ${record.code}` : null,
+  ].filter(Boolean);
+  const next = new Error(parts.join(" | "));
+  Object.assign(next, record);
+  return next;
 }
 
 export async function markCampSubmissionAction(params: {

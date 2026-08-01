@@ -106,6 +106,12 @@ type ReviewDialogState = {
   defaultPoints: number;
 } | null;
 
+type ApprovalRecoveryPrompt = {
+  actionId: string;
+  points: number;
+  message: string;
+} | null;
+
 type ActionDialogState =
   | { kind: "edit_action"; actionId: string; defaultPoints: number | null }
   | { kind: "associate"; submissionId: string }
@@ -449,6 +455,7 @@ export default function CampAdmin() {
   const [countsForCabin, setCountsForCabin] = useState(false);
   const [lastAwardResult, setLastAwardResult] = useState<AdminAwardResult | null>(null);
   const [lastReconcileResult, setLastReconcileResult] = useState<CampReviewReconcileResult | null>(null);
+  const [approvalRecoveryPrompt, setApprovalRecoveryPrompt] = useState<ApprovalRecoveryPrompt>(null);
   const [manualIdempotencyKey, setManualIdempotencyKey] = useState(createManualIdempotencyKey);
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialogState>(null);
@@ -572,6 +579,7 @@ export default function CampAdmin() {
     if (!reviewDialog) return;
     setBusyId(reviewDialog.actionId);
     setError(null);
+    setApprovalRecoveryPrompt(null);
     try {
       if (reviewDialog.kind === "approve") {
         const points = Number(reviewPoints);
@@ -612,7 +620,15 @@ export default function CampAdmin() {
       setReviewDialog(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update submission.");
+      const message = err instanceof Error ? err.message : "Could not update submission.";
+      setError(message);
+      if (reviewDialog.kind === "approve") {
+        setApprovalRecoveryPrompt({
+          actionId: reviewDialog.actionId,
+          points: Number(reviewPoints) || reviewDialog.defaultPoints,
+          message,
+        });
+      }
     } finally {
       setBusyId(null);
     }
@@ -622,6 +638,7 @@ export default function CampAdmin() {
     const points = defaultPoints ?? action.approved_points ?? action.requested_points ?? 0;
     setBusyId(action.id);
     setError(null);
+    setApprovalRecoveryPrompt(null);
     setLastReconcileResult(null);
     try {
       const result = await reconcileCampReviewAward({
@@ -1497,7 +1514,23 @@ export default function CampAdmin() {
 
           {error && (
             <div className="rounded-[1.5rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">
-              {error}
+              <div>{error}</div>
+              {approvalRecoveryPrompt ? (() => {
+                const action = submissions
+                  .flatMap((submission) => submission.gpe_camp_submission_actions || [])
+                  .find((candidate) => candidate.id === approvalRecoveryPrompt.actionId);
+                return action ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === action.id}
+                    onClick={() => void handleReconcileReviewAward(action, approvalRecoveryPrompt.points)}
+                  >
+                    Reconcile & Award
+                  </Button>
+                ) : null;
+              })() : null}
             </div>
           )}
 
@@ -2074,9 +2107,11 @@ export default function CampAdmin() {
                                   <div>Profile: {lastReconcileResult.profileId}</div>
                                   <div>Season member: {lastReconcileResult.seasonMemberId}</div>
                                   <div>Review: {lastReconcileResult.reviewSubmissionId || "none"}</div>
-                                  <div>Transaction: {lastReconcileResult.pointTransactionId || "none"}</div>
-                                  <div>Camp ledger: {lastReconcileResult.campLedgerId || "none"}</div>
-                                  <div>Points: {lastReconcileResult.points}</div>
+                                  <div>Transaction: {lastReconcileResult.pointTransactionId || lastReconcileResult.transactionId || "none"}</div>
+                                  <div>Camp ledger: {lastReconcileResult.campLedgerId || lastReconcileResult.ledgerId || "none"}</div>
+                                  <div>Points awarded: {lastReconcileResult.pointsAwarded ?? lastReconcileResult.points}</div>
+                                  <div>Already awarded: {lastReconcileResult.alreadyAwarded ? "Yes" : "No"}</div>
+                                  <div>Season member created: {lastReconcileResult.seasonMemberCreated ? "Yes" : "No"}</div>
                                   <div className="md:col-span-2">Lead actions: {lastReconcileResult.leadActionIds?.join(", ") || "none"}</div>
                                   <div className="md:col-span-2">Point events: {lastReconcileResult.pointEventIds?.join(", ") || "none"}</div>
                                 </div>

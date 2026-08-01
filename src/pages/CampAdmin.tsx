@@ -22,6 +22,7 @@ import {
   type ChallengePublishState,
   type AdminAwardResult,
   type CampReviewReconcileResult,
+  type CampSubmissionLinkResult,
   type AdminPointMember,
   type AdminPointTransaction,
   type HubPointRule,
@@ -36,6 +37,7 @@ import {
   getModerationQueueItems,
   getPendingCampSubmissions,
   getPointRules,
+  linkCampSubmissionToHubMember,
   reconcileCampReviewAward,
   reversePointTransaction,
   searchPointMembers,
@@ -115,6 +117,7 @@ type ApprovalRecoveryPrompt = {
 type ActionDialogState =
   | { kind: "edit_action"; actionId: string; defaultPoints: number | null }
   | { kind: "associate"; submissionId: string }
+  | { kind: "link_member"; submissionId: string; memberLabel: string; contactEmail: string }
   | { kind: "reopen"; actionId: string }
   | { kind: "manual_award" }
   | { kind: "reverse"; transaction: AdminPointTransaction }
@@ -455,10 +458,16 @@ export default function CampAdmin() {
   const [countsForCabin, setCountsForCabin] = useState(false);
   const [lastAwardResult, setLastAwardResult] = useState<AdminAwardResult | null>(null);
   const [lastReconcileResult, setLastReconcileResult] = useState<CampReviewReconcileResult | null>(null);
+  const [lastLinkResult, setLastLinkResult] = useState<CampSubmissionLinkResult | null>(null);
   const [approvalRecoveryPrompt, setApprovalRecoveryPrompt] = useState<ApprovalRecoveryPrompt>(null);
   const [manualIdempotencyKey, setManualIdempotencyKey] = useState(createManualIdempotencyKey);
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialogState>(null);
+  const [linkMemberQuery, setLinkMemberQuery] = useState("");
+  const [linkMemberResults, setLinkMemberResults] = useState<AdminPointMember[]>([]);
+  const [selectedLinkMember, setSelectedLinkMember] = useState<AdminPointMember | null>(null);
+  const [isSearchingLinkMembers, setIsSearchingLinkMembers] = useState(false);
+  const [linkSearchMessage, setLinkSearchMessage] = useState<string | null>(null);
   const [dialogChallengeId, setDialogChallengeId] = useState("");
   const [dialogDescription, setDialogDescription] = useState("");
   const [dialogPoints, setDialogPoints] = useState("");
@@ -717,6 +726,77 @@ export default function CampAdmin() {
       toast({ title: "Member associated", description: "The submission is linked for Camp review." });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not associate submission with member.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function openLinkMemberDialog(submission: CampSubmission, memberLabel: string) {
+    setDialogNotes("");
+    setLastLinkResult(null);
+    setSelectedLinkMember(null);
+    setLinkMemberResults([]);
+    setLinkSearchMessage(null);
+    setLinkMemberQuery(submission.contact_email || memberLabel || "");
+    setActionDialog({
+      kind: "link_member",
+      submissionId: submission.id,
+      memberLabel,
+      contactEmail: submission.contact_email,
+    });
+  }
+
+  useEffect(() => {
+    if (actionDialog?.kind !== "link_member") return;
+    const trimmed = linkMemberQuery.trim();
+    if (!season || trimmed.length < 2) {
+      setLinkMemberResults([]);
+      setLinkSearchMessage(trimmed.length > 0 && trimmed.length < 2 ? "Enter at least 2 characters." : null);
+      return;
+    }
+
+    const handle = window.setTimeout(async () => {
+      setIsSearchingLinkMembers(true);
+      setLinkSearchMessage(null);
+      try {
+        const results = await searchPointMembers({ seasonId: season.id, query: trimmed, limit: 12 });
+        setLinkMemberResults(results);
+        setLinkSearchMessage(`${results.length} result${results.length === 1 ? "" : "s"} found.`);
+      } catch (err) {
+        setLinkMemberResults([]);
+        setLinkSearchMessage(err instanceof Error ? err.message : "Member search failed.");
+      } finally {
+        setIsSearchingLinkMembers(false);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(handle);
+  }, [actionDialog, linkMemberQuery, season]);
+
+  async function submitLinkMember() {
+    if (actionDialog?.kind !== "link_member") return;
+    if (!selectedLinkMember) {
+      setError("Select the exact Hub profile to link.");
+      return;
+    }
+    setBusyId(actionDialog.submissionId);
+    setError(null);
+    setLastLinkResult(null);
+    try {
+      const result = await linkCampSubmissionToHubMember({
+        submissionId: actionDialog.submissionId,
+        profileId: selectedLinkMember.profile_id,
+        notes: dialogNotes.trim() || `Linked after admin identity confirmation for ${actionDialog.contactEmail}.`,
+      });
+      setLastLinkResult(result);
+      setActionDialog(null);
+      await load();
+      toast({
+        title: "Submission linked",
+        description: `Profile ${result.profileId} · season member ${result.seasonMemberId}`,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not link this submission to the selected Hub member.");
     } finally {
       setBusyId(null);
     }
@@ -2057,6 +2137,13 @@ export default function CampAdmin() {
                               <div><span className="font-black">Submitted:</span> {new Date(selectedSubmission.created_at).toLocaleString()}</div>
                               <div><span className="font-black">Source:</span> {submissionSource(selectedSubmission, fields)}</div>
                               <div><span className="font-black">Identity:</span> {selectedSubmission.member_link_status === "linked" ? "Member linked" : "Identity pending"}</div>
+                              {selectedSubmission.member_link_status !== "linked" && (
+                                <div className="md:col-span-2">
+                                  <Button size="sm" variant="outline" disabled={busyId === selectedSubmission.id} onClick={() => openLinkMemberDialog(selectedSubmission, memberLabel)}>
+                                    <Users className="mr-2 h-4 w-4" />Link to Hub Member
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                             {dynamicRows.length > 0 && (
                               <div className="rounded-[1.25rem] border-[3px] border-black bg-white p-4">
@@ -2114,6 +2201,18 @@ export default function CampAdmin() {
                                   <div>Season member created: {lastReconcileResult.seasonMemberCreated ? "Yes" : "No"}</div>
                                   <div className="md:col-span-2">Lead actions: {lastReconcileResult.leadActionIds?.join(", ") || "none"}</div>
                                   <div className="md:col-span-2">Point events: {lastReconcileResult.pointEventIds?.join(", ") || "none"}</div>
+                                </div>
+                              </div>
+                            )}
+                            {lastLinkResult && (
+                              <div className="rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4 text-xs font-bold text-black">
+                                <div className="font-black uppercase">Last Link Result</div>
+                                <div className="mt-2 grid gap-1 md:grid-cols-2">
+                                  <div>Profile: {lastLinkResult.profileId}</div>
+                                  <div>Season member: {lastLinkResult.seasonMemberId}</div>
+                                  <div>Season member created: {lastLinkResult.seasonMemberCreated ? "Yes" : "No"}</div>
+                                  <div>Status: {lastLinkResult.memberLinkStatus}</div>
+                                  <div className="md:col-span-2">Reviews: {lastLinkResult.reviewSubmissionIds?.join(", ") || "none"}</div>
                                 </div>
                               </div>
                             )}
@@ -3042,6 +3141,8 @@ export default function CampAdmin() {
             <Tape>
               {actionDialog?.kind === "edit_action"
                 ? "Edit Review Action"
+                : actionDialog?.kind === "link_member"
+                  ? "Link to Hub Member"
                 : actionDialog?.kind === "associate"
                   ? "Associate Member"
                   : actionDialog?.kind === "reopen"
@@ -3051,7 +3152,11 @@ export default function CampAdmin() {
                       : "Confirm Points"}
             </Tape>
             <DialogTitle className="font-header text-3xl uppercase">
-              {actionDialog?.kind === "manual_award" ? "Award Manual Points" : "Camp Admin Action"}
+              {actionDialog?.kind === "manual_award"
+                ? "Award Manual Points"
+                : actionDialog?.kind === "link_member"
+                  ? "Confirm Member Link"
+                  : "Camp Admin Action"}
             </DialogTitle>
             <DialogDescription>
               This action is handled inside the Camp Admin audit workflow without browser-native prompts.
@@ -3075,6 +3180,63 @@ export default function CampAdmin() {
               <div>
                 <Label htmlFor="action-notes">Internal reviewer notes</Label>
                 <Textarea id="action-notes" value={dialogNotes} onChange={(event) => setDialogNotes(event.target.value)} />
+              </div>
+            </div>
+          ) : actionDialog?.kind === "link_member" ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border-2 border-black bg-cyan-50 p-3 text-sm font-bold">
+                <div>Submission: {actionDialog.memberLabel}</div>
+                <div className="break-all">Submitted email: {actionDialog.contactEmail}</div>
+              </div>
+              <div>
+                <Label htmlFor="link-member-search">Search Hub member</Label>
+                <Input
+                  id="link-member-search"
+                  value={linkMemberQuery}
+                  onChange={(event) => {
+                    setLinkMemberQuery(event.target.value);
+                    setSelectedLinkMember(null);
+                  }}
+                  placeholder="Search by exact email or member name"
+                />
+                <div className="mt-1 text-xs font-bold text-black/55">
+                  {isSearchingLinkMembers ? "Searching..." : linkSearchMessage || "Select the exact profile after confirming identity."}
+                </div>
+              </div>
+              <div className="max-h-72 space-y-2 overflow-y-auto">
+                {linkMemberResults.map((member) => {
+                  const selected = selectedLinkMember?.profile_id === member.profile_id;
+                  return (
+                    <button
+                      key={member.profile_id}
+                      type="button"
+                      onClick={() => setSelectedLinkMember(member)}
+                      className={`w-full rounded-xl border-2 border-black p-3 text-left text-sm ${selected ? "bg-gpe-yellow shadow-gpe-sm" : "bg-white"}`}
+                    >
+                      <div className="font-black">{member.full_name || member.email || member.profile_id}</div>
+                      <div className="break-all font-bold text-black/60">{member.email || "No email"} · profile {member.profile_id}</div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs font-black uppercase text-black/55">
+                        <span>Membership {member.membership_status || "unknown"}</span>
+                        <span>Season member {member.season_member_id || "will be created if eligible"}</span>
+                        <span>Season {member.seasonal_points}</span>
+                        <span>Ongoing {member.ongoing_points}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedLinkMember && (
+                <div className="rounded-xl border-2 border-black bg-white p-3 text-sm font-bold">
+                  <div className="font-black uppercase">Selected Hub Profile</div>
+                  <div className="mt-1 break-all">Profile: {selectedLinkMember.profile_id}</div>
+                  <div className="break-all">Email: {selectedLinkMember.email || "none"}</div>
+                  <div>Membership: {selectedLinkMember.membership_status || "unknown"}</div>
+                  <div>Season member: {selectedLinkMember.season_member_id || "create during link"}</div>
+                </div>
+              )}
+              <div>
+                <Label htmlFor="link-member-notes">Identity confirmation notes</Label>
+                <Textarea id="link-member-notes" value={dialogNotes} onChange={(event) => setDialogNotes(event.target.value)} placeholder="Document how the identity match was confirmed." />
               </div>
             </div>
           ) : actionDialog?.kind === "associate" ? (
@@ -3112,17 +3274,18 @@ export default function CampAdmin() {
           <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="outline" onClick={() => setActionDialog(null)}>Cancel</Button>
             <Button
-              disabled={!actionDialog || Boolean(busyId)}
+              disabled={!actionDialog || Boolean(busyId) || (actionDialog.kind === "link_member" && !selectedLinkMember)}
               onClick={() => {
                 if (!actionDialog) return;
                 if (actionDialog.kind === "edit_action") void submitUpdateAction(actionDialog.actionId);
+                if (actionDialog.kind === "link_member") void submitLinkMember();
                 if (actionDialog.kind === "associate") void submitAssociateSubmission(actionDialog.submissionId);
                 if (actionDialog.kind === "reopen") void submitReopenAction(actionDialog.actionId);
                 if (actionDialog.kind === "manual_award") void submitScopedManualAward();
                 if (actionDialog.kind === "reverse") void submitReverseTransaction(actionDialog.transaction);
               }}
             >
-              {busyId ? "Saving" : "Save"}
+              {busyId ? "Saving" : actionDialog?.kind === "link_member" ? "Link Member" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

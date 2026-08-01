@@ -255,6 +255,19 @@ export type CampReviewReconcileResult = {
   attachResult?: Record<string, unknown>;
 };
 
+export type CampSubmissionLinkResult = {
+  ok: boolean;
+  submissionId: string;
+  profileId: string;
+  seasonId: string;
+  seasonMemberId: string;
+  seasonMemberCreated: boolean;
+  reviewSubmissionIds: string[];
+  neonAccountId: string | null;
+  email: string | null;
+  memberLinkStatus: string;
+};
+
 export type CampSubmission = {
   id: string;
   season_id: string;
@@ -678,6 +691,20 @@ export async function reconcileCampReviewAward(params: {
   });
   if (error) throw campRpcError("admin_reconcile_camp_review_award", error);
   return data as CampReviewReconcileResult;
+}
+
+export async function linkCampSubmissionToHubMember(params: {
+  submissionId: string;
+  profileId: string;
+  notes?: string | null;
+}) {
+  const { data, error } = await supabase.rpc("admin_link_camp_submission_to_hub_member", {
+    p_submission_id: params.submissionId,
+    p_profile_id: params.profileId,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw campRpcError("admin_link_camp_submission_to_hub_member", error);
+  return data as CampSubmissionLinkResult;
 }
 
 function campRpcError(operation: string, error: unknown) {

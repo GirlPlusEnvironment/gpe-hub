@@ -230,6 +230,25 @@ export type AdminAwardResult = {
   counts_for_cabin: boolean;
 };
 
+export type CampReviewReconcileResult = {
+  status: string;
+  profileId: string;
+  email: string | null;
+  neonAccountId: string | null;
+  seasonMemberId: string;
+  campSubmissionId: string;
+  campSubmissionActionId: string;
+  reviewSubmissionId: string | null;
+  pointTransactionId: string | null;
+  campLedgerId: string | null;
+  pointEventIds: string[];
+  pendingAwardIds: string[];
+  leadActionIds: string[];
+  points: number;
+  claimResult?: Record<string, unknown>;
+  attachResult?: Record<string, unknown>;
+};
+
 export type CampSubmission = {
   id: string;
   season_id: string;
@@ -639,6 +658,20 @@ export async function approveCampSubmissionAction(params: {
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
+}
+
+export async function reconcileCampReviewAward(params: {
+  actionId: string;
+  points?: number | null;
+  notes?: string | null;
+}) {
+  const { data, error } = await supabase.rpc("admin_reconcile_camp_review_award", {
+    p_action_id: params.actionId,
+    p_points: params.points ?? null,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw error;
+  return data as CampReviewReconcileResult;
 }
 
 export async function markCampSubmissionAction(params: {

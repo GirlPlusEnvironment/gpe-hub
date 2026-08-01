@@ -18,8 +18,10 @@ import {
   type CampCabinLeaderboardRow,
   type CampSeason,
   type CampSubmission,
+  type CampSubmissionAction,
   type ChallengePublishState,
   type AdminAwardResult,
+  type CampReviewReconcileResult,
   type AdminPointMember,
   type AdminPointTransaction,
   type HubPointRule,
@@ -34,6 +36,7 @@ import {
   getModerationQueueItems,
   getPendingCampSubmissions,
   getPointRules,
+  reconcileCampReviewAward,
   reversePointTransaction,
   searchPointMembers,
   applyModerationAction,
@@ -445,6 +448,7 @@ export default function CampAdmin() {
   const [countsForSeason, setCountsForSeason] = useState(false);
   const [countsForCabin, setCountsForCabin] = useState(false);
   const [lastAwardResult, setLastAwardResult] = useState<AdminAwardResult | null>(null);
+  const [lastReconcileResult, setLastReconcileResult] = useState<CampReviewReconcileResult | null>(null);
   const [manualIdempotencyKey, setManualIdempotencyKey] = useState(createManualIdempotencyKey);
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialogState>(null);
@@ -609,6 +613,33 @@ export default function CampAdmin() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update submission.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReconcileReviewAward(action: CampSubmissionAction, defaultPoints: number | null) {
+    const points = defaultPoints ?? action.approved_points ?? action.requested_points ?? 0;
+    setBusyId(action.id);
+    setError(null);
+    setLastReconcileResult(null);
+    try {
+      const result = await reconcileCampReviewAward({
+        actionId: action.id,
+        points,
+        notes: "Team Review recovery: reconcile member link and award missing eligible points.",
+      });
+      setLastReconcileResult(result);
+      await load();
+      toast({
+        title: "Review reconciled",
+        description: [
+          result.pointTransactionId ? `Transaction ${result.pointTransactionId}` : null,
+          result.campLedgerId ? `Camp ledger ${result.campLedgerId}` : null,
+        ].filter(Boolean).join(" · ") || "Existing records were verified without duplicates.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reconcile and award this review.");
     } finally {
       setBusyId(null);
     }
@@ -2022,6 +2053,9 @@ export default function CampAdmin() {
                                       <div className="flex flex-wrap gap-2">
                                         <Button size="sm" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => openReviewDialog({ kind: "approve", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}><Trophy className="mr-2 h-4 w-4" />Approve</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => openUpdateActionDialog(action.id, defaultPoints)}>Approve and Edit Points</Button>
+                                        <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => void handleReconcileReviewAward(action, defaultPoints)}>
+                                          Reconcile & Award
+                                        </Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "needs_information", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Request Changes</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "duplicate", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Duplicate</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "reject", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Reject</Button>
@@ -2033,6 +2067,21 @@ export default function CampAdmin() {
                                 );
                               })}
                             </div>
+                            {lastReconcileResult && (
+                              <div className="rounded-[1.25rem] border-[3px] border-black bg-gpe-yellow p-4 text-xs font-bold text-black">
+                                <div className="font-black uppercase">Last Reconcile & Award Result</div>
+                                <div className="mt-2 grid gap-1 md:grid-cols-2">
+                                  <div>Profile: {lastReconcileResult.profileId}</div>
+                                  <div>Season member: {lastReconcileResult.seasonMemberId}</div>
+                                  <div>Review: {lastReconcileResult.reviewSubmissionId || "none"}</div>
+                                  <div>Transaction: {lastReconcileResult.pointTransactionId || "none"}</div>
+                                  <div>Camp ledger: {lastReconcileResult.campLedgerId || "none"}</div>
+                                  <div>Points: {lastReconcileResult.points}</div>
+                                  <div className="md:col-span-2">Lead actions: {lastReconcileResult.leadActionIds?.join(", ") || "none"}</div>
+                                  <div className="md:col-span-2">Point events: {lastReconcileResult.pointEventIds?.join(", ") || "none"}</div>
+                                </div>
+                              </div>
+                            )}
                             <Button size="sm" variant="outline" disabled={busyId === selectedSubmission.id} onClick={() => openAssociateSubmissionDialog(selectedSubmission.id)}>Associate Member</Button>
                           </div>
                         );

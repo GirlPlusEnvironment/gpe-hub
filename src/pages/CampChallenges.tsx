@@ -30,6 +30,7 @@ import {
   getMyCampHistory,
   getMyCampStatus,
 } from "@/lib/camp";
+import { memberChallengeAction } from "@/lib/challenge-definition";
 
 export default function CampChallenges() {
   const { profile, user } = useAuth();
@@ -323,7 +324,7 @@ export default function CampChallenges() {
                                   category={challenge.category.replaceAll("_", " ")}
                                   deadline={challengeWindow(challenge)}
                                   difficulty={challenge.is_featured ? "Featured" : challenge.submission_type?.replaceAll("_", " ")}
-                                  estimatedTime={challenge.cta_label || "Details"}
+                                  estimatedTime={memberChallengeAction(challenge).label}
                                   status={status}
                                   progress={limitReached ? 100 : selectedNow ? 50 : 0}
                                   accent={accent}

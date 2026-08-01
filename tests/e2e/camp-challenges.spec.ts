@@ -273,6 +273,58 @@ const challenges = [
     theme: "Summer may end, but advocacy does not.",
     submission_type: "reflection",
   }),
+  challenge({
+    id: "c13",
+    slug: "climate-career-event",
+    title: "Register for the Climate Career Mixer",
+    short_description: "Join a Camp GPE event with climate leaders.",
+    category: "event",
+    point_value: 1,
+    starts_at: "2026-08-17T05:00:00.000Z",
+    ends_at: "2026-08-29T04:59:59.000Z",
+    display_order: 440,
+    week_number: 7,
+    theme: "Summer may end, but advocacy does not.",
+    submission_type: "event",
+    related_kind: "event",
+    action_url: "https://members.girlplusenvironment.org/events/climate-career-mixer",
+  }),
+  challenge({
+    id: "c14",
+    slug: "watch-camp-resource",
+    title: "Watch the Camp Resource",
+    short_description: "Use the external resource Team GPE selected.",
+    category: "learn",
+    point_value: 1,
+    starts_at: "2026-08-17T05:00:00.000Z",
+    ends_at: "2026-08-29T04:59:59.000Z",
+    display_order: 450,
+    week_number: 7,
+    theme: "Summer may end, but advocacy does not.",
+    cta_label: "Watch Resource",
+    submission_type: "external",
+    related_kind: "external",
+    action_url: "https://www.girlplusenvironment.org/resources/camp",
+  }),
+  challenge({
+    id: "c15",
+    slug: "mark-camp-orientation-complete",
+    title: "Complete Camp Orientation",
+    short_description: "Mark orientation complete after reading the guide.",
+    category: "learn",
+    point_value: 1,
+    starts_at: "2026-08-17T05:00:00.000Z",
+    ends_at: "2026-08-29T04:59:59.000Z",
+    display_order: 460,
+    week_number: 7,
+    theme: "Summer may end, but advocacy does not.",
+    submission_type: "completion",
+    metadata: {
+      definition: {
+        open_flow: { kind: "completion_only" },
+      },
+    },
+  }),
 ];
 
 async function installCampStubs(page: Page) {
@@ -388,28 +440,176 @@ test("Camp challenge board shows every scheduled week and opens internal details
   await expect(page.locator("h1", { hasText: "Sign the Extreme Weather Petition" })).toBeVisible();
 });
 
-test("Camp challenge detail survives refresh and opens the dynamic flow router", async ({ page }) => {
+test("Camp challenge detail survives refresh and exposes one petition action", async ({ page }) => {
   await page.goto("/camp-gpe/challenges/beat-heat-extreme-weather-petition");
   await expect(page.getByText("Why It Matters")).toBeVisible();
 
   await page.reload();
   await expect(page.locator("h1", { hasText: "Sign the Extreme Weather Petition" })).toBeVisible();
 
-  const cta = page.getByRole("link", { name: /open petition/i }).first();
-  await expect(cta).toHaveAttribute("href", /\/camp-gpe\/challenges\/beat-heat-extreme-weather-petition\/flow$/);
+  const cta = page.getByRole("link", { name: /sign petition/i }).first();
+  await expect(cta).toHaveAttribute("href", "https://girlplusenvironment.org/extreme-weather-action");
+  await expect(page.getByRole("button", { name: /submit for points/i })).toHaveCount(0);
+  await expect(page.getByText("Open Submission Flow")).toHaveCount(0);
 });
 
 test("dynamic flow router resolves petition challenges to the configured external action", async ({ page }) => {
   await page.goto("/camp-gpe/challenges/beat-heat-extreme-weather-petition/flow");
-  await expect(page.getByRole("heading", { name: "Open Petition" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign Petition" })).toBeVisible();
 
-  const action = page.getByRole("link", { name: /open petition/i }).first();
+  const action = page.getByRole("link", { name: /sign petition/i }).first();
   await expect(action).toHaveAttribute("href", "https://girlplusenvironment.org/extreme-weather-action");
   await expect(action).toHaveAttribute("target", "_blank");
   await expect(action).toHaveAttribute("rel", /noopener/);
   await expect(action).toHaveAttribute("rel", /noreferrer/);
 
-  await expect(page.getByRole("link", { name: /submit for points/i })).toHaveAttribute("href", /\/camp-gpe\/challenges\/beat-heat-extreme-weather-petition\/submit$/);
+  await expect(page.getByRole("link", { name: /submit for points/i })).toHaveCount(0);
+});
+
+test("member-facing challenge actions expose one primary CTA per destination", async ({ page }) => {
+  const expectations = [
+    {
+      slug: "beat-heat-extreme-weather-petition",
+      label: /sign petition/i,
+      role: "link",
+      absent: [/submit for points/i],
+    },
+    {
+      slug: "beat-heat-story-sticker",
+      label: /submit for points/i,
+      role: "button",
+      absent: [/sign petition/i],
+    },
+    {
+      slug: "climate-career-event",
+      label: /^register$/i,
+      role: "link",
+      absent: [/submit for points/i],
+    },
+    {
+      slug: "watch-camp-resource",
+      label: /watch resource/i,
+      role: "link",
+      absent: [/submit for points/i],
+    },
+    {
+      slug: "mark-camp-orientation-complete",
+      label: /mark complete/i,
+      role: "link",
+      absent: [/submit for points/i],
+    },
+  ];
+
+  for (const item of expectations) {
+    await page.goto(`/camp-gpe/challenges/${item.slug}`);
+    await expect(page.getByText("Open Submission Flow")).toHaveCount(0);
+    await expect(
+      item.role === "button"
+        ? page.getByRole("button", { name: item.label })
+        : page.getByRole("link", { name: item.label }),
+    ).toHaveCount(1);
+    for (const absent of item.absent) {
+      await expect(page.getByRole("button", { name: absent }).or(page.getByRole("link", { name: absent }))).toHaveCount(0);
+    }
+  }
+
+  await page.goto("/camp-gpe/challenges/beat-heat-story-sticker");
+  await page.getByRole("button", { name: /submit for points/i }).click();
+  await expect(page.getByRole("dialog", { name: /submit for points/i })).toBeVisible();
+});
+
+test("challenge detail replaces member CTA with submission status", async ({ page }) => {
+  let reviewStatus = "pending";
+  let awarded = false;
+
+  await page.route("**/rest/v1/gpe_camp_challenge_submissions?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: `submission-${reviewStatus}`,
+          season_id: season.id,
+          season_member_id: "season-member-1",
+          user_id: testUser.id,
+          neon_account_id: null,
+          contact_email: testUser.email,
+          challenge_key: "beat-heat-story-sticker",
+          submitted_payload: { fields: { challengeIds: ["c2"] } },
+          proof_links: [],
+          review_status: reviewStatus,
+          reviewed_by: null,
+          reviewed_at: null,
+          created_at: "2026-07-24T15:00:00.000Z",
+          gpe_camp_submission_actions: [
+            {
+              id: `action-${reviewStatus}`,
+              submission_id: `submission-${reviewStatus}`,
+              challenge_id: "c2",
+              action_type_id: null,
+              other_description: null,
+              proof_urls: [],
+              requested_points: 2,
+              approved_points: reviewStatus === "approved" ? 2 : null,
+              review_status: reviewStatus,
+              reviewer_notes: null,
+              reviewed_by: null,
+              reviewed_at: null,
+              created_at: "2026-07-24T15:00:00.000Z",
+              gpe_challenges: { id: "c2", title: "Complete the Camp GPE Story Sticker", slug: "beat-heat-story-sticker", point_value: 2, requires_proof: false, requires_review: true, auto_approve: false, category: "repost_gpe" },
+            },
+          ],
+        },
+      ]),
+    });
+  });
+
+  await page.route("**/rest/v1/gpe_camp_points_ledger?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(awarded ? [
+        {
+          id: "ledger-c2",
+          season_id: season.id,
+          season_member_id: "season-member-1",
+          user_id: testUser.id,
+          submission_id: `submission-${reviewStatus}`,
+          submission_action_id: `action-${reviewStatus}`,
+          challenge_id: "c2",
+          points: 2,
+          reason: "Complete the Camp GPE Story Sticker",
+          adjustment_type: "award",
+          entry_type: "challenge_award",
+          source: "team_gpe_review",
+          created_at: "2026-07-24T15:00:00.000Z",
+          reversed_at: null,
+          reversed_entry_id: null,
+          reversal_reason: null,
+          approval_status: "approved",
+        },
+      ] : []),
+    });
+  });
+
+  await page.goto("/camp-gpe/challenges/beat-heat-story-sticker");
+  await expect(page.getByRole("button", { name: /pending review/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /submit for points/i })).toHaveCount(0);
+
+  reviewStatus = "needs_information";
+  await page.reload();
+  await expect(page.getByRole("button", { name: /changes requested/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /submit for points/i })).toHaveCount(0);
+
+  reviewStatus = "approved";
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^completed$/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /submit for points/i })).toHaveCount(0);
+
+  awarded = true;
+  await page.reload();
+  await expect(page.getByRole("button", { name: /points awarded/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /submit for points/i })).toHaveCount(0);
 });
 
 test("dynamic flow router accepts legacy open_flow.type and reaches submit route", async ({ page }) => {
@@ -441,7 +641,7 @@ test("dynamic flow router accepts legacy open_flow.type and reaches submit route
 test("dynamic flow router shows a designed error when configured destination is missing", async ({ page }) => {
   await page.goto("/camp-gpe/challenges/tell-your-story-camp-graphics/flow");
   await expect(page).toHaveURL(/\/camp-gpe\/challenges\/tell-your-story-camp-graphics\/flow$/);
-  await expect(page.getByRole("heading", { name: "Open Flow Not Configured" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Action Not Configured" })).toBeVisible();
   await expect(page.getByText("Toolkit URL is missing.")).toBeVisible();
   await expect(page.getByRole("link", { name: /challenge details/i })).toHaveAttribute("href", /\/camp-gpe\/challenges\/tell-your-story-camp-graphics$/);
 });
@@ -549,5 +749,6 @@ test("mobile challenge detail remains usable", async ({ page }) => {
 
   await expect(page.locator("h1", { hasText: "Post Using Camp GPE Graphics" })).toBeVisible();
   await expect(page.getByText("Submission Requirements")).toBeVisible();
-  await expect(page.getByRole("link", { name: /submit for points/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /toolkit url is missing/i })).toBeVisible();
+  await expect(page.getByText("Open Submission Flow")).toHaveCount(0);
 });

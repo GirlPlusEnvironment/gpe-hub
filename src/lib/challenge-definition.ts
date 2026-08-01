@@ -158,6 +158,7 @@ function inferredOpenFlowKind(challenge: CampChallenge): ChallengeOpenFlowKind {
   if (type.includes("petition") || challenge.related_kind === "petition") return "external_action";
   if (type.includes("event") || challenge.related_kind === "event") return "event";
   if (type.includes("toolkit") || challenge.related_kind === "toolkit") return "toolkit";
+  if (type.includes("external") || type.includes("resource") || challenge.related_kind === "external") return "external_link";
   return "submission_form";
 }
 
@@ -230,6 +231,62 @@ export function resolveChallengeOpenFlow(challenge: CampChallenge) {
     returnHref: completionHref,
     secondaryLabel: openFlow.secondary_label || "Submit for Points",
     secondaryHref: normalizeUrl(openFlow.secondary_url) || submissionHref,
+  };
+}
+
+export type MemberChallengeAction =
+  | {
+      kind: "submission_form" | "completion_page";
+      label: string;
+      href: string;
+      external: false;
+    }
+  | {
+      kind: "petition" | "toolkit" | "event" | "external_action" | "external_link";
+      label: string;
+      href: string;
+      external: boolean;
+      invalid?: boolean;
+      invalidReason?: string;
+    };
+
+export function memberChallengeAction(challenge: CampChallenge): MemberChallengeAction {
+  const flow = resolveChallengeOpenFlow(challenge);
+  const challengeType = String(`${challenge.related_kind || ""} ${challenge.submission_type || ""} ${challenge.category || ""}`).toLowerCase();
+
+  if (flow.kind === "submission_form") {
+    return {
+      kind: "submission_form",
+      label: "Submit for Points",
+      href: flow.href,
+      external: false,
+    };
+  }
+
+  if (flow.kind === "completion_page" || flow.kind === "completion_only") {
+    return {
+      kind: "completion_page",
+      label: "Mark Complete",
+      href: flow.href,
+      external: false,
+    };
+  }
+
+  const label =
+    flow.kind === "petition" || challengeType.includes("petition") ? "Sign Petition" :
+    flow.kind === "toolkit" || challengeType.includes("toolkit") ? "Open Toolkit" :
+    flow.kind === "event" || challengeType.includes("event") ? "Register" :
+    challenge.cta_label && !/open submission flow/i.test(challenge.cta_label)
+      ? challenge.cta_label
+      : flow.label || "Open Action";
+
+  return {
+    kind: flow.kind,
+    label,
+    href: flow.href,
+    external: flow.external,
+    invalid: flow.invalid,
+    invalidReason: flow.invalidReason,
   };
 }
 

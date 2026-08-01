@@ -19,12 +19,14 @@ import {
   type CampChallenge,
   type CampPointsLedgerRow,
   type CampSeason,
+  type CampSubmission,
   getActiveCampSeason,
   getHubCampChallengeBySlug,
   getHubCampChallenges,
   getMyCampHistory,
 } from "@/lib/camp";
-import { challengeMetadata, resolveChallengeOpenFlow } from "@/lib/challenge-definition";
+import { challengeMetadata, memberChallengeAction } from "@/lib/challenge-definition";
+import { normalizeReviewStatus } from "@/lib/review-status";
 
 const CAMP_CHALLENGE_FORM_URL = "https://www.girlplusenvironment.org/camp-gpe#challenge";
 const CAMP_CHALLENGE_FORM_ORIGIN = "https://www.girlplusenvironment.org";
@@ -84,6 +86,44 @@ function metadataFaq(metadata: Record<string, unknown>) {
   return [];
 }
 
+function submissionMatchesChallenge(submission: CampSubmission, challenge: CampChallenge) {
+  if (
+    (submission.gpe_camp_submission_actions || []).some((action) =>
+      action.challenge_id === challenge.id || action.gpe_challenges?.slug === challenge.slug,
+    )
+  ) {
+    return true;
+  }
+
+  if (submission.challenge_key === challenge.slug || submission.challenge_key === challenge.id) return true;
+
+  const fields = submission.submitted_payload?.fields || {};
+  const challengeIds = Array.isArray(fields.challengeIds) ? fields.challengeIds : [];
+  const challengeSlugs = Array.isArray(fields.challengeSlugs) ? fields.challengeSlugs : [];
+  return (
+    challengeIds.includes(challenge.id) ||
+    challengeSlugs.includes(challenge.slug) ||
+    fields.challengeId === challenge.id ||
+    fields.challengeSlug === challenge.slug
+  );
+}
+
+function challengeSubmissionStatus(challenge: CampChallenge, submissions: CampSubmission[], completed: boolean) {
+  if (completed) return "Points Awarded";
+  const match = submissions.find((submission) => submissionMatchesChallenge(submission, challenge));
+  if (!match) return null;
+
+  const statuses = [
+    ...((match.gpe_camp_submission_actions || []).map((action) => normalizeReviewStatus(action.review_status))),
+    normalizeReviewStatus(match.review_status),
+  ];
+
+  if (statuses.includes("needs_information")) return "Changes Requested";
+  if (statuses.includes("pending")) return "Pending Review";
+  if (statuses.includes("approved")) return "Completed";
+  return null;
+}
+
 export default function CampChallengeDetail() {
   const { challengeSlug } = useParams();
   const navigate = useNavigate();
@@ -91,6 +131,7 @@ export default function CampChallengeDetail() {
   const [challenge, setChallenge] = useState<CampChallenge | null>(null);
   const [related, setRelated] = useState<CampChallenge[]>([]);
   const [ledger, setLedger] = useState<CampPointsLedgerRow[]>([]);
+  const [submissions, setSubmissions] = useState<CampSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissionOpen, setSubmissionOpen] = useState(false);
@@ -129,6 +170,7 @@ export default function CampChallengeDetail() {
       ]);
       setChallenge(challengeRow);
       setLedger(history.ledger);
+      setSubmissions(history.submissions);
       setRelated(
         allChallenges
           .filter((item) => item.slug !== challengeSlug)
@@ -157,8 +199,8 @@ export default function CampChallengeDetail() {
   }, [challenge, ledger]);
 
   const availability = challenge ? challengeAvailability(challenge) : "Open";
-  const openFlow = challenge ? resolveChallengeOpenFlow(challenge) : null;
-  const flowHref = challenge ? `/camp-gpe/challenges/${challenge.slug}/flow` : "/camp-gpe/challenges";
+  const memberAction = challenge ? memberChallengeAction(challenge) : null;
+  const memberStatus = challenge ? challengeSubmissionStatus(challenge, submissions, completed) : null;
   const metadata = challengeMetadata(challenge);
   const subtitle = metadataString(metadata, "subtitle");
   const longDescription = metadataString(metadata, "long_description");
@@ -317,20 +359,38 @@ export default function CampChallengeDetail() {
 
                   <Card className="border-[4px] border-black">
                     <CardContent className="space-y-3 p-5">
-                      <Link to={flowHref}>
-                        <CampButton className="w-full justify-center" variant="secondary">
-                          {openFlow?.label || "Open Flow"}
-                          {openFlow?.external ? <ExternalLink className="ml-2 h-4 w-4" /> : null}
-                        </CampButton>
-                      </Link>
-                      <CampButton
-                        className="w-full justify-center"
-                        variant="outline"
-                        onClick={() => setSubmissionOpen(true)}
-                      >
+                      {memberStatus ? (
+                        <CampButton className="w-full justify-center" variant="secondary" disabled>
                           <Trophy className="mr-2 h-4 w-4" />
-                          {openFlow?.secondaryLabel || "Submit for Points"}
-                      </CampButton>
+                          {memberStatus}
+                        </CampButton>
+                      ) : memberAction?.invalid ? (
+                        <CampButton className="w-full justify-center" variant="outline" disabled>
+                          {memberAction.invalidReason || "Action Not Configured"}
+                        </CampButton>
+                      ) : memberAction?.kind === "submission_form" ? (
+                        <CampButton
+                          className="w-full justify-center"
+                          variant="secondary"
+                          onClick={() => setSubmissionOpen(true)}
+                        >
+                          <Trophy className="mr-2 h-4 w-4" />
+                          {memberAction.label}
+                        </CampButton>
+                      ) : memberAction?.external ? (
+                        <a href={memberAction.href} target="_blank" rel="noopener noreferrer">
+                          <CampButton className="w-full justify-center" variant="secondary">
+                            {memberAction.label}
+                            <ExternalLink className="ml-2 h-4 w-4" />
+                          </CampButton>
+                        </a>
+                      ) : memberAction ? (
+                        <Link to={memberAction.href}>
+                          <CampButton className="w-full justify-center" variant="secondary">
+                            {memberAction.label}
+                          </CampButton>
+                        </Link>
+                      ) : null}
                       <Link to="/camp-gpe/challenges">
                         <CampButton className="w-full justify-center" variant="yellow">
                           Back to Challenges

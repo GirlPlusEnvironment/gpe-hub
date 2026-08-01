@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { BookOpen, Briefcase, Calendar, DollarSign } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { BookOpen, Briefcase, Calendar, DollarSign, Tent, UsersRound } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { CampButton, SectionHeader, Sticker } from "@/components/camp/CampDesign";
@@ -7,16 +8,26 @@ import JobSubmissionForm from "./JobSubmissionForm";
 import EventSubmissionForm from "./EventSubmissionForm";
 import FundingSubmissionForm from "./FundingSubmissionForm";
 import ResourceSubmissionForm from "./ResourceSubmissionForm";
+import MentorshipSubmissionForm from "./MentorshipSubmissionForm";
+import CabinSubmissionForm from "./CabinSubmissionForm";
 
 const submissionTabs = [
   { id: "job", title: "Job", icon: <Briefcase className="h-5 w-5" />, tone: "bg-gpe-jobs" },
   { id: "event", title: "Event", icon: <Calendar className="h-5 w-5" />, tone: "bg-gpe-events" },
   { id: "funding", title: "Funding", icon: <DollarSign className="h-5 w-5" />, tone: "bg-gpe-funding" },
   { id: "resource", title: "Resource", icon: <BookOpen className="h-5 w-5" />, tone: "bg-gpe-resources" },
+  { id: "mentorship", title: "Mentorship", icon: <UsersRound className="h-5 w-5" />, tone: "bg-gpe-cyan" },
+  { id: "cabin", title: "Cabin", icon: <Tent className="h-5 w-5" />, tone: "bg-gpe-yellow" },
 ];
 
 const Submit = () => {
-  const [selectedTab, setSelectedTab] = useState("job");
+  const location = useLocation();
+  const initialTab = location.pathname.includes("/submit/mentorship")
+    ? "mentorship"
+    : location.pathname.includes("/submit/cabin")
+    ? "cabin"
+    : "job";
+  const [selectedTab, setSelectedTab] = useState(initialTab);
 
   return (
     <div className="gpe-page">
@@ -41,7 +52,7 @@ const Submit = () => {
           </div>
         </section>
 
-        <section className="mb-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <section className="mb-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {submissionTabs.map((tab) => (
             <button
               key={tab.id}
@@ -63,6 +74,8 @@ const Submit = () => {
           {selectedTab === "event" && <EventSubmissionForm />}
           {selectedTab === "funding" && <FundingSubmissionForm />}
           {selectedTab === "resource" && <ResourceSubmissionForm />}
+          {selectedTab === "mentorship" && <MentorshipSubmissionForm />}
+          {selectedTab === "cabin" && <CabinSubmissionForm />}
         </section>
 
         <div className="mt-8">

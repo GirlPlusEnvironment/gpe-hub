@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +15,7 @@ import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker, Tape }
 
 const Messages = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const {
     conversations,
@@ -38,6 +39,15 @@ const Messages = () => {
       setIsMessagesPageActive(false);
     };
   }, [setIsMessagesPageActive]);
+
+  useEffect(() => {
+    const conversationId = searchParams.get("conversation");
+    if (!conversationId) return;
+    const canOpen = conversations.some((conversation) => conversation.id === conversationId);
+    if (canOpen) {
+      setCurrentConversationId(conversationId);
+    }
+  }, [conversations, searchParams, setCurrentConversationId]);
 
   // Fetch profiles for all participants in conversations
   useEffect(() => {

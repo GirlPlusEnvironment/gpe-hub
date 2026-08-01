@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Award, BadgeCheck, Clock, Loader2, Medal, Search, Shield, Sparkles, Trophy, Users, Zap } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Award, BadgeCheck, Clock, Loader2, Medal, MessageSquare, Search, Shield, Sparkles, Tent, Trophy, Users, Zap } from "lucide-react";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import { UserProfileCard } from "@/components/UserProfileCard";
@@ -45,6 +45,7 @@ import {
   getMyCampStatus,
 } from "@/lib/camp";
 import { getLeaderboard } from "@/lib/points";
+import { fetchCabins, type Cabin } from "@/lib/mentorship";
 import { reviewStatusLabel } from "@/lib/review-status";
 import { canManageCamp, isAdmin as checkIsAdmin } from "@/lib/roles";
 
@@ -126,6 +127,7 @@ function rankMovementLabel(_row: CampLeaderboardRow) {
 }
 
 export default function Leaderboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<LeaderboardTab>("all-time");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
@@ -138,6 +140,7 @@ export default function Leaderboard() {
   const [season, setSeason] = useState<CampSeason | null>(null);
   const [seasonalLeaderboard, setSeasonalLeaderboard] = useState<CampLeaderboardRow[]>([]);
   const [cabinLeaderboard, setCabinLeaderboard] = useState<CampCabinLeaderboardRow[]>([]);
+  const [cabins, setCabins] = useState<Cabin[]>([]);
   const [challenges, setChallenges] = useState<CampChallenge[]>([]);
   const [recentActivity, setRecentActivity] = useState<CampRecentActivityRow[]>([]);
   const [memberStatus, setMemberStatus] = useState<CampSeasonMember | null>(null);
@@ -206,6 +209,7 @@ export default function Leaderboard() {
       if (!active) {
         setSeasonalLeaderboard([]);
         setCabinLeaderboard([]);
+        setCabins([]);
         setChallenges([]);
         setRecentActivity([]);
         setMemberStatus(null);
@@ -214,16 +218,18 @@ export default function Leaderboard() {
         setSeasonalLoaded(true);
         return;
       }
-      const [boardRows, cabinRows, challengeRows, activityRows, status, history] = await Promise.all([
+      const [boardRows, cabinRows, challengeRows, activityRows, status, history, cabinRecords] = await Promise.all([
         getCampLeaderboard(active.id, 50),
         getCampCabinLeaderboard(active.id),
         getHubCampChallenges(active.id),
         getCampRecentActivity(active.id, 12),
         getMyCampStatus(active.id),
         getMyCampHistory(active.id),
+        fetchCabins(),
       ]);
       setSeasonalLeaderboard(boardRows);
       setCabinLeaderboard(cabinRows);
+      setCabins(cabinRecords.filter((cabin) => cabin.season_id === active.id));
       setChallenges(challengeRows);
       setRecentActivity(activityRows);
       setMemberStatus(status as CampSeasonMember | null);
@@ -322,6 +328,7 @@ export default function Leaderboard() {
             <TabsContent value="seasonal" className="mt-8 space-y-8">
               <SeasonalLeaderboardPanel
                 cabinLeaderboard={cabinLeaderboard}
+                cabins={cabins}
                 challenges={challenges}
                 error={seasonalError}
                 isLoading={seasonalLoading}
@@ -337,11 +344,14 @@ export default function Leaderboard() {
                 seasonalTitle={seasonalTitle}
                 submissions={submissions}
                 totalSeasonalPoints={totalSeasonalPoints}
+                onOpenCabin={(cabinId) => navigate(`/camp-gpe/cabins/${cabinId}`)}
+                onOpenChat={(conversationId) => navigate(`/messages?conversation=${conversationId}`)}
               />
             </TabsContent>
             <TabsContent value="cabins" className="mt-8 space-y-8">
               <CabinsPanel
                 cabinLeaderboard={cabinLeaderboard}
+                cabins={cabins}
                 error={seasonalError}
                 isLoading={seasonalLoading}
                 onRefresh={() => {
@@ -349,6 +359,8 @@ export default function Leaderboard() {
                   void loadSeasonalLeaderboard();
                 }}
                 season={season}
+                onOpenCabin={(cabinId) => navigate(`/camp-gpe/cabins/${cabinId}`)}
+                onOpenChat={(conversationId) => navigate(`/messages?conversation=${conversationId}`)}
               />
             </TabsContent>
             <TabsContent value="badges" className="mt-8 space-y-8">
@@ -583,6 +595,7 @@ function MainLeaderboardPanel({
 
 function SeasonalLeaderboardPanel({
   cabinLeaderboard,
+  cabins,
   challenges,
   error,
   isLoading,
@@ -595,8 +608,11 @@ function SeasonalLeaderboardPanel({
   seasonalTitle,
   submissions,
   totalSeasonalPoints,
+  onOpenCabin,
+  onOpenChat,
 }: {
   cabinLeaderboard: CampCabinLeaderboardRow[];
+  cabins: Cabin[];
   challenges: CampChallenge[];
   error: string | null;
   isLoading: boolean;
@@ -609,6 +625,8 @@ function SeasonalLeaderboardPanel({
   seasonalTitle: string;
   submissions: CampSubmission[];
   totalSeasonalPoints: number;
+  onOpenCabin: (cabinId: string) => void;
+  onOpenChat: (conversationId: string) => void;
 }) {
   const prizes = parsePrizes(season);
   const activeLedger = ledger.filter((row) => !row.reversed_at && row.approval_status !== "reversed" && row.entry_type !== "reversal");
@@ -697,7 +715,7 @@ function SeasonalLeaderboardPanel({
         <StatSticker label="Season clock" value={seasonCountdownLabel(season)} accent="orange" icon={<Clock className="h-14 w-14" />} />
       </div>
 
-      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} />
+      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} cabins={cabins} onOpenCabin={onOpenCabin} onOpenChat={onOpenChat} />
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
         <SeasonRankingsCard leaderboard={seasonalLeaderboard} seasonalTitle={seasonalTitle} />
@@ -825,7 +843,17 @@ function YourRankCard({
   );
 }
 
-function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampCabinLeaderboardRow[] }) {
+function CabinLeaderboardSection({
+  cabinLeaderboard,
+  cabins,
+  onOpenCabin,
+  onOpenChat,
+}: {
+  cabinLeaderboard: CampCabinLeaderboardRow[];
+  cabins: Cabin[];
+  onOpenCabin: (cabinId: string) => void;
+  onOpenChat: (conversationId: string) => void;
+}) {
   const maxPoints = Math.max(1, ...cabinLeaderboard.map((row) => row.points));
   if (cabinLeaderboard.length === 0) {
     return (
@@ -845,20 +873,38 @@ function CabinLeaderboardSection({ cabinLeaderboard }: { cabinLeaderboard: CampC
         description="Current-season cabin totals include only approved point events explicitly marked for cabins."
       />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {cabinLeaderboard.map((row, index) => (
-          <CabinCard
-            key={row.cabin_id}
-            name={`${row.rank}. ${row.cabin_name}`}
-            members={`${row.member_count} member${row.member_count === 1 ? "" : "s"}`}
-            score={`${row.points.toLocaleString()} pts`}
-            progress={Math.round((row.points / maxPoints) * 100)}
-            accent={(["pink", "yellow", "cyan", "orange"] as const)[index % 4]}
-            description={index === 0 ? "Current cabin leader" : "Climbing with reviewed actions"}
-            leader={index === 0 ? "Top cabin" : "Open"}
-            topContributors={`${Math.max(0, row.points).toLocaleString()} pts`}
-            recentActivity={row.member_count > 0 ? "Active" : "Waiting"}
-          />
-        ))}
+        {cabinLeaderboard.map((row, index) => {
+          const cabin = cabins.find((item) => item.id === row.cabin_id);
+          return (
+            <CabinCard
+              key={row.cabin_id}
+              name={`${row.rank}. ${row.cabin_name}`}
+              members={`${row.member_count} member${row.member_count === 1 ? "" : "s"}`}
+              score={`${row.points.toLocaleString()} pts`}
+              progress={Math.round((row.points / maxPoints) * 100)}
+              accent={(["pink", "yellow", "cyan", "orange"] as const)[index % 4]}
+              description={cabin?.focus_area || (index === 0 ? "Current cabin leader" : "Climbing with reviewed actions")}
+              leader={index === 0 ? "Top cabin" : "Open"}
+              topContributors={`${Math.max(0, row.points).toLocaleString()} pts`}
+              recentActivity={row.member_count > 0 ? "Active" : "Waiting"}
+              icon={<Tent className="h-7 w-7" />}
+              action={
+                <div className="grid gap-2">
+                  <CampButton variant="outline" size="sm" onClick={() => onOpenCabin(row.cabin_id)}>
+                    <Tent className="h-4 w-4" />
+                    Open Cabin
+                  </CampButton>
+                  {cabin?.conversation_id ? (
+                    <CampButton variant="secondary" size="sm" onClick={() => onOpenChat(cabin.conversation_id!)}>
+                      <MessageSquare className="h-4 w-4" />
+                      Open Cabin Chat
+                    </CampButton>
+                  ) : null}
+                </div>
+              }
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -1047,15 +1093,21 @@ function PrizeSection({ prizes }: { prizes: Array<{ title: string; description: 
 
 function CabinsPanel({
   cabinLeaderboard,
+  cabins,
   error,
   isLoading,
   onRefresh,
+  onOpenCabin,
+  onOpenChat,
   season,
 }: {
   cabinLeaderboard: CampCabinLeaderboardRow[];
+  cabins: Cabin[];
   error: string | null;
   isLoading: boolean;
   onRefresh: () => void;
+  onOpenCabin: (cabinId: string) => void;
+  onOpenChat: (conversationId: string) => void;
   season: CampSeason | null;
 }) {
   if (isLoading) {
@@ -1077,7 +1129,7 @@ function CabinsPanel({
         description={`${season.name} cabin totals from approved point events explicitly marked for cabins.`}
         action={<CampButton variant="cyan" onClick={onRefresh}>Refresh</CampButton>}
       />
-      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} />
+      <CabinLeaderboardSection cabinLeaderboard={cabinLeaderboard} cabins={cabins} onOpenCabin={onOpenCabin} onOpenChat={onOpenChat} />
     </>
   );
 }

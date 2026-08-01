@@ -11,6 +11,7 @@ import {
   Heart,
   MapPin,
   Search,
+  UsersRound,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -22,21 +23,25 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { getSortOptions, sortListings, type SortOption } from "@/lib/sorting";
 import type { EventListing, FundraiserListing, JobListing, Listing, ResourceListing } from "@/types/listings";
 import { gpeCategoryConfig } from "@/lib/gpe";
+import { fetchMentorshipListings, mentorshipBadge, toListText, type MentorshipListing } from "@/lib/mentorship";
 
 type ListingCategory = Listing["category"];
+type ExploreCategory = ListingCategory | "mentorship";
 
-const categories: Array<{ id: ListingCategory; title: string; icon: JSX.Element }> = [
+const categories: Array<{ id: ExploreCategory; title: string; icon: JSX.Element }> = [
   { id: "jobs", title: "Jobs", icon: <Briefcase className="h-5 w-5" /> },
   { id: "events", title: "Events", icon: <Calendar className="h-5 w-5" /> },
   { id: "fundraisers", title: "Funds", icon: <DollarSign className="h-5 w-5" /> },
   { id: "resources", title: "Resources", icon: <BookOpen className="h-5 w-5" /> },
+  { id: "mentorship", title: "Mentorship", icon: <UsersRound className="h-5 w-5" /> },
 ];
 
-const filterOptions: Record<ListingCategory, string[]> = {
+const filterOptions: Record<ExploreCategory, string[]> = {
   jobs: ["All", "Full-time", "Part-time", "Contract", "Remote"],
   events: ["All", "Conference", "Workshop", "Festival", "Meetup", "Expo", "Panel"],
   fundraisers: ["All", "Infrastructure", "Education", "Environment", "Legal", "Food Security"],
   resources: ["All", "Toolkit", "Video", "Guide", "Handbook", "Technical Guide", "Database"],
+  mentorship: ["All", "Mentor offers", "Mentor requests", "Remote", "Local", "Open only"],
 };
 
 const listingPlaceholder = {
@@ -44,6 +49,7 @@ const listingPlaceholder = {
   events: <Calendar className="h-16 w-16 opacity-30" />,
   fundraisers: <DollarSign className="h-16 w-16 opacity-30" />,
   resources: <BookOpen className="h-16 w-16 opacity-30" />,
+  mentorship: <UsersRound className="h-16 w-16 opacity-30" />,
 };
 
 const Explore = () => {
@@ -51,7 +57,7 @@ const Explore = () => {
   const location = useLocation();
   const { isFavorited, toggleFavorite, isPending } = useFavorites();
 
-  const [selectedCategory, setSelectedCategory] = useState<ListingCategory>("jobs");
+  const [selectedCategory, setSelectedCategory] = useState<ExploreCategory>("jobs");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [sortOption, setSortOption] = useState<SortOption>("most_recent");
@@ -62,10 +68,16 @@ const Explore = () => {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: mentorshipListings = [], isLoading: mentorshipLoading, isError: mentorshipError } = useQuery({
+    queryKey: ["mentorship-listings"],
+    queryFn: fetchMentorshipListings,
+    staleTime: 1000 * 60 * 2,
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const cat = params.get("category") as ListingCategory | null;
-    if (cat && ["jobs", "events", "fundraisers", "resources"].includes(cat)) {
+    const cat = params.get("category") as ExploreCategory | null;
+    if (cat && ["jobs", "events", "fundraisers", "resources", "mentorship"].includes(cat)) {
       setSelectedCategory(cat);
       setSelectedFilter("All");
       setSortOption("most_recent");
@@ -73,11 +85,39 @@ const Explore = () => {
   }, [location.search]);
 
   const currentListings = useMemo(
-    () => listings.filter((listing) => listing.category === selectedCategory),
+    () => selectedCategory === "mentorship" ? [] : listings.filter((listing) => listing.category === selectedCategory),
     [listings, selectedCategory],
   );
 
+  const filteredMentorshipListings = useMemo(() => {
+    if (selectedCategory !== "mentorship") return [];
+    const query = searchQuery.trim().toLowerCase();
+    return mentorshipListings.filter((listing) => {
+      const haystack = [
+        listing.display_name,
+        listing.headline,
+        listing.intro,
+        listing.location,
+        listing.availability,
+        listing.career_stage,
+        listing.remote_preference,
+        ...listing.topics,
+        ...listing.climate_focus,
+      ].join(" ").toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+      const matchesFilter =
+        selectedFilter === "All" ||
+        (selectedFilter === "Mentor offers" && listing.listing_type === "mentor_offer") ||
+        (selectedFilter === "Mentor requests" && listing.listing_type === "mentor_request") ||
+        (selectedFilter === "Remote" && listing.remote_preference === "remote") ||
+        (selectedFilter === "Local" && listing.remote_preference === "local") ||
+        (selectedFilter === "Open only" && listing.status === "published");
+      return matchesSearch && matchesFilter;
+    });
+  }, [mentorshipListings, searchQuery, selectedCategory, selectedFilter]);
+
   const filteredListings = useMemo(() => {
+    if (selectedCategory === "mentorship") return [];
     const filtered = currentListings.filter((listing) => {
       const haystack = `${listing.title} ${listing.description} ${listing.summary ?? ""}`.toLowerCase();
       const matchesSearch = haystack.includes(searchQuery.toLowerCase());
@@ -162,7 +202,7 @@ const Explore = () => {
                 onChange={(event) => setSortOption(event.target.value as SortOption)}
                 className="gpe-input pl-11"
               >
-                {getSortOptions(selectedCategory).map((option) => (
+              {(selectedCategory === "mentorship" ? [{ value: "most_recent", label: "Newest" }] : getSortOptions(selectedCategory)).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -172,7 +212,14 @@ const Explore = () => {
           </div>
         </section>
 
-        {isLoading ? (
+        {selectedCategory === "mentorship" ? (
+          <MentorshipGrid
+            listings={filteredMentorshipListings}
+            isLoading={mentorshipLoading}
+            isError={mentorshipError}
+            onOpen={(listing) => navigate(`/mentorship/${listing.id}`, { state: { from: `${location.pathname}${location.search}` } })}
+          />
+        ) : isLoading ? (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((item) => <LoadingCampCard key={item} label="Loading listings" />)}
           </div>
@@ -294,5 +341,93 @@ const Explore = () => {
     </div>
   );
 };
+
+function MentorshipGrid({
+  listings,
+  isLoading,
+  isError,
+  onOpen,
+}: {
+  listings: MentorshipListing[];
+  isLoading: boolean;
+  isError: boolean;
+  onOpen: (listing: MentorshipListing) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2, 3, 4, 5].map((item) => <LoadingCampCard key={item} label="Loading mentorship" />)}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        illustration="megaphone"
+        title="Mentorship Is Offline"
+        description="Mentorship listings could not be loaded. Try refreshing in a moment."
+      />
+    );
+  }
+
+  if (listings.length === 0) {
+    return (
+      <EmptyState
+        illustration="notebook"
+        title="No Mentorship Listings"
+        description="Try another search, or submit a mentorship request or offer."
+      />
+    );
+  }
+
+  return (
+    <>
+      <p className="mb-6 text-sm font-bold uppercase text-black/70">
+        Showing {listings.length} mentorship listings
+      </p>
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {listings.map((listing) => (
+          <article key={listing.id} className="gpe-card gpe-hover-lift overflow-hidden">
+            <div className="flex h-44 items-center justify-center border-b-[3px] border-black bg-gpe-cyan">
+              {listing.profile_image_url || listing.profiles?.avatar_url ? (
+                <img
+                  src={listing.profile_image_url || listing.profiles?.avatar_url || ""}
+                  alt={listing.display_name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <UsersRound className="h-16 w-16 opacity-60" />
+              )}
+            </div>
+            <div className="p-6">
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="rounded-full border-[3px] border-black bg-gpe-yellow px-4 py-1 text-xs font-bold uppercase">
+                  {mentorshipBadge(listing)}
+                </span>
+                <span className="rounded-full border-[3px] border-black bg-white px-4 py-1 text-xs font-bold uppercase">
+                  {listing.status}
+                </span>
+              </div>
+              <h3 className="font-header text-2xl uppercase leading-tight">{listing.headline}</h3>
+              <p className="mt-2 text-sm font-bold text-black/70">{listing.display_name}</p>
+              <p className="mt-3 line-clamp-3 text-sm font-bold text-black/70">
+                {listing.intro || listing.support_needed || listing.mentor_areas || "Mentorship details available on the listing page."}
+              </p>
+              <div className="mt-5 space-y-2 border-t-[3px] border-black pt-4 text-sm font-bold text-black/70">
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {listing.location || listing.remote_preference}</div>
+                <div>{toListText(listing.topics)}</div>
+                <div>{listing.availability || "Availability open"}</div>
+              </div>
+              <Button type="button" className="mt-6 w-full" onClick={() => onOpen(listing)}>
+                View Details
+              </Button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
 
 export default Explore;

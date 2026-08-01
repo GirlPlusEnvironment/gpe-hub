@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Trophy, ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Camera, Trophy, ArrowLeft, Check, Loader2, MessageSquare, Pause, Play, XCircle, UsersRound, Tent } from "lucide-react";
 import { CampButton, EmptyState, LoadingCampCard, SectionHeader, Sticker } from "@/components/camp/CampDesign";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,16 @@ import { supabase, supabasePublicStorageUrl } from "@/lib/supabaseClient";
 import { validateContent } from "@/lib/profanityFilter";
 import { format } from "date-fns";
 import { getPreferredDisplayName, normalizeUsername, shortenEmail, USERNAME_PATTERN } from "@/lib/auth";
+import {
+  fetchMyCabinMemberships,
+  fetchMyMentorshipListings,
+  fetchMyMentorshipMatches,
+  fetchReceivedMentorshipRequests,
+  mentorshipBadge,
+  respondMentorshipMatchRequest,
+  updateMyMentorshipListingStatus,
+  type MentorshipListingStatus,
+} from "@/lib/mentorship";
 
 type ProfileFormState = {
   full_name: string;
@@ -50,15 +61,42 @@ function calculateLevel(points: number) {
 }
 
 const Profile = () => {
+  const navigate = useNavigate();
   const { user, profile, refreshProfile, loading } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [formState, setFormState] = useState<ProfileFormState>(INITIAL_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [avatarKey, setAvatarKey] = useState(0); // Force re-render key
+  const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const { data: mentorshipListings = [] } = useQuery({
+    queryKey: ["my-mentorship-listings", profile?.id],
+    queryFn: () => fetchMyMentorshipListings(profile!.id),
+    enabled: Boolean(profile?.id),
+  });
+
+  const { data: receivedMentorshipRequests = [] } = useQuery({
+    queryKey: ["received-mentorship-requests", profile?.id],
+    queryFn: () => fetchReceivedMentorshipRequests(profile!.id),
+    enabled: Boolean(profile?.id),
+  });
+
+  const { data: mentorshipMatches = [] } = useQuery({
+    queryKey: ["my-mentorship-matches", profile?.id],
+    queryFn: () => fetchMyMentorshipMatches(profile!.id),
+    enabled: Boolean(profile?.id),
+  });
+
+  const { data: cabinMemberships = [] } = useQuery({
+    queryKey: ["my-cabin-memberships", profile?.id],
+    queryFn: () => fetchMyCabinMemberships(profile!.id),
+    enabled: Boolean(profile?.id),
+  });
 
   useEffect(() => {
     if (!user) {
@@ -304,6 +342,47 @@ const Profile = () => {
     ? shortenEmail(user.email)
     : "";
 
+  const setMentorshipStatus = async (listingId: string, status: MentorshipListingStatus) => {
+    try {
+      await updateMyMentorshipListingStatus(listingId, status);
+      await queryClient.invalidateQueries({ queryKey: ["my-mentorship-listings", profile?.id] });
+      toast({ title: "Listing updated", description: `Status changed to ${status}.` });
+    } catch (error) {
+      toast({
+        title: "Could not update listing",
+        description: error instanceof Error ? error.message : "Try again in a moment.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const acceptMentorshipRequest = async (requestId: string) => {
+    setRespondingRequestId(requestId);
+    try {
+      const result = await respondMentorshipMatchRequest({ requestId, decision: "accepted" });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["received-mentorship-requests", profile?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["my-mentorship-matches", profile?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations", profile?.id] }),
+      ]);
+      toast({
+        title: "Mentorship match accepted",
+        description: result.conversationId ? "The shared chat is ready." : "The match was accepted.",
+      });
+      if (result.conversationId) {
+        navigate(`/messages?conversation=${result.conversationId}`);
+      }
+    } catch (error) {
+      toast({
+        title: "Could not accept request",
+        description: error instanceof Error ? error.message : "Try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setRespondingRequestId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="gpe-page flex items-center justify-center">
@@ -522,6 +601,98 @@ const Profile = () => {
                       </Button>
                     </div>
                   </form>
+                </CardContent>
+              </Card>
+
+              <Card className="gpe-paper mt-6">
+                <CardHeader>
+                  <Sticker accent="cyan" className="w-fit">Mentorship</Sticker>
+                  <CardTitle className="text-3xl">Mentorship & Cabins</CardTitle>
+                  <CardDescription>
+                    Manage listings, respond to match requests, and open linked chats.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-header text-2xl uppercase">Your Listings</h3>
+                      <Link to="/submit"><Button type="button" variant="outline" size="sm"><UsersRound className="h-4 w-4" /> New</Button></Link>
+                    </div>
+                    {mentorshipListings.length === 0 ? (
+                      <p className="text-sm font-bold text-black/70">No mentorship listings yet.</p>
+                    ) : mentorshipListings.map((listing) => (
+                      <div key={listing.id} className="rounded-md border-[3px] border-black bg-white p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold uppercase">{mentorshipBadge(listing)}</p>
+                            <Link to={`/mentorship/${listing.id}`} className="font-header text-xl uppercase underline">{listing.headline}</Link>
+                            <p className="text-sm font-bold text-black/70">Status: {listing.status}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={() => setMentorshipStatus(listing.id, "paused")}><Pause className="h-4 w-4" /> Pause</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setMentorshipStatus(listing.id, "published")}><Play className="h-4 w-4" /> Reopen</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setMentorshipStatus(listing.id, "closed")}><XCircle className="h-4 w-4" /> Close</Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="font-header text-2xl uppercase">Match Requests</h3>
+                    {receivedMentorshipRequests.length === 0 ? (
+                      <p className="text-sm font-bold text-black/70">No received mentorship requests.</p>
+                    ) : receivedMentorshipRequests.map((request) => (
+                      <div key={request.id} className="rounded-md border-[3px] border-black bg-gpe-yellow p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold uppercase">{request.status}</p>
+                            <p className="font-header text-xl uppercase">{request.hub_mentorship_listings?.headline || "Mentorship request"}</p>
+                            {request.message ? <p className="mt-2 text-sm font-bold text-black/70">{request.message}</p> : null}
+                          </div>
+                          {request.status === "requested" ? (
+                            <Button type="button" size="sm" onClick={() => acceptMentorshipRequest(request.id)} disabled={respondingRequestId === request.id}>
+                              {respondingRequestId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                              Accept
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="font-header text-2xl uppercase">Active Chats</h3>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {mentorshipMatches.map((match) => (
+                        <div key={match.id} className="rounded-md border-[3px] border-black bg-white p-4">
+                          <p className="font-bold uppercase">{match.status}</p>
+                          <p className="font-header text-xl uppercase">{match.hub_mentorship_listings?.headline || "Mentorship match"}</p>
+                          {match.conversation_id ? (
+                            <Button type="button" className="mt-3 w-full" onClick={() => navigate(`/messages?conversation=${match.conversation_id}`)}>
+                              <MessageSquare className="h-4 w-4" />
+                              Open Mentorship Chat
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                      {cabinMemberships.map((membership) => (
+                        <div key={membership.id} className="rounded-md border-[3px] border-black bg-white p-4">
+                          <p className="font-bold uppercase">{membership.role} | {membership.status}</p>
+                          <p className="font-header text-xl uppercase">{membership.gpe_cabins?.name || "Camp cabin"}</p>
+                          {membership.gpe_cabins?.conversation_id ? (
+                            <Button type="button" className="mt-3 w-full" onClick={() => navigate(`/messages?conversation=${membership.gpe_cabins?.conversation_id}`)}>
+                              <Tent className="h-4 w-4" />
+                              Open Cabin Chat
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                    {mentorshipMatches.length === 0 && cabinMemberships.length === 0 ? (
+                      <p className="text-sm font-bold text-black/70">No linked mentorship or cabin chats yet.</p>
+                    ) : null}
+                  </section>
                 </CardContent>
               </Card>
             </div>

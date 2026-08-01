@@ -18,6 +18,7 @@ const Community = lazy(() => import("./pages/Community"));
 const PostDetail = lazy(() => import("./pages/PostDetail"));
 const Messages = lazy(() => import("./pages/Messages"));
 const Submit = lazy(() => import("./pages/Submit"));
+const MentorshipDetail = lazy(() => import("./pages/MentorshipDetail"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Favorites = lazy(() => import("./pages/Favorites"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
@@ -25,6 +26,7 @@ const CampChallenges = lazy(() => import("./pages/CampChallenges"));
 const CampChallengeDetail = lazy(() => import("./pages/CampChallengeDetail"));
 const CampChallengeFlow = lazy(() => import("./pages/CampChallengeFlow"));
 const CampChallengeSubmit = lazy(() => import("./pages/CampChallengeSubmit"));
+const CabinDetail = lazy(() => import("./pages/CabinDetail"));
 const MySubmissions = lazy(() => import("./pages/MySubmissions"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ListingDetailPage = lazy(() => import("./pages/ListingDetailPage"));
@@ -37,6 +39,7 @@ const EmailPreferences = lazy(() => import("./pages/EmailPreferences"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminMembershipDiagnostics = lazy(() => import("./pages/AdminMembershipDiagnostics"));
 const CampAdmin = lazy(() => import("./pages/CampAdmin"));
+const AdminMentorshipCabins = lazy(() => import("./pages/AdminMentorshipCabins"));
 
 const queryClient = new QueryClient();
 
@@ -165,7 +168,31 @@ const App = () => (
               }
             />
             <Route
+              path="/mentorship/:listingId"
+              element={
+                <ProtectedRoute>
+                  <MentorshipDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/submit/job"
+              element={
+                <ProtectedRoute>
+                  <Submit />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/submit/mentorship"
+              element={
+                <ProtectedRoute>
+                  <Submit />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/submit/cabin"
               element={
                 <ProtectedRoute>
                   <Submit />
@@ -229,6 +256,14 @@ const App = () => (
               }
             />
             <Route
+              path="/camp-gpe/cabins/:cabinId"
+              element={
+                <ProtectedRoute>
+                  <CabinDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/camp-gpe/challenges/:challengeSlug/flow"
               element={
                 <ProtectedRoute>
@@ -268,6 +303,14 @@ const App = () => (
                     <CampAdmin />
                   </TeamRoute>
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/mentorship-cabins"
+              element={
+                <TeamRoute>
+                  <AdminMentorshipCabins />
+                </TeamRoute>
               }
             />
             <Route

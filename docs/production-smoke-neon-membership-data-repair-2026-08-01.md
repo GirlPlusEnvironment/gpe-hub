@@ -36,7 +36,30 @@ Direct production Activity smoke after redeploy:
 | Grad Highlight | `a8ba8c1e-0a2f-4161-8a9c-640a678bbd7c` | `3725` | `63` | `4e41c3b0-f0e5-4d73-9506-ed6321a8c462` | PASS for direct function path |
 | Camp GPE registration | `bcbc5d3e-41fe-435a-9b40-31299156cadf` | `3726` | `64` | `b5cc427c-a644-4c3c-b7d8-241a149ec3e1` | PASS for direct function path |
 
-The Climate 429 blocker is fixed for the Edge Function path. A full published Wix browser submission for Climate still needs a stable Playwright pass; the current direct function proof does not replace the published-form release gate.
+The Climate 429 blocker is fixed for the Edge Function path.
+
+Published Wix Climate browser smoke after redeploy:
+
+| Evidence | Value |
+| --- | --- |
+| Published page | `https://www.girlplusenvironment.org/mobile-climate-adaptation-survey` |
+| Wix iframe URL | `https://www-girlplusenvironment-org.filesusr.com/html/cc6d59_0785c701c14e712bd1968a2e4a36df78.html` |
+| Controlled email | `gpe-smoke+climate-wix-20260801025011-xg26@girlplusenvironment.org` |
+| Helper loaded | `gpe-form-membership.js?v=20260729a` |
+| Membership lookup | 200, `publicState=new_person`, page did not remain stuck on Checking |
+| Climate endpoint | `neon-climate-survey` |
+| Request payload | Complete published-form answers; `membershipRequest=null` for no-membership path |
+| Supabase submission | `34445379-0bef-469e-a872-97168005cb16` |
+| Supabase status | `neon_synced` |
+| Neon account | `3727` |
+| Neon Activity | `65` |
+| Resend delivery row | `9cb8fbc7-12c9-4150-9359-4d36daea4129` |
+| Resend provider message | `52202541-537a-4ebf-9ed0-ad56ff72fdb7` |
+| Browser confirmation | `Your response has been submitted` |
+| Console errors | Wix ExpandableMenu fallback only; no membership helper ReferenceError |
+| Result | PASS for published Wix no-membership Climate path |
+
+The live Wix embed still references `?v=20260729a`, even though jsDelivr currently serves fixed helper bytes. Republish is still required for version parity.
 
 Structured Neon membership mapping remains partial. Neon discovery found:
 
@@ -59,6 +82,18 @@ Focused membership mapping smoke after the guard:
 | --- | --- | --- | --- | --- | --- |
 | `7f4bfdb2-ff13-40cb-8776-08757c276d4b` | `3723` | `2883` | `61` | PARTIAL: no Neon 400; missing mappings explicitly listed | Membership email sent; Hub invite sent |
 
+Backfill dry-run constraint:
+
+| Check | Result |
+| --- | --- |
+| Supabase payload source | `gpe_form_submissions.membership_request` contains normalized onboarding fields for recent membership submissions |
+| Supabase Neon account IDs | Present on recent membership submissions |
+| Supabase Neon membership IDs | Not persisted for standalone/Hub-origin membership submissions; only Climate inline rows have `neon_membership_id` |
+| Safe execution state | BLOCKED until Neon lookup/readback is available to resolve the current membership ID per account/email and record it in the backfill audit |
+| Current candidate examples | `7f4bfdb2-ff13-40cb-8776-08757c276d4b` account `3723`, known smoke membership `2883`; `675369ad-2e5b-4f2e-8eea-1f208c4889ae` account `3720`; `ce14a860-af8a-44ea-a959-ca9bb4f7e8ed` account `3715` |
+
+Do not run structured-field backfill yet. The remaining account fields must be created/configured first, and the backfill must resolve and log Neon membership IDs through Neon readback rather than guessing from smoke notes.
+
 Camp approval proof for the provided action is blocked by identity state:
 
 | Field | Value |
@@ -74,6 +109,15 @@ Camp approval proof for the provided action is blocked by identity state:
 | Link status | `pending_reconciliation` |
 
 This submission is a valid proof that the public Camp challenge creates a pending action, but it is not a valid proof of member point approval because it is not linked to an active Hub profile or Camp season member. Do not award this as the manual approval proof. Use a dedicated QA Hub profile with an active membership and Camp season membership, then approve that existing review through the admin UI and retry approval to prove idempotency.
+
+Additional Camp candidate scan:
+
+| Check | Result |
+| --- | --- |
+| Pending actions with linked profile and season member | None found |
+| Pending actions found | All are `pending_reconciliation` with no `user_id` and no `season_member_id` |
+| QA season member available | `hub-qa-active-member@girlplusenvironment.org`, user/profile `4d6fbac3-01e7-42f5-9df5-3273cda088ed`, season member `b12f245a-5ed6-47b4-b1a8-f0d9a94a675c` |
+| Browser approval proof | BLOCKED pending authenticated QA member/admin browser session or a new controlled QA submission made while logged in |
 
 ## Camp Approval 400 / Admin Route 404 Repair
 

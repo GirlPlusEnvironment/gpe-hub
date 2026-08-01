@@ -75,6 +75,70 @@ Camp approval proof for the provided action is blocked by identity state:
 
 This submission is a valid proof that the public Camp challenge creates a pending action, but it is not a valid proof of member point approval because it is not linked to an active Hub profile or Camp season member. Do not award this as the manual approval proof. Use a dedicated QA Hub profile with an active membership and Camp season membership, then approve that existing review through the admin UI and retry approval to prove idempotency.
 
+## Camp Approval 400 / Admin Route 404 Repair
+
+Status: PARTIAL
+
+Deployed commit: `3b124d83139dd8b9088c9f4f2ed73a9b0f62de50`
+
+Production RPC signatures after schema refresh:
+
+| RPC | Signature | Result |
+| --- | --- | --- |
+| `approve_camp_submission_action` | `(p_action_id uuid, p_points integer, p_notes text)` | `TABLE(ledger_id uuid, season_member_id uuid, season_points integer, season_rank integer)` |
+| `admin_reconcile_camp_review_award` | `(p_action_id uuid, p_points integer, p_notes text)` | `jsonb` |
+
+The normal approval helper sends exactly:
+
+```json
+{
+  "p_action_id": "<action-id>",
+  "p_points": 5,
+  "p_notes": "<reviewer-note-or-null>"
+}
+```
+
+Backend diagnostic for the affected action under an admin `auth.uid()` simulation:
+
+| Action | RPC | Status | PostgreSQL response body |
+| --- | --- | --- | --- |
+| `9b170d87-df67-4c9d-be69-7c2dc9ce65d4` | `approve_camp_submission_action` | 400 | `ERROR: P0001: Submission is not linked to a Camp season member.` |
+| `9b170d87-df67-4c9d-be69-7c2dc9ce65d4` | `admin_reconcile_camp_review_award` | 400 | `ERROR: P0001: No Hub profile found for Camp submission email gpe-smoke+camp-challenge-live-20260801-1785547478976-vl7q@girlplusenvironment.org. Reconcile the submission to a Hub profile before approving.` |
+
+Current readback for that action:
+
+| Field | Value |
+| --- | --- |
+| Submission | `127f5ddd-f45a-498c-ab50-c82391336837` |
+| Action | `9b170d87-df67-4c9d-be69-7c2dc9ce65d4` |
+| Review status | `pending` |
+| Requested points | `5` |
+| Matched Hub profile | None |
+| Matched season member | None |
+| Point transaction | None |
+| Camp ledger | None |
+| Link status | `pending_reconciliation` |
+
+Fixes shipped:
+
+- `admin_reconcile_camp_review_award` now creates a missing `gpe_season_members` row only when a matching active Hub profile exists.
+- The recovery RPC returns `ok`, `seasonMemberCreated`, `alreadyAwarded`, `transactionId`, `ledgerId`, and `pointsAwarded`.
+- Team Review now preserves PostgREST `message`, `details`, `hint`, and `code` in the visible admin error banner.
+- Failed normal approvals now show a contextual `Reconcile & Award` action for the same Camp action.
+- Static GitHub Pages shims were added for `/admin/`, `/admin/camp/`, and `/admin/membership-diagnostics/`.
+
+Live route verification:
+
+| URL | Result |
+| --- | --- |
+| `https://members.girlplusenvironment.org/admin/camp?tab=submissions` | `301` to `/admin/camp/?tab=submissions`, then `200` |
+| Deployed app entry | `assets/index-BfKMI6G7.js` |
+| Deployed Team Review chunk | `assets/CampAdmin-BS8fcKor.js` |
+
+Remaining gate:
+
+- A real authenticated admin browser approval still needs to be run against a submission linked to an active QA Hub profile and Camp season member. The affected smoke action above is not awardable because it has no Hub profile.
+
 ## Shared Membership Helper
 
 Status: PARTIAL

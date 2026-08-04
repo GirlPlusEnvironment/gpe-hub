@@ -319,6 +319,7 @@ export const fetchAllListings = async (): Promise<Listing[]> => {
     `)
     .eq("is_removed", false)
     .eq("is_hidden", false)
+    .eq("status", "published")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -344,6 +345,7 @@ export const fetchListingsByCategory = async (category: ListingCategory): Promis
     .eq("category", category)
     .eq("is_removed", false)
     .eq("is_hidden", false)
+    .eq("status", "published")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -413,6 +415,7 @@ export const fetchFavoriteListings = async (profileId: string): Promise<Listing[
     .eq("profile_id", profileId)
     .eq("listings.is_removed", false)
     .eq("listings.is_hidden", false)
+    .eq("listings.status", "published")
     .order("id", { ascending: false });
 
   if (error) {

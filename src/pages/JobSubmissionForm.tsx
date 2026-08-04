@@ -21,6 +21,7 @@ const STORAGE_KEY = "job-submission-draft";
 const MINIMUM_FIELDS = ["title", "details"] as const;
 
 const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+const optionalText = (value: unknown) => (hasText(value) ? String(value).trim() : null);
 
 export default function JobSubmissionForm() {
   const navigate = useNavigate();
@@ -138,29 +139,29 @@ export default function JobSubmissionForm() {
     // Prepare data for Supabase
     const jobData = {
       category: "jobs",
-      title: form.title,
-      summary: form.description ? form.description.slice(0, 120) : form.applicationUrl || form.company || "Submitted for Team GPE review.",
-      description: form.description || form.applicationUrl || "Details to be completed during Team GPE review.",
-      image_url: form.image,
-      location: form.state,
+      title: form.title.trim(),
+      summary: optionalText(form.description)?.slice(0, 120) ?? optionalText(form.applicationUrl) ?? optionalText(form.company) ?? "Submitted for Team GPE review.",
+      description: optionalText(form.description) ?? optionalText(form.applicationUrl) ?? "Details to be completed during Team GPE review.",
+      image_url: optionalText(form.image),
+      location: optionalText(form.state),
       tags: [],
       metadata: {
-        location: form.state,
+        location: optionalText(form.state),
         job_type: Array.isArray(form.workArrangements) && form.workArrangements.length > 0
           ? form.workArrangements[0]
           : "Full-time",
-        salary: form.salary,
-        company: form.company,
-        state: form.state,
-        work_arrangements: form.workArrangements,
-        industry: form.industry,
+        salary: optionalText(form.salary),
+        company: optionalText(form.company),
+        state: optionalText(form.state),
+        work_arrangements: Array.isArray(form.workArrangements) ? form.workArrangements : [],
+        industry: optionalText(form.industry),
         requirements: form.requirements
           ? form.requirements.split(",").map((r) => r.trim()).filter(Boolean)
           : [],
-        contact_email: form.contactEmail,
-        application_url: form.applicationUrl,
-        experience_level: form.experienceLevel,
-        application_deadline: form.applicationDeadline,
+        contact_email: optionalText(form.contactEmail),
+        application_url: optionalText(form.applicationUrl),
+        experience_level: optionalText(form.experienceLevel),
+        application_deadline: optionalText(form.applicationDeadline),
       },
     };
 

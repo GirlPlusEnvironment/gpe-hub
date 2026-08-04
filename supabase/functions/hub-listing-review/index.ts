@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       await supabaseFetch(`listings?id=eq.${encodeURIComponent(listingId)}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ metadata: rejectedMetadata }),
+        body: JSON.stringify({ moderation_status: "rejected", metadata: rejectedMetadata }),
       });
       if (submissionId) {
         await updateFormSubmission(submissionId, {
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     await supabaseFetch(`listings?id=eq.${encodeURIComponent(listingId)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ status: "published", metadata: approvedMetadata }),
+      body: JSON.stringify({ status: "published", moderation_status: "published", metadata: approvedMetadata }),
     });
 
     if (submissionId) {

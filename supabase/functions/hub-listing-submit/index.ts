@@ -177,6 +177,7 @@ Deno.serve(async (req) => {
         location: stringValue(listing, "location", 220) || null,
         tags: Array.isArray(listing.tags) ? listing.tags.map((tag) => sanitizeText(tag, 80)).filter(Boolean) : [],
         status: "pending_review",
+        moderation_status: "pending_review",
         submitted_by: user.id,
         metadata,
       }),

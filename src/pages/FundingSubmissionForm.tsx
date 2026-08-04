@@ -17,6 +17,7 @@ const STORAGE_KEY = "funding-submission-draft";
 const MINIMUM_FIELDS = ["title", "fundingType", "details"] as const;
 
 const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+const optionalText = (value: unknown) => (hasText(value) ? String(value).trim() : null);
 
 export default function FundingSubmissionForm() {
   const navigate = useNavigate();
@@ -124,23 +125,23 @@ export default function FundingSubmissionForm() {
     
     const fundingData = {
       category: "fundraisers",
-      title: form.title,
-      summary: form.description ? form.description.slice(0, 120) : form.link || form.source || "Submitted for Team GPE review.",
-      description: form.description || form.link || "Details to be completed during Team GPE review.",
-      image_url: form.image,
+      title: form.title.trim(),
+      summary: optionalText(form.description)?.slice(0, 120) ?? optionalText(form.link) ?? optionalText(form.source) ?? "Submitted for Team GPE review.",
+      description: optionalText(form.description) ?? optionalText(form.link) ?? "Details to be completed during Team GPE review.",
+      image_url: optionalText(form.image),
       tags: [],
       metadata: {
-        organizer: form.source,
-        source: form.source,
-        funding_type: form.fundingType,
-        amount: form.amount,
-        goal_amount: form.amount,
+        organizer: optionalText(form.source),
+        source: optionalText(form.source),
+        funding_type: optionalText(form.fundingType),
+        amount: optionalText(form.amount),
+        goal_amount: optionalText(form.amount),
         current_amount: "0",
-        deadline: form.deadline,
-        link: form.link,
-        donation_url: form.link,
-        contact_email: form.contactEmail,
-        notes: form.notes,
+        deadline: optionalText(form.deadline),
+        link: optionalText(form.link),
+        donation_url: optionalText(form.link),
+        contact_email: optionalText(form.contactEmail),
+        notes: optionalText(form.notes),
       },
     };
     

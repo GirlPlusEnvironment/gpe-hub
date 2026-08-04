@@ -117,7 +117,12 @@ Production verification:
 | Fresh deployed-function Job submit | `200`; listing `0420b1db-6118-4a3a-8b88-143e3ad6d74a`; submission `b18d4d9c-5c96-4968-899a-9532627ac096`; lead action `a43d9b7f-c41f-47a1-80a8-9ef7f507c002`; `status = pending_review`; `moderation_status = pending_review`; point events before approval: `0`. |
 | Approval through `hub-listing-review` | Admin `851e2061-fa88-47e4-a346-80e3ef31c475`; `200`; point event `94ad42ea-ec93-4cfe-86f6-f4309a0cfca8`; point transaction `49d37842-e4b9-44bb-a2a2-fbe0e1e1b3a1`; awarded `20` points with rule `job_approved`. |
 | Approval retry | `200`; returned the same point event `94ad42ea-ec93-4cfe-86f6-f4309a0cfca8` and transaction `49d37842-e4b9-44bb-a2a2-fbe0e1e1b3a1`; no duplicate points. |
-| Route check | `/submit/` must be rechecked after the GitHub Pages frontend deploy completes. |
+| Browser Job submission UI | Active member `57f3e21e-d4d7-4029-b8ce-ee8ca7ed6524`; `/submit/` loaded from production; `hub-listing-submit` request `019fcd91-a07f-722e-bed1-11f5ffbdffa0` returned `200`; listing `42a2181b-63af-431e-bdaa-1766d4098804`; submission `aea408d1-fcb9-42e1-8a43-3bdd059cea44`; lead action `cfd0a850-1d1c-48a6-9dc1-66bcbceb58b4`; request payload sent optional image as `null` and included URL, salary, location, organization, description, deadline, employment type, and application URL. |
+| Browser-created moderation state | Listing `42a2181b-63af-431e-bdaa-1766d4098804` initially had `status = pending_review`, `moderation_status = pending_review`, review status `requires_review`, and `0` point events before approval. |
+| Browser-created approval | QA admin `d10543d6-e82f-4422-9460-76adffcb6f88`; `hub-listing-review` request `019fcd93-3a2d-7ba3-965c-8330014d0e9a` returned `200`; point event `2341287a-5841-4e03-bc46-0a11cf960038`; transaction `f1d1d104-1613-4fdd-9387-63c47d46efe9`; `20` points awarded with rule `job_approved`. |
+| Browser-created approval retry | Retry request `019fcd93-43b2-7393-863b-75b627663c1c` returned the same point event `2341287a-5841-4e03-bc46-0a11cf960038` and transaction `f1d1d104-1613-4fdd-9387-63c47d46efe9`; no duplicate points. |
+| Browser-created Explore/My Submissions proof | Listing `42a2181b-63af-431e-bdaa-1766d4098804` is `status = published`, `moderation_status = published`, `is_hidden = false`, `is_removed = false`; My Submissions count for the submitter/listing is `1`; Explore-visible count is `1`; point events count is `1`; transactions count is `1`. |
+| Route check | GitHub Pages deploy `30927732577` for commit `bdf8c7661dd0ccf5f05384640c2d632d46a39f27` completed successfully; `/submit/` and `/submit/job/` both return `200`. |
 
 ## Controlled Test Plan
 

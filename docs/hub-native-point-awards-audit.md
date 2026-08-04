@@ -1,6 +1,7 @@
 # Hub-Native Point Awards Audit
 
 Date: 2026-07-30
+Updated: 2026-08-04
 
 Scope: Hub-native actions that appear to earn points or feed the moderation/reward system. This audit separates verified backend point events from UI-only point language.
 
@@ -76,7 +77,47 @@ Repository validation run:
 | `hub-listing-submit` endpoint | Deployed and returns auth-gated response |
 | `hub-listing-review` endpoint | Deployed and returns auth-gated response |
 
-Live production tests were not run in this pass. They require an authenticated test member profile, an admin reviewer account, and a cleanup/reversal plan for test point transactions.
+## Production Incident Trace: Hub Job Submit 400
+
+Date: 2026-08-04
+
+Root cause: production `hub-listing-submit` reached the correct Edge Function, but inserting a pending Job listing fired the legacy `listings_award_job_points` insert trigger. That trigger attempted the obsolete `job_submission` point award before moderation review and raised PostgreSQL `P0001` with message `Not authorized to award Hub points.` The frontend was using `supabase.functions.invoke`, so the UI collapsed the detailed function response into the generic message `Edge Function returned a non-2xx status code`.
+
+Captured failing production response before code changes:
+
+| Field | Value |
+| --- | --- |
+| Function | `hub-listing-submit` |
+| QA member profile/user | `ab01bc42-d251-4b61-8a3a-3ddb508eb200`, `gpe-smoke+hub-listing-20260804@girlplusenvironment.org` |
+| HTTP status | `400` |
+| Supabase request id | `019fcd7b-81b1-7c79-aa38-92f37ccb1998` |
+| PostgreSQL code | `P0001` |
+| PostgreSQL message | `Not authorized to award Hub points.` |
+| PostgreSQL details | `null` |
+| PostgreSQL hint | `null` |
+
+Fixes applied:
+
+| Area | Change |
+| --- | --- |
+| Database | Dropped `listings_award_job_points`; disabled legacy `job_submission` rule whose metadata source was `listing_insert_trigger`; recorded migration `20260804155451_disable_legacy_listing_insert_points_trigger.sql`. |
+| Edge Function | `hub-listing-submit` now writes `moderation_status = pending_review`; `hub-listing-review` writes `moderation_status = published` or `rejected`. |
+| Frontend | Hub function calls now use `fetch` with the authenticated session so non-2xx JSON response bodies, codes, details, and hints are preserved in the visible error message. |
+| Listing queries | Explore/category/favorites listing queries now require `status = published`, so pending review rows do not appear in Explore. |
+| Submit payloads | Job, Resource, and Funding forms send blank optional strings as `null` rather than omitted/undefined values. |
+
+Production verification:
+
+| Check | Result |
+| --- | --- |
+| Job submit after DB fix | `200`; listing `2a7ea2a0-d7fa-4edd-ba2b-e44fbb789f54`; submission `f827965a-392b-4c74-a89b-a6f1cbda1164`; lead action `a4c5bf4b-87d8-4d75-8a9b-9897ae9ce4fd`. |
+| Resource submit shared function | `200`; listing `b7580f2d-7560-4be6-9083-a4541a232ded`; submission `97aac2a2-dad9-40a9-bb53-6676b9ae3299`; lead action `7534bf2a-5188-4901-86ad-d9d016e2d548`. |
+| Funding submit shared function | `200`; listing `4f07821a-cd28-4cd3-a2e4-1fd8df255099`; submission `74939334-07a0-44f9-88c6-a05d1c76836e`; lead action `d6723bf4-e5e6-41bb-a7a8-647637466c76`. |
+| Duplicate submit retry | Same idempotency keys returned `duplicate: true` with the same listing IDs for Job, Resource, and Funding. |
+| Fresh deployed-function Job submit | `200`; listing `0420b1db-6118-4a3a-8b88-143e3ad6d74a`; submission `b18d4d9c-5c96-4968-899a-9532627ac096`; lead action `a43d9b7f-c41f-47a1-80a8-9ef7f507c002`; `status = pending_review`; `moderation_status = pending_review`; point events before approval: `0`. |
+| Approval through `hub-listing-review` | Admin `851e2061-fa88-47e4-a346-80e3ef31c475`; `200`; point event `94ad42ea-ec93-4cfe-86f6-f4309a0cfca8`; point transaction `49d37842-e4b9-44bb-a2a2-fbe0e1e1b3a1`; awarded `20` points with rule `job_approved`. |
+| Approval retry | `200`; returned the same point event `94ad42ea-ec93-4cfe-86f6-f4309a0cfca8` and transaction `49d37842-e4b9-44bb-a2a2-fbe0e1e1b3a1`; no duplicate points. |
+| Route check | `/submit/` must be rechecked after the GitHub Pages frontend deploy completes. |
 
 ## Controlled Test Plan
 

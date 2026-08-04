@@ -17,6 +17,7 @@ const STORAGE_KEY = "resource-submission-draft";
 const MINIMUM_FIELDS = ["title", "resourceCategory", "details"] as const;
 
 const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+const optionalText = (value: unknown) => (hasText(value) ? String(value).trim() : null);
 
 export default function ResourceSubmissionForm() {
   const navigate = useNavigate();
@@ -103,19 +104,19 @@ export default function ResourceSubmissionForm() {
     
     const resourceData = {
       category: "resources",
-      title: form.title,
-      image_url: form.image,
-      summary: form.description ? form.description.slice(0, 120) : form.link || form.source || "Submitted for Team GPE review.",
-      description: form.description || form.link || "Details to be completed during Team GPE review.",
+      title: form.title.trim(),
+      image_url: optionalText(form.image),
+      summary: optionalText(form.description)?.slice(0, 120) ?? optionalText(form.link) ?? optionalText(form.source) ?? "Submitted for Team GPE review.",
+      description: optionalText(form.description) ?? optionalText(form.link) ?? "Details to be completed during Team GPE review.",
       tags: [],
       metadata: {
-        source: form.source,
-        resource_category: form.resourceCategory,
-        resource_type: form.resourceCategory,
-        topic: form.resourceCategory,
-        link: form.link,
-        download_url: form.link,
-        notes: form.notes,
+        source: optionalText(form.source),
+        resource_category: optionalText(form.resourceCategory),
+        resource_type: optionalText(form.resourceCategory),
+        topic: optionalText(form.resourceCategory),
+        link: optionalText(form.link),
+        download_url: optionalText(form.link),
+        notes: optionalText(form.notes),
       },
     };
     

@@ -63,6 +63,9 @@ type ScheduleSort = "start_asc" | "start_desc" | "status" | "order";
 type SeasonSaveMode = "draft" | "publish";
 type RewardsTab = "rules" | "hubMembers" | "ledger" | "adjustments" | "badges" | "achievements";
 type HubRosterStatus = "all" | "hub" | "missing_hub" | "missing_neon" | "attempted" | "active_member";
+type RewardsMemberStatus = HubRosterStatus;
+type RewardsPointFilter = "all" | "has_points" | "no_points" | "pending_points";
+type RewardsMemberSort = "name_asc" | "points_desc" | "joined_desc" | "last_activity_desc";
 type ModerationTab = "posts" | "comments" | "listings" | "messages" | "reports" | "users";
 type ChallengeEditorTab = "overview" | "content" | "schedule" | "rewards" | "submission" | "resources" | "notifications" | "history";
 
@@ -231,6 +234,8 @@ const hubRosterFilters: Array<{ value: HubRosterStatus; label: string }> = [
   { value: "missing_neon", label: "Missing Neon" },
   { value: "attempted", label: "Attempted signup" },
 ];
+
+const rewardsMemberPageSize = 25;
 
 const challengeEditorTabs: Array<{ value: ChallengeEditorTab; label: string }> = [
   { value: "overview", label: "Overview" },
@@ -454,6 +459,14 @@ export default function CampAdmin() {
   const [hubRosterStatus, setHubRosterStatus] = useState<HubRosterStatus>("all");
   const [isLoadingHubRoster, setIsLoadingHubRoster] = useState(false);
   const [hubRosterMessage, setHubRosterMessage] = useState<string | null>(null);
+  const [rewardsMemberRows, setRewardsMemberRows] = useState<AdminHubMemberRosterRow[]>([]);
+  const [rewardsMemberQuery, setRewardsMemberQuery] = useState("");
+  const [rewardsMemberStatus, setRewardsMemberStatus] = useState<RewardsMemberStatus>("all");
+  const [rewardsPointFilter, setRewardsPointFilter] = useState<RewardsPointFilter>("all");
+  const [rewardsMemberSort, setRewardsMemberSort] = useState<RewardsMemberSort>("name_asc");
+  const [rewardsMemberPage, setRewardsMemberPage] = useState(0);
+  const [isLoadingRewardsMembers, setIsLoadingRewardsMembers] = useState(false);
+  const [rewardsMemberMessage, setRewardsMemberMessage] = useState<string | null>(null);
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("all");
@@ -520,6 +533,9 @@ export default function CampAdmin() {
     });
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }, [setSearchParams]);
+
+  const rewardsMemberTotal = Number(rewardsMemberRows[0]?.total_count || 0);
+  const rewardsMemberTotalPages = Math.max(Math.ceil(rewardsMemberTotal / rewardsMemberPageSize), 1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -869,6 +885,99 @@ export default function CampAdmin() {
     }
   }, [hubRosterQuery, hubRosterStatus, season?.id]);
 
+  function rosterRowToPointMember(row: AdminHubMemberRosterRow): AdminPointMember {
+    return {
+      profile_id: row.profile_id || "",
+      season_member_id: row.season_member_id,
+      full_name: row.display_name,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      email: row.email,
+      membership_status: row.neon_membership_status || row.hub_profile_status,
+      neon_account_id: row.neon_account_id,
+      ongoing_points: row.current_hub_points,
+      seasonal_points: row.current_season_points,
+      cabin_points: row.current_camp_points,
+      cabin_id: null,
+      cabin_name: null,
+      season_id: season?.id ?? null,
+      result_rank: row.result_rank ?? 50,
+    };
+  }
+
+  const loadRewardsMemberTable = useCallback(async (nextPage = rewardsMemberPage) => {
+    setIsLoadingRewardsMembers(true);
+    setRewardsMemberMessage(null);
+    try {
+      const rows = await getAdminHubMemberRoster({
+        seasonId: season?.id ?? null,
+        query: rewardsMemberQuery.trim() || undefined,
+        status: rewardsMemberStatus,
+        pointsFilter: rewardsPointFilter,
+        sort: rewardsMemberSort,
+        limit: rewardsMemberPageSize,
+        offset: nextPage * rewardsMemberPageSize,
+      });
+      setRewardsMemberRows(rows);
+      setRewardsMemberPage(nextPage);
+      const total = Number(rows[0]?.total_count || 0);
+      setRewardsMemberMessage(`${total || rows.length} member row${(total || rows.length) === 1 ? "" : "s"} available.`);
+    } catch (err) {
+      setRewardsMemberRows([]);
+      setRewardsMemberMessage(err instanceof Error ? err.message : "Rewards member table failed to load.");
+    } finally {
+      setIsLoadingRewardsMembers(false);
+    }
+  }, [rewardsMemberPage, rewardsMemberQuery, rewardsMemberSort, rewardsMemberStatus, rewardsPointFilter, season?.id]);
+
+  async function resolvePointMember(row: AdminHubMemberRosterRow) {
+    if (!row.profile_id) {
+      throw new Error("This member row does not have a Hub profile yet, so points cannot be assigned.");
+    }
+    const [member] = await searchPointMembers({ seasonId: season?.id ?? null, query: row.profile_id, limit: 1 });
+    return member || rosterRowToPointMember(row);
+  }
+
+  async function openRewardsMemberAward(row: AdminHubMemberRosterRow) {
+    setBusyId(`rewards-award-${row.participant_key}`);
+    setError(null);
+    try {
+      const member = await resolvePointMember(row);
+      setSelectedPointMember(member);
+      setPointHistory([]);
+      setLastAwardResult(null);
+      setManualPoints("5");
+      setManualReason("QA validation of manual point award");
+      setManualAdminNote("");
+      setManualActionType("manual_admin_award");
+      setManualChallengeId("");
+      setCountsForOngoing(true);
+      setCountsForSeason(false);
+      setCountsForCabin(false);
+      setManualIdempotencyKey(createManualIdempotencyKey());
+      setActionDialog({ kind: "manual_award" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not prepare this member for points.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function openRewardsMemberHistory(row: AdminHubMemberRosterRow) {
+    setBusyId(`rewards-history-${row.participant_key}`);
+    setError(null);
+    try {
+      const member = await resolvePointMember(row);
+      setSelectedPointMember(member);
+      await loadPointHistory(member);
+      setRewardsMemberMessage(`Loaded point history for ${member.full_name || member.email || member.profile_id}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load point history for this member.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function selectRosterPointMember(row: AdminHubMemberRosterRow) {
     if (!row.profile_id) {
       setError("This roster row does not have a Hub profile yet, so points cannot be assigned until the person is connected to Hub.");
@@ -878,23 +987,7 @@ export default function CampAdmin() {
     setError(null);
     try {
       const [member] = await searchPointMembers({ seasonId: season?.id ?? null, query: row.profile_id, limit: 1 });
-      selectPointMember(member || {
-        profile_id: row.profile_id,
-        season_member_id: row.season_member_id,
-        full_name: row.display_name,
-        first_name: row.first_name,
-        last_name: row.last_name,
-        email: row.email,
-        membership_status: row.neon_membership_status,
-        neon_account_id: row.neon_account_id,
-        ongoing_points: row.current_hub_points,
-        seasonal_points: row.current_season_points,
-        cabin_points: row.current_camp_points,
-        cabin_id: null,
-        cabin_name: null,
-        season_id: season?.id ?? null,
-        result_rank: row.result_rank ?? 50,
-      });
+      selectPointMember(member || rosterRowToPointMember(row));
       setRewardsTab("adjustments");
       toast({ title: "Member selected", description: "Manual assignment and point history are ready below." });
     } catch (err) {
@@ -1015,6 +1108,9 @@ export default function CampAdmin() {
         setSelectedPointMember(refreshed[0]);
       }
       await loadPointHistory(refreshed[0] || selectedPointMember);
+      if (rewardsMemberRows.length > 0) {
+        await loadRewardsMemberTable(rewardsMemberPage);
+      }
       setActionDialog(null);
       toast({ title: "Points awarded", description: "The ledger and leaderboard scopes were updated." });
     } catch (err) {
@@ -2798,6 +2894,186 @@ export default function CampAdmin() {
                         </div>
                       )}
 
+                      <div className="space-y-3 rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                          <div>
+                            <Tape>Member table</Tape>
+                            <h3 className="mt-2 font-header text-2xl uppercase">Points Management</h3>
+                          </div>
+                          <Button disabled={isLoadingRewardsMembers} onClick={() => void loadRewardsMemberTable(0)}>
+                            <Users className="mr-2 h-4 w-4" />
+                            {isLoadingRewardsMembers ? "Loading" : "Load Member Table"}
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+                          <div>
+                            <Label htmlFor="rewards-member-table-search">Search table</Label>
+                            <Input
+                              id="rewards-member-table-search"
+                              value={rewardsMemberQuery}
+                              onChange={(event) => setRewardsMemberQuery(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") void loadRewardsMemberTable(0);
+                              }}
+                              placeholder="Name, email, Hub profile ID, or Neon ID"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="rewards-member-status">Status</Label>
+                            <select
+                              id="rewards-member-status"
+                              value={rewardsMemberStatus}
+                              onChange={(event) => setRewardsMemberStatus(event.target.value as RewardsMemberStatus)}
+                              className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="all">All statuses</option>
+                              <option value="hub">In Hub</option>
+                              <option value="active_member">Active Neon</option>
+                              <option value="missing_hub">Missing Hub</option>
+                              <option value="missing_neon">Missing Neon</option>
+                              <option value="attempted">Attempted signup</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor="rewards-point-filter">Points</Label>
+                            <select
+                              id="rewards-point-filter"
+                              value={rewardsPointFilter}
+                              onChange={(event) => setRewardsPointFilter(event.target.value as RewardsPointFilter)}
+                              className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="all">All</option>
+                              <option value="has_points">Has points</option>
+                              <option value="no_points">No points</option>
+                              <option value="pending_points">Pending points</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor="rewards-member-sort">Sort</Label>
+                            <select
+                              id="rewards-member-sort"
+                              value={rewardsMemberSort}
+                              onChange={(event) => setRewardsMemberSort(event.target.value as RewardsMemberSort)}
+                              className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="name_asc">Name</option>
+                              <option value="points_desc">Point total</option>
+                              <option value="last_activity_desc">Recent activity</option>
+                              <option value="joined_desc">Joined newest</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {rewardsMemberMessage && (
+                          <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold">
+                            {rewardsMemberMessage}
+                          </div>
+                        )}
+
+                        {isLoadingRewardsMembers ? (
+                          <LoadingCampCard label="Loading rewards members" />
+                        ) : rewardsMemberRows.length > 0 ? (
+                          <div className="overflow-x-auto rounded-[1.25rem] border-[3px] border-black bg-white">
+                            <table className="min-w-full divide-y-2 divide-black text-sm">
+                              <thead className="bg-gpe-yellow/40 text-left text-xs font-black uppercase">
+                                <tr>
+                                  <th className="px-3 py-2">Name</th>
+                                  <th className="px-3 py-2">Email</th>
+                                  <th className="px-3 py-2">Status</th>
+                                  <th className="px-3 py-2">Current points</th>
+                                  <th className="px-3 py-2">Recent activity</th>
+                                  <th className="px-3 py-2">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-black/20">
+                                {rewardsMemberRows.map((row) => (
+                                  <tr key={row.participant_key} className="align-top">
+                                    <td className="px-3 py-3">
+                                      <div className="font-black">{row.display_name || "Unknown"}</div>
+                                      <div className="mt-1 break-all text-xs text-black/45">
+                                        {row.profile_id ? `Hub ${row.profile_id}` : "No Hub profile"}
+                                      </div>
+                                    </td>
+                                    <td className="break-all px-3 py-3 text-xs font-bold text-black/65">
+                                      {row.email || "No email"}
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      <div className="flex max-w-[16rem] flex-wrap gap-1">
+                                        <Badge variant={row.profile_id ? "default" : "outline"}>{row.hub_profile_status}</Badge>
+                                        <Badge variant={row.neon_membership_status === "active" ? "default" : "outline"}>{row.neon_membership_status || row.neon_account_status || "membership unknown"}</Badge>
+                                        <Badge variant={row.season_member_id ? "default" : "outline"}>{row.camp_status || "no season row"}</Badge>
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-3 text-xs font-black uppercase">
+                                      <div>Ongoing {row.current_hub_points}</div>
+                                      <div>Season {row.current_season_points}</div>
+                                      <div>Camp {row.current_camp_points}</div>
+                                      {row.pending_points > 0 && <div className="text-amber-700">Pending {row.pending_points}</div>}
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      <div className="max-w-[18rem] space-y-1 text-xs font-bold text-black/60">
+                                        {(row.recent_actions || []).slice(0, 3).map((action) => (
+                                          <div key={action.id || `${action.actionSlug}-${action.occurredAt}`}>
+                                            {action.actionSlug || action.actionType || action.provider || "activity"} · {action.pointsStatus || "points n/a"}
+                                          </div>
+                                        ))}
+                                        {(row.recent_actions || []).length === 0 ? "No recent activity" : null}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      <div className="flex flex-wrap gap-2">
+                                        <Button
+                                          size="sm"
+                                          disabled={!row.profile_id || busyId === `rewards-award-${row.participant_key}`}
+                                          onClick={() => void openRewardsMemberAward(row)}
+                                        >
+                                          <Trophy className="mr-2 h-4 w-4" />
+                                          Add Points
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={!row.profile_id || busyId === `rewards-history-${row.participant_key}`}
+                                          onClick={() => void openRewardsMemberHistory(row)}
+                                        >
+                                          <Eye className="mr-2 h-4 w-4" />
+                                          View History
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t-[3px] border-black p-3 text-sm font-bold">
+                              <div>Page {rewardsMemberPage + 1} of {rewardsMemberTotalPages} · {rewardsMemberTotal.toLocaleString()} members</div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={rewardsMemberPage === 0 || isLoadingRewardsMembers}
+                                  onClick={() => void loadRewardsMemberTable(Math.max(rewardsMemberPage - 1, 0))}
+                                >
+                                  Previous
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={rewardsMemberPage + 1 >= rewardsMemberTotalPages || isLoadingRewardsMembers}
+                                  onClick={() => void loadRewardsMemberTable(rewardsMemberPage + 1)}
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold text-black/65">
+                            Click Load Member Table to manage points from the production participant directory.
+                          </div>
+                        )}
+                      </div>
+
                       <div className="space-y-3">
                         {isSearchingMembers && <LoadingCampCard label="Searching members" />}
                         {!isSearchingMembers && memberQuery.trim().length >= 2 && pointMemberResults.length === 0 && (
@@ -3470,15 +3746,94 @@ export default function CampAdmin() {
               </div>
             </div>
           ) : actionDialog?.kind === "manual_award" ? (
-            <div className="rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4 text-sm font-bold">
-              {dialogReason}
+            <div className="space-y-4">
+              {selectedPointMember ? (
+                <>
+                  <div className="rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4 text-sm font-bold">
+                    <div className="font-header text-2xl uppercase">
+                      {selectedPointMember.full_name || selectedPointMember.email || selectedPointMember.profile_id}
+                    </div>
+                    <div className="mt-1 break-all text-black/65">{selectedPointMember.email || "No email"}</div>
+                    <div className="mt-3 grid gap-2 text-xs font-black uppercase md:grid-cols-3">
+                      <div className="rounded-xl border-2 border-black bg-white p-2">Ongoing {selectedPointMember.ongoing_points}</div>
+                      <div className="rounded-xl border-2 border-black bg-white p-2">Season {selectedPointMember.seasonal_points}</div>
+                      <div className="rounded-xl border-2 border-black bg-white p-2">Camp {selectedPointMember.cabin_points}</div>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="dialog-manual-action-type">Point category/rule</Label>
+                      <select
+                        id="dialog-manual-action-type"
+                        value={manualActionType}
+                        onChange={(event) => setManualActionType(event.target.value)}
+                        className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        {pointRules.filter((rule) => rule.active).map((rule) => (
+                          <option key={rule.action_type} value={rule.action_type}>
+                            {rule.display_name} ({rule.action_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="dialog-manual-points">Point amount</Label>
+                      <Input id="dialog-manual-points" inputMode="numeric" value={manualPoints} onChange={(event) => setManualPoints(event.target.value)} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="dialog-manual-reason">Reason</Label>
+                      <Input id="dialog-manual-reason" value={manualReason} onChange={(event) => setManualReason(event.target.value)} required />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="dialog-manual-note">Internal note</Label>
+                      <Textarea id="dialog-manual-note" value={manualAdminNote} onChange={(event) => setManualAdminNote(event.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                      <input type="checkbox" checked={countsForOngoing} onChange={(event) => setCountsForOngoing(event.target.checked)} />
+                      Ongoing
+                    </label>
+                    <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                      <input
+                        type="checkbox"
+                        checked={countsForSeason}
+                        onChange={(event) => {
+                          setCountsForSeason(event.target.checked);
+                          if (!event.target.checked) setCountsForCabin(false);
+                        }}
+                      />
+                      Season
+                    </label>
+                    <label className="flex items-center gap-3 rounded-xl border-2 border-black bg-white p-3 text-sm font-black">
+                      <input
+                        type="checkbox"
+                        checked={countsForCabin}
+                        disabled={!countsForSeason || !selectedPointMember.cabin_id}
+                        onChange={(event) => setCountsForCabin(event.target.checked)}
+                      />
+                      Cabin
+                    </label>
+                  </div>
+                  {lastAwardResult && (
+                    <div className="rounded-xl border-2 border-black bg-white p-3 text-xs font-bold">
+                      Event {lastAwardResult.point_event_id || "n/a"} · Transaction {lastAwardResult.point_transaction_id || "n/a"} · Audit {lastAwardResult.audit_log_id || "n/a"}
+                      {lastAwardResult.duplicate ? " · duplicate request reused" : ""}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4 text-sm font-bold">
+                  Select a member before awarding points.
+                </div>
+              )}
             </div>
           ) : null}
 
           <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="outline" onClick={() => setActionDialog(null)}>Cancel</Button>
             <Button
-              disabled={!actionDialog || Boolean(busyId) || (actionDialog.kind === "link_member" && !selectedLinkMember)}
+              disabled={!actionDialog || Boolean(busyId) || (actionDialog.kind === "link_member" && !selectedLinkMember) || (actionDialog.kind === "manual_award" && !selectedPointMember)}
               onClick={() => {
                 if (!actionDialog) return;
                 if (actionDialog.kind === "edit_action") void submitUpdateAction(actionDialog.actionId);
@@ -3489,7 +3844,7 @@ export default function CampAdmin() {
                 if (actionDialog.kind === "reverse") void submitReverseTransaction(actionDialog.transaction);
               }}
             >
-              {busyId ? "Saving" : actionDialog?.kind === "link_member" ? "Link Member" : "Save"}
+              {busyId ? "Saving" : actionDialog?.kind === "link_member" ? "Link Member" : actionDialog?.kind === "manual_award" ? "Confirm Award" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

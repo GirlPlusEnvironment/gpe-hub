@@ -25,6 +25,15 @@ const FIELDS = [
   ...CANONICAL_MEMBERSHIP_FIELDS
 ];
 
+function hubInvitationSyncStatus(status: unknown) {
+  const value = String(status || "");
+  if (value === "sent" || value.startsWith("not_required")) return "succeeded";
+  if (value === "queued") return "pending";
+  if (value === "not_attempted") return "not_attempted";
+  if (value) return "failed";
+  return "not_attempted";
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
   let submissionId: string | null = null;
@@ -62,7 +71,7 @@ Deno.serve(async (req) => {
       await updateFormSubmission(String(submission.id), {
         submission_status: hubInviteStatus === "failed" ? "partial_failure" : "duplicate",
         neon_sync_status: "succeeded",
-        hub_invitation_status: hubInviteQueued ? hubInviteStatus : "not_required",
+        hub_invitation_status: hubInviteQueued ? hubInvitationSyncStatus(hubInviteStatus) : "succeeded",
         membership_outcome: before.outcome,
         neon_account_id: before.neonAccountId,
         submission_payload: {
@@ -116,9 +125,17 @@ Deno.serve(async (req) => {
     await updateFormSubmission(String(submission.id), {
       submission_status: "completed",
       neon_sync_status: "succeeded",
-      hub_invitation_status: "pending",
+      hub_invitation_status: hubInvitationSyncStatus(membershipResult.hubInviteStatus),
       neon_account_id: account.neonAccountId,
-      membership_outcome: "active_member_needs_hub_invite"
+      membership_outcome: "active_member_needs_hub_invite",
+      submission_payload: {
+        fields,
+        canonicalMembership,
+        membershipCreationStatus: membershipResult.membershipCreationStatus,
+        membershipId: membershipResult.membershipId,
+        membershipFinalization: membershipResult,
+        membershipOutcome: "active_member_needs_hub_invite"
+      }
     });
     await recordLeadAction({
       submissionId: String(submission.id),

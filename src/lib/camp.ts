@@ -192,6 +192,51 @@ export type AdminPointMember = {
   result_rank: number;
 };
 
+export type AdminHubMemberRosterRow = {
+  total_count?: number;
+  participant_key: string;
+  profile_id: string | null;
+  auth_user_id: string | null;
+  season_member_id: string | null;
+  display_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email: string | null;
+  hub_profile_status: string;
+  hub_account_status: string;
+  neon_account_status: string;
+  neon_membership_status: string | null;
+  neon_account_id: string | null;
+  neon_membership_id: string | null;
+  camp_status: string | null;
+  season_status: string | null;
+  invitation_status: string | null;
+  onboarding_status: string | null;
+  reconciliation_status: string;
+  identity_confidence: string;
+  source_kinds: string[];
+  current_hub_points: number;
+  current_season_points: number;
+  current_camp_points: number;
+  past_actions_count: number;
+  pending_points: number;
+  last_activity_at: string | null;
+  recent_actions?: Array<{
+    id?: string;
+    actionType?: string | null;
+    actionSlug?: string | null;
+    provider?: string | null;
+    pointsStatus?: string | null;
+    neonSyncStatus?: string | null;
+    hubIdentityStatus?: string | null;
+    occurredAt?: string | null;
+  }>;
+  signup_started_at: string | null;
+  joined_at: string | null;
+  last_refreshed_at?: string | null;
+  result_rank?: number;
+};
+
 export type AdminPointTransaction = {
   transaction_id: string;
   points: number;
@@ -220,14 +265,97 @@ export type AdminPointTransaction = {
   metadata?: Record<string, unknown> | null;
 };
 
+export type AdminHubParticipantDetail = {
+  participant: AdminHubMemberRosterRow & {
+    raw_refs?: Record<string, unknown> | null;
+  };
+  pointHistory: Array<{
+    transactionId?: string;
+    date?: string;
+    points?: number;
+    reason?: string | null;
+    ruleKey?: string | null;
+    sourceType?: string | null;
+    sourceRecordId?: string | null;
+    adminNote?: string | null;
+    awardedBy?: string | null;
+    approvalStatus?: string | null;
+    countsForOngoing?: boolean;
+    countsForSeason?: boolean;
+    countsForCabin?: boolean;
+  }>;
+  pastActions: Array<{
+    id?: string;
+    actionType?: string | null;
+    actionSlug?: string | null;
+    provider?: string | null;
+    providerActionId?: string | null;
+    providerSignatureId?: string | null;
+    formSubmissionId?: string | null;
+    campaignSlug?: string | null;
+    sourceUrl?: string | null;
+    membershipChoice?: string | null;
+    neonSyncStatus?: string | null;
+    hubIdentityStatus?: string | null;
+    pointsStatus?: string | null;
+    generalPointTransactionId?: string | null;
+    campPointTransactionId?: string | null;
+    campLedgerId?: string | null;
+    campSubmissionId?: string | null;
+    campSubmissionActionId?: string | null;
+    seasonId?: string | null;
+    seasonMemberId?: string | null;
+    challengeId?: string | null;
+    occurredAt?: string | null;
+  }>;
+  auditLog: Array<{
+    id?: string;
+    adminId?: string | null;
+    action?: string;
+    reason?: string | null;
+    previousState?: Record<string, unknown>;
+    newState?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  }>;
+};
+
 export type AdminAwardResult = {
   point_transaction_id: string | null;
+  point_event_id?: string | null;
   camp_ledger_id: string | null;
+  audit_log_id?: string | null;
   duplicate: boolean;
+  idempotency_key?: string | null;
   points: number;
   counts_for_ongoing: boolean;
   counts_for_season: boolean;
   counts_for_cabin: boolean;
+};
+
+export type CampReviewReconcileResult = {
+  ok?: boolean;
+  status: string;
+  seasonMemberCreated?: boolean;
+  alreadyAwarded?: boolean;
+  profileId: string;
+  email: string | null;
+  neonAccountId: string | null;
+  seasonMemberId: string;
+  campSubmissionId: string;
+  campSubmissionActionId: string;
+  reviewSubmissionId: string | null;
+  transactionId?: string | null;
+  ledgerId?: string | null;
+  pointTransactionId: string | null;
+  campLedgerId: string | null;
+  pointEventIds: string[];
+  pendingAwardIds: string[];
+  leadActionIds: string[];
+  points: number;
+  pointsAwarded?: number;
+  claimResult?: Record<string, unknown>;
+  attachResult?: Record<string, unknown>;
 };
 
 export type CampSubmission = {
@@ -515,6 +643,73 @@ export async function searchPointMembers(params: {
   return (data || []) as AdminPointMember[];
 }
 
+export async function getAdminHubMemberRoster(params: {
+  seasonId?: string | null;
+  query?: string;
+  limit?: number;
+  offset?: number;
+  hubStatus?: string;
+  neonStatus?: string;
+  reconciliationStatus?: string;
+  campStatus?: string;
+  pointsFilter?: string;
+  activityFilter?: string;
+  sort?: string;
+  status?: "all" | "hub" | "missing_hub" | "missing_neon" | "attempted" | "active_member";
+}) {
+  const compatibility = params.status || "all";
+  const { data, error } = await supabase.rpc("admin_get_hub_member_roster", {
+    p_query: params.query ?? null,
+    p_limit: params.limit ?? 250,
+    p_offset: params.offset ?? 0,
+    p_hub_status: params.hubStatus ?? (compatibility === "hub" ? "hub_active" : compatibility === "missing_hub" || compatibility === "attempted" ? "missing_hub" : "all"),
+    p_neon_status: params.neonStatus ?? (compatibility === "missing_neon" ? "missing_neon" : compatibility === "active_member" ? "active" : "all"),
+    p_reconciliation_status: params.reconciliationStatus ?? "all",
+    p_camp_status: params.campStatus ?? "all",
+    p_points_filter: params.pointsFilter ?? "all",
+    p_activity_filter: params.activityFilter ?? (compatibility === "attempted" ? "incomplete_signup" : "all"),
+    p_sort: params.sort ?? "last_activity_desc",
+  });
+  if (error) throw error;
+  return (data || []) as AdminHubMemberRosterRow[];
+}
+
+export async function refreshAdminHubParticipantDirectory() {
+  const { data, error } = await supabase.rpc("admin_refresh_hub_participant_directory");
+  if (error) throw error;
+  return data as { ok?: boolean; refreshedCount?: number; refreshedAt?: string };
+}
+
+export async function getAdminHubParticipantDetail(participantKey: string) {
+  const { data, error } = await supabase.rpc("admin_get_hub_participant_detail", {
+    p_participant_key: participantKey,
+  });
+  if (error) throw error;
+  return data as AdminHubParticipantDetail;
+}
+
+export async function logAdminParticipantAction(params: {
+  participantKey?: string | null;
+  profileId?: string | null;
+  action: string;
+  reason?: string | null;
+  previousState?: Record<string, unknown>;
+  newState?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}) {
+  const { data, error } = await supabase.rpc("admin_log_participant_action", {
+    p_participant_key: params.participantKey ?? null,
+    p_profile_id: params.profileId ?? null,
+    p_action: params.action,
+    p_reason: params.reason ?? null,
+    p_previous_state: params.previousState ?? {},
+    p_new_state: params.newState ?? {},
+    p_metadata: params.metadata ?? {},
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 export async function getPointRules() {
   const { data, error } = await supabase
     .from("hub_point_rules")
@@ -637,8 +832,36 @@ export async function approveCampSubmissionAction(params: {
     p_points: params.points ?? null,
     p_notes: params.notes ?? null,
   });
-  if (error) throw error;
+  if (error) throw campRpcError("approve_camp_submission_action", error);
   return Array.isArray(data) ? data[0] : data;
+}
+
+export async function reconcileCampReviewAward(params: {
+  actionId: string;
+  points?: number | null;
+  notes?: string | null;
+}) {
+  const { data, error } = await supabase.rpc("admin_reconcile_camp_review_award", {
+    p_action_id: params.actionId,
+    p_points: params.points ?? null,
+    p_notes: params.notes ?? null,
+  });
+  if (error) throw campRpcError("admin_reconcile_camp_review_award", error);
+  return data as CampReviewReconcileResult;
+}
+
+function campRpcError(operation: string, error: unknown) {
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const parts = [
+    `${operation} failed`,
+    typeof record.message === "string" ? record.message : null,
+    typeof record.details === "string" ? record.details : null,
+    typeof record.hint === "string" ? `Hint: ${record.hint}` : null,
+    typeof record.code === "string" ? `Code: ${record.code}` : null,
+  ].filter(Boolean);
+  const next = new Error(parts.join(" | "));
+  Object.assign(next, record);
+  return next;
 }
 
 export async function markCampSubmissionAction(params: {

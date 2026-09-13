@@ -36,6 +36,7 @@ const MembershipHelp = lazy(() => import("./pages/MembershipHelp"));
 const EmailPreferences = lazy(() => import("./pages/EmailPreferences"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminMembershipDiagnostics = lazy(() => import("./pages/AdminMembershipDiagnostics"));
+const AdminHubMembers = lazy(() => import("./pages/AdminHubMembers"));
 const CampAdmin = lazy(() => import("./pages/CampAdmin"));
 
 const queryClient = new QueryClient();
@@ -290,6 +291,16 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/hub-members"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminHubMembers />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
             <Route path="/login" element={<Login />} />
             <Route path="/sign-up" element={<Navigate to="/login?mode=signup" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -297,6 +308,14 @@ const App = () => (
             <Route path="/accept-invite/" element={<AcceptInvite />} />
             <Route
               path="/invite"
+              element={
+                <ProtectedRoute>
+                  <Invite />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invite/"
               element={
                 <ProtectedRoute>
                   <Invite />

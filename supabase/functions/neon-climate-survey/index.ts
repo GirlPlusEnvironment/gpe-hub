@@ -562,6 +562,7 @@ Deno.serve(async (req) => {
       neonSyncStatus: status === "neon_synced" || status === "hub_invited" || status === "hub_invite_pending" ? "succeeded" : status === "neon_sync_pending" ? "pending" : "failed",
       hubIdentityStatus: status === "hub_invited" ? "succeeded" : status === "hub_invite_pending" ? "pending" : "not_attempted",
       pointsStatus: "not_applicable",
+      neonActivityId: neonActivityId || null,
       rawPayload: { climateSurveySubmissionId: submission.id, formSubmissionStatus: activitySynced ? "created" : "neon_sync_failed", formRecordId: neonActivityId || null, membershipOutcome: outcome, status, activityFailureMessage, membershipCreationStatus, neonMembershipId, membershipEmailQueued, hubInviteQueued, membershipFailureMessage, membershipFinalization }
     }).catch((error) => console.error("climate-survey-lead-action", safeError(error)));
     await recordPointEventForLeadAction({
@@ -611,7 +612,7 @@ Deno.serve(async (req) => {
               : "not_requested",
         communityResourcesUrl: "https://www.girlplusenvironment.org/resources",
         membershipUrl: "https://www.girlplusenvironment.org/become-a-member",
-        invitePageUrl: "https://members.girlplusenvironment.org/invite",
+        invitePageUrl: "https://members.girlplusenvironment.org/invite/",
         hubUrl: "https://members.girlplusenvironment.org"
       }
     }).catch((error) => {

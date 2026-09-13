@@ -18,8 +18,11 @@ import {
   type CampCabinLeaderboardRow,
   type CampSeason,
   type CampSubmission,
+  type CampSubmissionAction,
   type ChallengePublishState,
   type AdminAwardResult,
+  type AdminHubMemberRosterRow,
+  type CampReviewReconcileResult,
   type AdminPointMember,
   type AdminPointTransaction,
   type HubPointRule,
@@ -34,6 +37,8 @@ import {
   getModerationQueueItems,
   getPendingCampSubmissions,
   getPointRules,
+  getAdminHubMemberRoster,
+  reconcileCampReviewAward,
   reversePointTransaction,
   searchPointMembers,
   applyModerationAction,
@@ -54,7 +59,8 @@ type ScheduleFilter = "all" | "active" | "upcoming" | "draft" | "hidden" | "comp
 type ScheduleView = "timeline" | "calendar" | "list";
 type ScheduleSort = "start_asc" | "start_desc" | "status" | "order";
 type SeasonSaveMode = "draft" | "publish";
-type RewardsTab = "rules" | "ledger" | "adjustments" | "badges" | "achievements";
+type RewardsTab = "rules" | "hubMembers" | "ledger" | "adjustments" | "badges" | "achievements";
+type HubRosterStatus = "all" | "hub" | "missing_hub" | "missing_neon" | "attempted" | "active_member";
 type ModerationTab = "posts" | "comments" | "listings" | "messages" | "reports" | "users";
 type ChallengeEditorTab = "overview" | "content" | "schedule" | "rewards" | "submission" | "resources" | "notifications" | "history";
 
@@ -101,6 +107,12 @@ type ReviewDialogState = {
   memberLabel: string;
   challengeTitle: string;
   defaultPoints: number;
+} | null;
+
+type ApprovalRecoveryPrompt = {
+  actionId: string;
+  points: number;
+  message: string;
 } | null;
 
 type ActionDialogState =
@@ -201,10 +213,20 @@ const moderationTabs: Array<{ value: ModerationTab; label: string }> = [
 
 const rewardsTabs: Array<{ value: RewardsTab; label: string }> = [
   { value: "rules", label: "Point Rules" },
+  { value: "hubMembers", label: "Hub Members" },
   { value: "ledger", label: "Point Ledger" },
   { value: "adjustments", label: "Manual Adjustments" },
   { value: "badges", label: "Badges" },
   { value: "achievements", label: "Achievements" },
+];
+
+const hubRosterFilters: Array<{ value: HubRosterStatus; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "hub", label: "In Hub" },
+  { value: "active_member", label: "Active Neon" },
+  { value: "missing_hub", label: "Neon not in Hub" },
+  { value: "missing_neon", label: "Missing Neon" },
+  { value: "attempted", label: "Attempted signup" },
 ];
 
 const challengeEditorTabs: Array<{ value: ChallengeEditorTab; label: string }> = [
@@ -424,6 +446,11 @@ export default function CampAdmin() {
   const [selectedPointMember, setSelectedPointMember] = useState<AdminPointMember | null>(null);
   const [pointHistory, setPointHistory] = useState<AdminPointTransaction[]>([]);
   const [pointRules, setPointRules] = useState<HubPointRule[]>([]);
+  const [hubRosterRows, setHubRosterRows] = useState<AdminHubMemberRosterRow[]>([]);
+  const [hubRosterQuery, setHubRosterQuery] = useState("");
+  const [hubRosterStatus, setHubRosterStatus] = useState<HubRosterStatus>("all");
+  const [isLoadingHubRoster, setIsLoadingHubRoster] = useState(false);
+  const [hubRosterMessage, setHubRosterMessage] = useState<string | null>(null);
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("all");
@@ -445,6 +472,8 @@ export default function CampAdmin() {
   const [countsForSeason, setCountsForSeason] = useState(false);
   const [countsForCabin, setCountsForCabin] = useState(false);
   const [lastAwardResult, setLastAwardResult] = useState<AdminAwardResult | null>(null);
+  const [lastReconcileResult, setLastReconcileResult] = useState<CampReviewReconcileResult | null>(null);
+  const [approvalRecoveryPrompt, setApprovalRecoveryPrompt] = useState<ApprovalRecoveryPrompt>(null);
   const [manualIdempotencyKey, setManualIdempotencyKey] = useState(createManualIdempotencyKey);
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialogState>(null);
@@ -568,6 +597,7 @@ export default function CampAdmin() {
     if (!reviewDialog) return;
     setBusyId(reviewDialog.actionId);
     setError(null);
+    setApprovalRecoveryPrompt(null);
     try {
       if (reviewDialog.kind === "approve") {
         const points = Number(reviewPoints);
@@ -608,7 +638,43 @@ export default function CampAdmin() {
       setReviewDialog(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update submission.");
+      const message = err instanceof Error ? err.message : "Could not update submission.";
+      setError(message);
+      if (reviewDialog.kind === "approve") {
+        setApprovalRecoveryPrompt({
+          actionId: reviewDialog.actionId,
+          points: Number(reviewPoints) || reviewDialog.defaultPoints,
+          message,
+        });
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReconcileReviewAward(action: CampSubmissionAction, defaultPoints: number | null) {
+    const points = defaultPoints ?? action.approved_points ?? action.requested_points ?? 0;
+    setBusyId(action.id);
+    setError(null);
+    setApprovalRecoveryPrompt(null);
+    setLastReconcileResult(null);
+    try {
+      const result = await reconcileCampReviewAward({
+        actionId: action.id,
+        points,
+        notes: "Team Review recovery: reconcile member link and award missing eligible points.",
+      });
+      setLastReconcileResult(result);
+      await load();
+      toast({
+        title: "Review reconciled",
+        description: [
+          result.pointTransactionId ? `Transaction ${result.pointTransactionId}` : null,
+          result.campLedgerId ? `Camp ledger ${result.campLedgerId}` : null,
+        ].filter(Boolean).join(" · ") || "Existing records were verified without duplicates.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reconcile and award this review.");
     } finally {
       setBusyId(null);
     }
@@ -703,6 +769,61 @@ export default function CampAdmin() {
     setPointHistory(history);
   }
 
+  const loadHubRoster = useCallback(async (query = hubRosterQuery, status = hubRosterStatus) => {
+    setIsLoadingHubRoster(true);
+    setHubRosterMessage(null);
+    try {
+      const rows = await getAdminHubMemberRoster({
+        seasonId: season?.id ?? null,
+        query: query.trim() || undefined,
+        status,
+        limit: 250,
+      });
+      setHubRosterRows(rows);
+      setHubRosterMessage(`${rows.length} roster row${rows.length === 1 ? "" : "s"} loaded.`);
+    } catch (err) {
+      setHubRosterRows([]);
+      setHubRosterMessage(err instanceof Error ? err.message : "Hub member roster failed to load.");
+    } finally {
+      setIsLoadingHubRoster(false);
+    }
+  }, [hubRosterQuery, hubRosterStatus, season?.id]);
+
+  async function selectRosterPointMember(row: AdminHubMemberRosterRow) {
+    if (!row.profile_id) {
+      setError("This roster row does not have a Hub profile yet, so points cannot be assigned until the person is connected to Hub.");
+      return;
+    }
+    setBusyId(`hub-roster-${row.profile_id}`);
+    setError(null);
+    try {
+      const [member] = await searchPointMembers({ seasonId: season?.id ?? null, query: row.profile_id, limit: 1 });
+      selectPointMember(member || {
+        profile_id: row.profile_id,
+        season_member_id: row.season_member_id,
+        full_name: row.display_name,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        membership_status: row.neon_membership_status,
+        neon_account_id: row.neon_account_id,
+        ongoing_points: row.current_hub_points,
+        seasonal_points: row.current_season_points,
+        cabin_points: row.current_camp_points,
+        cabin_id: null,
+        cabin_name: null,
+        season_id: season?.id ?? null,
+        result_rank: row.result_rank ?? 50,
+      });
+      setRewardsTab("adjustments");
+      toast({ title: "Member selected", description: "Manual assignment and point history are ready below." });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not select this roster member.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function selectPointMember(member: AdminPointMember) {
     setSelectedPointMember(member);
     setLastAwardResult(null);
@@ -754,6 +875,11 @@ export default function CampAdmin() {
     setCountsForSeason(selectedRule.counts_for_season);
     setCountsForCabin(selectedRule.counts_for_cabin);
   }, [manualActionType, selectedRule]);
+
+  useEffect(() => {
+    if (rewardsTab !== "hubMembers") return;
+    void loadHubRoster();
+  }, [loadHubRoster, rewardsTab]);
 
   function handleScopedManualAward() {
     if (!season || !selectedPointMember) return;
@@ -1466,7 +1592,23 @@ export default function CampAdmin() {
 
           {error && (
             <div className="rounded-[1.5rem] border-[3px] border-red-500 bg-red-100 p-4 text-sm font-bold text-red-700">
-              {error}
+              <div>{error}</div>
+              {approvalRecoveryPrompt ? (() => {
+                const action = submissions
+                  .flatMap((submission) => submission.gpe_camp_submission_actions || [])
+                  .find((candidate) => candidate.id === approvalRecoveryPrompt.actionId);
+                return action ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === action.id}
+                    onClick={() => void handleReconcileReviewAward(action, approvalRecoveryPrompt.points)}
+                  >
+                    Reconcile & Award
+                  </Button>
+                ) : null;
+              })() : null}
             </div>
           )}
 
@@ -2022,6 +2164,9 @@ export default function CampAdmin() {
                                       <div className="flex flex-wrap gap-2">
                                         <Button size="sm" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => openReviewDialog({ kind: "approve", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}><Trophy className="mr-2 h-4 w-4" />Approve</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id || normalizeReviewStatus(action.review_status) === "approved"} onClick={() => openUpdateActionDialog(action.id, defaultPoints)}>Approve and Edit Points</Button>
+                                        <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => void handleReconcileReviewAward(action, defaultPoints)}>
+                                          Reconcile & Award
+                                        </Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "needs_information", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Request Changes</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "duplicate", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Duplicate</Button>
                                         <Button size="sm" variant="outline" disabled={busyId === action.id} onClick={() => openReviewDialog({ kind: "reject", actionId: action.id, memberLabel, challengeTitle: title, defaultPoints })}>Reject</Button>
@@ -2033,6 +2178,23 @@ export default function CampAdmin() {
                                 );
                               })}
                             </div>
+                            {lastReconcileResult && (
+                              <div className="rounded-[1.25rem] border-[3px] border-black bg-gpe-yellow p-4 text-xs font-bold text-black">
+                                <div className="font-black uppercase">Last Reconcile & Award Result</div>
+                                <div className="mt-2 grid gap-1 md:grid-cols-2">
+                                  <div>Profile: {lastReconcileResult.profileId}</div>
+                                  <div>Season member: {lastReconcileResult.seasonMemberId}</div>
+                                  <div>Review: {lastReconcileResult.reviewSubmissionId || "none"}</div>
+                                  <div>Transaction: {lastReconcileResult.pointTransactionId || lastReconcileResult.transactionId || "none"}</div>
+                                  <div>Camp ledger: {lastReconcileResult.campLedgerId || lastReconcileResult.ledgerId || "none"}</div>
+                                  <div>Points awarded: {lastReconcileResult.pointsAwarded ?? lastReconcileResult.points}</div>
+                                  <div>Already awarded: {lastReconcileResult.alreadyAwarded ? "Yes" : "No"}</div>
+                                  <div>Season member created: {lastReconcileResult.seasonMemberCreated ? "Yes" : "No"}</div>
+                                  <div className="md:col-span-2">Lead actions: {lastReconcileResult.leadActionIds?.join(", ") || "none"}</div>
+                                  <div className="md:col-span-2">Point events: {lastReconcileResult.pointEventIds?.join(", ") || "none"}</div>
+                                </div>
+                              </div>
+                            )}
                             <Button size="sm" variant="outline" disabled={busyId === selectedSubmission.id} onClick={() => openAssociateSubmissionDialog(selectedSubmission.id)}>Associate Member</Button>
                           </div>
                         );
@@ -2362,6 +2524,128 @@ export default function CampAdmin() {
                       ))}
                     </div>
                   )}
+                  {rewardsTab === "hubMembers" && (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+                        <div>
+                          <Label htmlFor="hub-roster-search">Search Hub and Neon roster</Label>
+                          <Input
+                            id="hub-roster-search"
+                            value={hubRosterQuery}
+                            onChange={(event) => setHubRosterQuery(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") void loadHubRoster();
+                            }}
+                            placeholder="Name, email, Neon ID, or Hub profile ID"
+                          />
+                        </div>
+                        <Button className="self-end" disabled={isLoadingHubRoster} onClick={() => void loadHubRoster()}>
+                          <Search className="mr-2 h-4 w-4" />
+                          {isLoadingHubRoster ? "Loading" : "Load roster"}
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Hub roster filters">
+                        {hubRosterFilters.map((filter) => (
+                          <Button
+                            key={filter.value}
+                            size="sm"
+                            role="tab"
+                            aria-selected={hubRosterStatus === filter.value}
+                            variant={hubRosterStatus === filter.value ? "default" : "outline"}
+                            onClick={() => setHubRosterStatus(filter.value)}
+                          >
+                            {filter.label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {hubRosterMessage && (
+                        <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold">
+                          {hubRosterMessage}
+                        </div>
+                      )}
+
+                      {isLoadingHubRoster ? (
+                        <LoadingCampCard label="Loading Hub members" />
+                      ) : hubRosterRows.length === 0 ? (
+                        <EmptyState
+                          illustration="clipboard"
+                          title="No Roster Rows"
+                          description="Load the roster or try a different status filter."
+                        />
+                      ) : (
+                        <div className="overflow-x-auto rounded-[1.25rem] border-[3px] border-black bg-white">
+                          <table className="min-w-full divide-y-2 divide-black text-sm">
+                            <thead className="bg-gpe-yellow/40 text-left text-xs font-black uppercase">
+                              <tr>
+                                <th className="px-3 py-2">Member</th>
+                                <th className="px-3 py-2">Statuses</th>
+                                <th className="px-3 py-2">Points</th>
+                                <th className="px-3 py-2">Past actions</th>
+                                <th className="px-3 py-2">Last seen</th>
+                                <th className="px-3 py-2">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-black/20">
+                              {hubRosterRows.map((row) => (
+                                <tr key={row.participant_key} className="align-top">
+                                  <td className="px-3 py-3">
+                                    <div className="font-black">{row.display_name}</div>
+                                    <div className="break-all text-xs font-bold text-black/60">{row.email || "No email"}</div>
+                                    <div className="mt-1 break-all text-xs text-black/45">
+                                      {row.profile_id ? `Hub ${row.profile_id}` : "No Hub profile"}
+                                      <br />
+                                      Neon {row.neon_account_id || "not linked"}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <div className="flex max-w-[18rem] flex-wrap gap-1">
+                                      <Badge variant={row.profile_id ? "default" : "outline"}>{row.hub_profile_status}</Badge>
+                                      <Badge variant={row.neon_account_id ? "default" : "outline"}>{row.neon_account_status}</Badge>
+                                      <Badge variant={row.neon_membership_status === "active" ? "default" : "outline"}>{row.neon_membership_status || "membership unknown"}</Badge>
+                                      <Badge variant={row.season_member_id ? "default" : "outline"}>{row.camp_status || "no season row"}</Badge>
+                                      {row.invitation_status && <Badge variant="outline">invite {row.invitation_status}</Badge>}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-xs font-black uppercase">
+                                    <div>Ongoing {row.current_hub_points}</div>
+                                    <div>Season {row.current_season_points}</div>
+                                    <div>Cabin {row.current_camp_points}</div>
+                                    {row.pending_points > 0 && <div className="text-amber-700">Pending {row.pending_points}</div>}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <div className="font-black">{row.past_actions_count}</div>
+                                    <div className="mt-1 max-w-[20rem] space-y-1 text-xs font-bold text-black/60">
+                                      {(row.recent_actions || []).slice(0, 3).map((action) => (
+                                        <div key={action.id || `${action.actionSlug}-${action.occurredAt}`}>
+                                          {action.actionSlug || action.actionType || action.provider || "action"} · {action.pointsStatus || "points n/a"}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-xs font-bold text-black/60">
+                                    {row.last_activity_at ? new Date(row.last_activity_at).toLocaleString() : "Unknown"}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <Button
+                                      size="sm"
+                                      variant={row.profile_id ? "default" : "outline"}
+                                      disabled={!row.profile_id || busyId === `hub-roster-${row.profile_id}`}
+                                      onClick={() => void selectRosterPointMember(row)}
+                                    >
+                                      <Trophy className="mr-2 h-4 w-4" />
+                                      Award points
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {rewardsTab === "badges" && (
                     <div className="rounded-[1.25rem] border-[3px] border-black bg-cyan-50 p-4">
                       <h3 className="font-header text-2xl uppercase">Badges</h3>
@@ -2378,100 +2662,104 @@ export default function CampAdmin() {
                       </div>
                     </div>
                   )}
-                  {rewardsTab === "ledger" ? <h3 className="font-header text-2xl uppercase">Point Ledger</h3> : null}
-                  {rewardsTab === "adjustments" ? <h3 className="font-header text-2xl uppercase">Manual Adjustments</h3> : null}
-                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                    <div>
-                      <Label htmlFor="member-search">Search member</Label>
-                      <Input
-                        id="member-search"
-                        value={memberQuery}
-                        onChange={(event) => setMemberQuery(event.target.value)}
-                        placeholder="First name, last name, full name, email, Neon ID, or profile ID"
-                      />
-                    </div>
-                    <Button className="self-end" onClick={() => {
-                      if (memberQuery.trim().length >= 2 && season) {
-                        setIsSearchingMembers(true);
-                        searchPointMembers({ seasonId: season.id, query: memberQuery, limit: 25 })
-                          .then((results) => {
-                            setPointMemberResults(results);
-                            setPointSearchMessage(`${results.length} result${results.length === 1 ? "" : "s"} found.`);
-                          })
-                          .catch((err) => setPointSearchMessage(err instanceof Error ? err.message : "Member search failed."))
-                          .finally(() => setIsSearchingMembers(false));
-                      }
-                    }}>
-                      <Search className="mr-2 h-4 w-4" />
-                      {isSearchingMembers ? "Searching" : "Search"}
-                    </Button>
-                  </div>
+                  {(rewardsTab === "ledger" || rewardsTab === "adjustments") && (
+                    <>
+                      {rewardsTab === "ledger" ? <h3 className="font-header text-2xl uppercase">Point Ledger</h3> : null}
+                      {rewardsTab === "adjustments" ? <h3 className="font-header text-2xl uppercase">Manual Adjustments</h3> : null}
+                      <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                        <div>
+                          <Label htmlFor="member-search">Search member</Label>
+                          <Input
+                            id="member-search"
+                            value={memberQuery}
+                            onChange={(event) => setMemberQuery(event.target.value)}
+                            placeholder="First name, last name, full name, email, Neon ID, or profile ID"
+                          />
+                        </div>
+                        <Button className="self-end" onClick={() => {
+                          if (memberQuery.trim().length >= 2 && season) {
+                            setIsSearchingMembers(true);
+                            searchPointMembers({ seasonId: season.id, query: memberQuery, limit: 25 })
+                              .then((results) => {
+                                setPointMemberResults(results);
+                                setPointSearchMessage(`${results.length} result${results.length === 1 ? "" : "s"} found.`);
+                              })
+                              .catch((err) => setPointSearchMessage(err instanceof Error ? err.message : "Member search failed."))
+                              .finally(() => setIsSearchingMembers(false));
+                          }
+                        }}>
+                          <Search className="mr-2 h-4 w-4" />
+                          {isSearchingMembers ? "Searching" : "Search"}
+                        </Button>
+                      </div>
 
-                  {pointSearchMessage && (
-                    <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold">
-                      {pointSearchMessage}
-                    </div>
+                      {pointSearchMessage && (
+                        <div className="rounded-[1rem] border-2 border-black bg-white p-3 text-sm font-bold">
+                          {pointSearchMessage}
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        {isSearchingMembers && <LoadingCampCard label="Searching members" />}
+                        {!isSearchingMembers && memberQuery.trim().length >= 2 && pointMemberResults.length === 0 && (
+                          <EmptyState
+                            illustration="clipboard"
+                            title="No Members Found"
+                            description="Try a first name, last name, full name, email, Neon ID, or profile ID."
+                          />
+                        )}
+                        {pointMemberResults.map((member) => {
+                          const selected = selectedPointMember?.profile_id === member.profile_id;
+                          return (
+                            <button
+                              key={`${member.profile_id}-${member.season_member_id || "profile"}`}
+                              type="button"
+                              onClick={() => selectPointMember(member)}
+                              className={`w-full rounded-[1.25rem] border-[3px] p-4 text-left transition ${
+                                selected ? "border-black bg-gpe-yellow shadow-gpe-sm" : "border-black bg-white hover:bg-gpe-yellow/30"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0">
+                                  <div className="font-header text-2xl uppercase leading-tight">
+                                    {member.full_name || [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email || "Unnamed member"}
+                                  </div>
+                                  <div className="mt-1 break-all text-sm font-bold text-black/65">{member.email || "No email"}</div>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-black uppercase">
+                                    <Badge variant="outline">{member.membership_status || "unknown"}</Badge>
+                                    <Badge variant="outline">Neon {member.neon_account_id || "not linked"}</Badge>
+                                    <Badge variant={member.season_member_id ? "default" : "outline"}>
+                                      {member.season_member_id ? "Season linked" : "No season link"}
+                                    </Badge>
+                                    <Badge variant={member.cabin_id ? "default" : "outline"}>
+                                      {member.cabin_name || "No cabin"}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-2 break-all text-xs font-bold text-black/50">
+                                    Profile {member.profile_id}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-center text-xs font-black uppercase">
+                                  <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                    <div className="font-header text-2xl">{member.ongoing_points}</div>
+                                    Ongoing
+                                  </div>
+                                  <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                    <div className="font-header text-2xl">{member.seasonal_points}</div>
+                                    Season
+                                  </div>
+                                  <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
+                                    <div className="font-header text-2xl">{member.cabin_points}</div>
+                                    Cabin
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
-
-                  <div className="space-y-3">
-                    {isSearchingMembers && <LoadingCampCard label="Searching members" />}
-                    {!isSearchingMembers && memberQuery.trim().length >= 2 && pointMemberResults.length === 0 && (
-                      <EmptyState
-                        illustration="clipboard"
-                        title="No Members Found"
-                        description="Try a first name, last name, full name, email, Neon ID, or profile ID."
-                      />
-                    )}
-                    {pointMemberResults.map((member) => {
-                      const selected = selectedPointMember?.profile_id === member.profile_id;
-                      return (
-                        <button
-                          key={`${member.profile_id}-${member.season_member_id || "profile"}`}
-                          type="button"
-                          onClick={() => selectPointMember(member)}
-                          className={`w-full rounded-[1.25rem] border-[3px] p-4 text-left transition ${
-                            selected ? "border-black bg-gpe-yellow shadow-gpe-sm" : "border-black bg-white hover:bg-gpe-yellow/30"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div className="min-w-0">
-                              <div className="font-header text-2xl uppercase leading-tight">
-                                {member.full_name || [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email || "Unnamed member"}
-                              </div>
-                              <div className="mt-1 break-all text-sm font-bold text-black/65">{member.email || "No email"}</div>
-                              <div className="mt-2 flex flex-wrap gap-2 text-xs font-black uppercase">
-                                <Badge variant="outline">{member.membership_status || "unknown"}</Badge>
-                                <Badge variant="outline">Neon {member.neon_account_id || "not linked"}</Badge>
-                                <Badge variant={member.season_member_id ? "default" : "outline"}>
-                                  {member.season_member_id ? "Season linked" : "No season link"}
-                                </Badge>
-                                <Badge variant={member.cabin_id ? "default" : "outline"}>
-                                  {member.cabin_name || "No cabin"}
-                                </Badge>
-                              </div>
-                              <div className="mt-2 break-all text-xs font-bold text-black/50">
-                                Profile {member.profile_id}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-center text-xs font-black uppercase">
-                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
-                                <div className="font-header text-2xl">{member.ongoing_points}</div>
-                                Ongoing
-                              </div>
-                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
-                                <div className="font-header text-2xl">{member.seasonal_points}</div>
-                                Season
-                              </div>
-                              <div className="rounded-xl border-2 border-black bg-white px-3 py-2">
-                                <div className="font-header text-2xl">{member.cabin_points}</div>
-                                Cabin
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
 
                   {selectedPointMember && (
                     <div className="space-y-5 rounded-[1.5rem] border-[3px] border-black bg-cyan-50 p-4">

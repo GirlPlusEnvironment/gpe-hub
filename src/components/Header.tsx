@@ -194,6 +194,8 @@ const Header = () => {
               {navItems.map((item) => renderNavLink(item, true))}
               {role === "admin" &&
                 renderNavLink({ to: "/admin", label: "Admin", icon: Shield }, true)}
+              {role === "admin" &&
+                renderNavLink({ to: "/admin/hub-members", label: "Hub Members", icon: Users }, true)}
               {(role === "admin" || role === "team_gpe") &&
                 renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield }, true)}
             </nav>
@@ -265,6 +267,7 @@ const Header = () => {
         >
           {navItems.map((item) => renderNavLink(item))}
           {role === "admin" && renderNavLink({ to: "/admin", label: "Admin", icon: Shield })}
+          {role === "admin" && renderNavLink({ to: "/admin/hub-members", label: "Hub Members", icon: Users })}
           {(role === "admin" || role === "team_gpe") &&
             renderNavLink({ to: "/admin/camp", label: "Team Review", icon: Shield })}
         </nav>

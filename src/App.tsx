@@ -38,6 +38,7 @@ const MembershipHelp = lazy(() => import("./pages/MembershipHelp"));
 const EmailPreferences = lazy(() => import("./pages/EmailPreferences"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminMembershipDiagnostics = lazy(() => import("./pages/AdminMembershipDiagnostics"));
+const AdminHubMembers = lazy(() => import("./pages/AdminHubMembers"));
 const CampAdmin = lazy(() => import("./pages/CampAdmin"));
 const AdminMentorshipCabins = lazy(() => import("./pages/AdminMentorshipCabins"));
 
@@ -329,6 +330,16 @@ const App = () => (
                 <ProtectedRoute>
                   <AdminRoute>
                     <AdminMembershipDiagnostics />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/hub-members"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminHubMembers />
                   </AdminRoute>
                 </ProtectedRoute>
               }

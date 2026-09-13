@@ -59,6 +59,7 @@ type PetitionCandidate = {
   submissionId: string | null;
   leadActionId: string | null;
   email: string;
+  displayName: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -152,10 +153,15 @@ function extractPetition(rawPayload: Json, submission?: SubmissionRow | null) {
     || sanitizeText(firstValue(fields.otherAction), 180).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const title = sanitizeText(firstValue(fields.otherAction, petition.title, action.title, form.title, slug), 220);
   const email = normalizeEmail(firstValue(submission?.email_normalized, rawPayload.email, fields.email, person.email, person.email_address, person.email_addresses));
+  const firstName = sanitizeText(firstValue(fields.firstName, rawPayload.firstName, rawPayload.first_name, person.first_name, person.firstName, person.given_name), 120);
+  const lastName = sanitizeText(firstValue(fields.lastName, rawPayload.lastName, rawPayload.last_name, person.last_name, person.lastName, person.family_name), 120);
+  const displayName = sanitizeText(firstValue(fields.name, fields.fullName, rawPayload.name, rawPayload.fullName, rawPayload.full_name, person.name, person.full_name), 180)
+    || [firstName, lastName].filter(Boolean).join(" ");
   return {
     email,
-    firstName: sanitizeText(firstValue(fields.firstName, rawPayload.firstName, rawPayload.first_name, person.first_name, person.firstName, person.given_name), 120),
-    lastName: sanitizeText(firstValue(fields.lastName, rawPayload.lastName, rawPayload.last_name, person.last_name, person.lastName, person.family_name), 120),
+    displayName: displayName || "Unknown",
+    firstName,
+    lastName,
     phone: sanitizeText(firstValue(fields.phone, rawPayload.phone, person.phone, person.phone_number), 80),
     zip: sanitizeText(firstValue(fields.zip, fields.postalCode, rawPayload.zip, rawPayload.postal_code, person.zip, person.postal_code), 40),
     actionSlug: slug,
@@ -427,6 +433,7 @@ async function candidateRows(limit = 100) {
       submissionId: action.form_submission_id,
       leadActionId: action.id,
       email: action.constituent_leads?.email_normalized || extracted.email,
+      displayName: [action.constituent_leads?.first_name, action.constituent_leads?.last_name].filter(Boolean).join(" ") || extracted.displayName || "Unknown",
       firstName: action.constituent_leads?.first_name || extracted.firstName,
       lastName: action.constituent_leads?.last_name || extracted.lastName,
       phone: extracted.phone,

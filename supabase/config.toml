@@ -203,6 +203,9 @@ verify_jwt = true
 [functions.admin-petition-reconciliation]
 verify_jwt = true
 
+[functions.admin-hub-participants-neon-sync]
+verify_jwt = true
+
 [functions.hub-invitation-request]
 verify_jwt = true
 

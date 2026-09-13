@@ -94,6 +94,9 @@ export type PetitionReconciliationRow = {
   submissionId: string | null;
   leadActionId: string | null;
   email: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
   actionSlug: string;
   petitionTitle: string;
   campaignSlug: string | null;
@@ -130,6 +133,52 @@ export type PetitionReconciliationReport = {
   reconciled?: number;
   checkedAt: string;
   rows: PetitionReconciliationRow[];
+};
+
+export type AdminMembershipLoadRow = {
+  total_count?: number;
+  participant_key: string;
+  profile_id: string | null;
+  auth_user_id: string | null;
+  display_name: string;
+  email: string | null;
+  hub_status: string;
+  membership_status: string;
+  neon_status: string;
+  hub_profile_status: string;
+  hub_account_status: string;
+  neon_account_status: string;
+  neon_membership_status: string | null;
+  petition_count: number;
+  latest_petition_title: string | null;
+  latest_petition_status: string | null;
+  latest_petition_at: string | null;
+  joined_at: string | null;
+  created_at: string | null;
+};
+
+export type AdminMemberPetitionHistory = {
+  participantKey: string;
+  profileId: string | null;
+  displayName: string;
+  email: string | null;
+  petitions: Array<{
+    leadActionId: string;
+    leadId: string;
+    submissionId: string | null;
+    petitionTitle: string;
+    actionSlug: string | null;
+    campaignSlug: string | null;
+    sourceUrl: string | null;
+    status: string;
+    neonSyncStatus: string | null;
+    hubIdentityStatus: string | null;
+    providerSignatureId: string | null;
+    transactionId: string | null;
+    campTransactionId: string | null;
+    campLedgerId: string | null;
+    occurredAt: string | null;
+  }>;
 };
 
 export async function getMembershipDiagnosticReport(email: string): Promise<MembershipDiagnosticReport> {
@@ -224,6 +273,34 @@ export async function getPetitionReconciliationReport(limit = 50): Promise<Petit
   if (error) throw error;
   if (!data) throw new Error("Petition reconciliation report was empty.");
   return data;
+}
+
+export async function getAdminMembershipLoadTable(params: {
+  query?: string;
+  limit?: number;
+  offset?: number;
+  status?: string;
+  petitionFilter?: string;
+  sort?: string;
+}) {
+  const { data, error } = await supabase.rpc("admin_get_membership_load_table", {
+    p_query: params.query?.trim() || null,
+    p_limit: params.limit ?? 25,
+    p_offset: params.offset ?? 0,
+    p_status: params.status ?? "all",
+    p_petition_filter: params.petitionFilter ?? "all",
+    p_sort: params.sort ?? "name_asc",
+  });
+  if (error) throw error;
+  return (data || []) as AdminMembershipLoadRow[];
+}
+
+export async function getAdminMemberPetitionHistory(participantKey: string) {
+  const { data, error } = await supabase.rpc("admin_get_member_petition_history", {
+    p_participant_key: participantKey,
+  });
+  if (error) throw error;
+  return data as AdminMemberPetitionHistory;
 }
 
 export async function reconcilePetitionSigners(submissionIds?: string[], limit = 50): Promise<PetitionReconciliationReport> {

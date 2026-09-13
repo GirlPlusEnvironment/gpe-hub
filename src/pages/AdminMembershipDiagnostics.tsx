@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, RefreshCw, Search, ServerCog, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, List, RefreshCw, Search, ServerCog, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -9,10 +9,14 @@ import { Label } from "@/components/ui/label";
 import { CampButton, EmptyState, SectionHeader, StatSticker, Sticker, Tape } from "@/components/camp/CampDesign";
 import {
   getChallengeDiagnosticReport,
+  getAdminMemberPetitionHistory,
+  getAdminMembershipLoadTable,
   getCrmConfigurationReport,
   getMembershipDiagnosticReport,
   getPetitionReconciliationReport,
   reconcilePetitionSigners,
+  type AdminMemberPetitionHistory,
+  type AdminMembershipLoadRow,
   type ChallengeDiagnosticReport,
   type CrmConfigurationCheck,
   type CrmConfigurationReport,
@@ -89,10 +93,8 @@ function CrmCheckRow({ check }: { check: CrmConfigurationCheck }) {
   );
 }
 
-function redactEmail(value: string) {
-  const [name = "", domain = ""] = value.split("@");
-  const [domainName = ""] = domain.split(".");
-  return `${name.slice(0, 2) || "**"}***@${domainName.slice(0, 2) || "**"}***`;
+function displayEmail(value: string | null | undefined) {
+  return value || "Unknown";
 }
 
 function shortId(value: string | null | undefined) {
@@ -141,8 +143,9 @@ function PetitionReconciliationRowView({ row }: { row: PetitionReconciliationRow
     <div className="border-t-[3px] border-black">
       <button type="button" onClick={() => setOpen((current) => !current)} className="grid w-full gap-3 px-4 py-3 text-left text-sm md:grid-cols-12 md:items-start">
         <div className="md:col-span-3">
-          <div className="font-black">{redactEmail(row.email)}</div>
-          <div className="mt-1 font-mono text-[11px] uppercase text-black/50">{shortId(row.submissionId || row.leadActionId)}</div>
+          <div className="font-black">{row.displayName || [row.firstName, row.lastName].filter(Boolean).join(" ") || "Unknown"}</div>
+          <div className="mt-1 break-all font-mono text-[11px] text-black/65">{displayEmail(row.email)}</div>
+          <div className="mt-1 font-mono text-[11px] uppercase text-black/50">Hub {shortId(row.hubProfileId)}</div>
         </div>
         <div className="md:col-span-3">
           <div className="font-black">{row.petitionTitle || row.actionSlug}</div>
@@ -157,7 +160,7 @@ function PetitionReconciliationRowView({ row }: { row: PetitionReconciliationRow
         </div>
         <div className="break-words font-mono text-[11px] md:col-span-2">
           <div>Neon: {shortId(row.neonAccountId)}</div>
-          <div>Hub: {shortId(row.hubProfileId)}</div>
+          <div>Record: {shortId(row.submissionId || row.leadActionId)}</div>
           <div className="mt-1 font-bold uppercase">{open ? "Hide pipeline" : "Show pipeline"}</div>
           {row.reconciliationError ? <div className="mt-1 text-red-700">{row.reconciliationError}</div> : null}
         </div>
@@ -212,6 +215,43 @@ function PetitionReconciliationRowView({ row }: { row: PetitionReconciliationRow
         </div>
       ) : null}
       </div>
+  );
+}
+
+const membershipPageSize = 25;
+
+function MemberPetitionHistoryPanel({ history }: { history: AdminMemberPetitionHistory }) {
+  return (
+    <div className="border-t-[3px] border-black bg-[#f6f1e7] p-4">
+      <div className="mb-3 text-sm font-black">
+        {history.displayName} · <span className="font-mono text-xs">{displayEmail(history.email)}</span>
+      </div>
+      {history.petitions.length > 0 ? (
+        <div className="grid gap-2">
+          {history.petitions.map((petition) => (
+            <div key={petition.leadActionId} className="grid gap-2 rounded-lg border-2 border-black bg-white p-3 text-xs font-bold md:grid-cols-12">
+              <div className="md:col-span-4">
+                <div className="font-black">{petition.petitionTitle || petition.actionSlug || "Petition"}</div>
+                <div className="break-all font-mono text-[11px] text-black/55">{petition.actionSlug || petition.campaignSlug || "No slug"}</div>
+              </div>
+              <div className="md:col-span-2">
+                <Sticker accent={statusAccent(petition.status)}>{petition.status}</Sticker>
+              </div>
+              <div className="font-mono text-[11px] md:col-span-3">
+                <div>Signed {formatDate(petition.occurredAt)}</div>
+                <div>Signature {shortId(petition.providerSignatureId)}</div>
+              </div>
+              <div className="break-all font-mono text-[11px] md:col-span-3">
+                <div>Transaction {shortId(petition.transactionId)}</div>
+                <div>Lead action {shortId(petition.leadActionId)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border-2 border-black bg-white p-3 text-sm font-bold">No petition records found for this participant.</div>
+      )}
+    </div>
   );
 }
 
@@ -289,13 +329,24 @@ export default function AdminMembershipDiagnostics() {
   const [challengeReport, setChallengeReport] = useState<ChallengeDiagnosticReport | null>(null);
   const [crmReport, setCrmReport] = useState<CrmConfigurationReport | null>(null);
   const [petitionReport, setPetitionReport] = useState<PetitionReconciliationReport | null>(null);
+  const [membershipRows, setMembershipRows] = useState<AdminMembershipLoadRow[]>([]);
+  const [membershipQuery, setMembershipQuery] = useState("");
+  const [membershipStatus, setMembershipStatus] = useState("all");
+  const [membershipPetitionFilter, setMembershipPetitionFilter] = useState("all");
+  const [membershipSort, setMembershipSort] = useState("name_asc");
+  const [membershipPage, setMembershipPage] = useState(0);
+  const [membershipDetail, setMembershipDetail] = useState<AdminMemberPetitionHistory | null>(null);
+  const [petitionQuery, setPetitionQuery] = useState("");
   const [crmLoading, setCrmLoading] = useState(false);
   const [petitionLoading, setPetitionLoading] = useState(false);
   const [petitionReconciling, setPetitionReconciling] = useState(false);
+  const [membershipLoading, setMembershipLoading] = useState(false);
+  const [membershipDetailLoading, setMembershipDetailLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [crmError, setCrmError] = useState<string | null>(null);
   const [petitionError, setPetitionError] = useState<string | null>(null);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
 
   const rows = useMemo(() => (report ? buildRows(report) : []), [report]);
   const counts = useMemo(() => ({
@@ -303,6 +354,30 @@ export default function AdminMembershipDiagnostics() {
     warn: rows.filter((row) => row.status === "warn").length,
     fail: rows.filter((row) => row.status === "fail").length,
   }), [rows]);
+  const membershipTotal = Number(membershipRows[0]?.total_count || 0);
+  const membershipTotalPages = Math.max(Math.ceil(membershipTotal / membershipPageSize), 1);
+  const filteredPetitionRows = useMemo(() => {
+    if (!petitionReport) return [];
+    const query = petitionQuery.trim().toLowerCase();
+    if (!query) return petitionReport.rows;
+    return petitionReport.rows.filter((row) => {
+      const values = [
+        row.displayName,
+        row.firstName,
+        row.lastName,
+        row.email,
+        row.petitionTitle,
+        row.actionSlug,
+        row.campaignSlug,
+        row.hubProfileId,
+        row.neonAccountId,
+        row.providerSignatureId,
+        row.submissionId,
+        row.leadActionId,
+      ];
+      return values.some((value) => String(value || "").toLowerCase().includes(query));
+    });
+  }, [petitionQuery, petitionReport]);
 
   async function runDiagnostic(event?: FormEvent) {
     event?.preventDefault();
@@ -316,6 +391,50 @@ export default function AdminMembershipDiagnostics() {
       setError(err instanceof Error ? err.message : "Membership diagnostic could not be loaded.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadMembershipTable(nextPage = membershipPage) {
+    setMembershipLoading(true);
+    setMembershipError(null);
+    try {
+      const data = await getAdminMembershipLoadTable({
+        query: membershipQuery,
+        status: membershipStatus,
+        petitionFilter: membershipPetitionFilter,
+        sort: membershipSort,
+        limit: membershipPageSize,
+        offset: nextPage * membershipPageSize,
+      });
+      setMembershipRows(data);
+      setMembershipPage(nextPage);
+    } catch (err) {
+      setMembershipRows([]);
+      setMembershipError(err instanceof Error ? err.message : "Membership table could not be loaded.");
+    } finally {
+      setMembershipLoading(false);
+    }
+  }
+
+  async function openMemberPetitions(row: AdminMembershipLoadRow) {
+    if (row.petition_count <= 0) {
+      setMembershipDetail({
+        participantKey: row.participant_key,
+        profileId: row.profile_id,
+        displayName: row.display_name,
+        email: row.email,
+        petitions: [],
+      });
+      return;
+    }
+    setMembershipDetailLoading(true);
+    setMembershipError(null);
+    try {
+      setMembershipDetail(await getAdminMemberPetitionHistory(row.participant_key));
+    } catch (err) {
+      setMembershipError(err instanceof Error ? err.message : "Petition history could not be loaded.");
+    } finally {
+      setMembershipDetailLoading(false);
     }
   }
 
@@ -390,6 +509,120 @@ export default function AdminMembershipDiagnostics() {
             Run Check
           </Button>
         </form>
+
+        <div className="gpe-card overflow-hidden p-0">
+          <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <Tape>Membership Search</Tape>
+              <h2 className="mt-3 font-header text-3xl uppercase">All Members</h2>
+            </div>
+            <Button type="button" disabled={membershipLoading} onClick={() => void loadMembershipTable(0)} className="gpe-press">
+              {membershipLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <List className="mr-2 h-4 w-4" />}
+              Load Table
+            </Button>
+          </div>
+
+          <div className="grid gap-3 border-t-[3px] border-black bg-[#f6f1e7] p-4 lg:grid-cols-[1fr_auto_auto_auto]">
+            <div>
+              <Label htmlFor="membership-table-search">Search</Label>
+              <Input
+                id="membership-table-search"
+                value={membershipQuery}
+                onChange={(event) => setMembershipQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void loadMembershipTable(0);
+                }}
+                placeholder="Name, email, petition, Hub profile ID, Neon ID"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="membership-status-filter">Status</Label>
+              <select id="membership-status-filter" value={membershipStatus} onChange={(event) => setMembershipStatus(event.target.value)} className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="all">All statuses</option>
+                <option value="hub_active">Hub active</option>
+                <option value="hub_incomplete">Hub incomplete</option>
+                <option value="missing_hub">Missing Hub</option>
+                <option value="missing_neon">Missing Neon</option>
+                <option value="active">Active member</option>
+                <option value="needs_reconciliation">Needs reconciliation</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="membership-petition-filter">Petitions</Label>
+              <select id="membership-petition-filter" value={membershipPetitionFilter} onChange={(event) => setMembershipPetitionFilter(event.target.value)} className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="all">All</option>
+                <option value="has_petitions">Has petitions</option>
+                <option value="no_petitions">No petitions</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="membership-sort">Sort</Label>
+              <select id="membership-sort" value={membershipSort} onChange={(event) => setMembershipSort(event.target.value)} className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="name_asc">Name</option>
+                <option value="created_desc">Newest</option>
+                <option value="petitions_desc">Petitions</option>
+                <option value="latest_petition_desc">Latest petition</option>
+              </select>
+            </div>
+          </div>
+
+          {membershipError ? (
+            <div className="border-t-[3px] border-black bg-red-100 p-4 text-sm font-black text-red-800">
+              {membershipError}
+            </div>
+          ) : null}
+
+          {membershipRows.length > 0 ? (
+            <>
+              <div className="grid grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white">
+                <div className="col-span-3">Name</div>
+                <div className="col-span-3">Email</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Petitions</div>
+                <div className="col-span-2">IDs</div>
+              </div>
+              {membershipRows.map((row) => (
+                <div key={row.participant_key} className="grid gap-3 border-t-[3px] border-black px-4 py-3 text-sm md:grid-cols-12 md:items-start">
+                  <div className="md:col-span-3">
+                    <div className="font-black">{row.display_name || "Unknown"}</div>
+                    <div className="mt-1 font-mono text-[11px] uppercase text-black/50">{formatDate(row.created_at)}</div>
+                  </div>
+                  <div className="break-all font-mono text-xs font-bold md:col-span-3">{displayEmail(row.email)}</div>
+                  <div className="flex flex-wrap gap-1 md:col-span-2">
+                    <Sticker accent={statusAccent(row.hub_status)}>Hub {row.hub_status}</Sticker>
+                    <Sticker accent={statusAccent(row.membership_status)}>Member {row.membership_status}</Sticker>
+                    <Sticker accent={statusAccent(row.neon_status)}>Neon {row.neon_status}</Sticker>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => void openMemberPetitions(row)} disabled={membershipDetailLoading}>
+                      {row.petition_count} petition{row.petition_count === 1 ? "" : "s"}
+                    </Button>
+                    {row.latest_petition_at ? (
+                      <div className="mt-1 text-xs font-bold text-black/60">{formatDate(row.latest_petition_at)}</div>
+                    ) : null}
+                  </div>
+                  <div className="break-all font-mono text-[11px] md:col-span-2">
+                    <div>Hub {shortId(row.profile_id)}</div>
+                    <div>Auth {shortId(row.auth_user_id)}</div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t-[3px] border-black p-4 text-sm font-bold">
+                <div>Page {membershipPage + 1} of {membershipTotalPages} · {membershipTotal.toLocaleString()} member rows</div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" disabled={membershipPage === 0 || membershipLoading} onClick={() => void loadMembershipTable(Math.max(membershipPage - 1, 0))}>Previous</Button>
+                  <Button type="button" variant="outline" disabled={membershipPage + 1 >= membershipTotalPages || membershipLoading} onClick={() => void loadMembershipTable(membershipPage + 1)}>Next</Button>
+                </div>
+              </div>
+              {membershipDetail ? <MemberPetitionHistoryPanel history={membershipDetail} /> : null}
+            </>
+          ) : (
+            <div className="border-t-[3px] border-black p-4 text-sm font-bold text-black/65">
+              Click Load Table to show all known participants from the production member directory.
+            </div>
+          )}
+        </div>
 
         {error ? (
           <div className="rounded-lg border-[3px] border-red-600 bg-red-100 p-4 text-sm font-black text-red-800">
@@ -476,10 +709,20 @@ export default function AdminMembershipDiagnostics() {
 
           {petitionReport ? (
             <>
+              <div className="border-t-[3px] border-black bg-[#f6f1e7] p-4">
+                <Label htmlFor="petition-table-search">Search petition table</Label>
+                <Input
+                  id="petition-table-search"
+                  value={petitionQuery}
+                  onChange={(event) => setPetitionQuery(event.target.value)}
+                  placeholder="Name, email, petition title, Hub profile ID"
+                  className="mt-1"
+                />
+              </div>
               <div className="grid gap-4 border-t-[3px] border-black bg-[#f6f1e7] p-4 md:grid-cols-4">
-                <StatSticker label="Rows" value={petitionReport.rows.length} accent="cyan" />
-                <StatSticker label="Missing Neon" value={petitionReport.rows.filter((row) => !row.neonAccountId).length} accent="orange" />
-                <StatSticker label="Pending points" value={petitionReport.rows.filter((row) => row.pointsStatus.startsWith("pending")).length} accent="yellow" />
+                <StatSticker label="Rows" value={`${filteredPetitionRows.length}/${petitionReport.rows.length}`} accent="cyan" />
+                <StatSticker label="Missing Neon" value={filteredPetitionRows.filter((row) => !row.neonAccountId).length} accent="orange" />
+                <StatSticker label="Pending points" value={filteredPetitionRows.filter((row) => row.pointsStatus.startsWith("pending")).length} accent="yellow" />
                 <StatSticker label="Reconciled" value={petitionReport.reconciled ?? 0} accent="cyan" />
               </div>
               <div className="grid grid-cols-12 gap-3 bg-black px-4 py-3 text-xs font-bold uppercase text-white">
@@ -488,13 +731,13 @@ export default function AdminMembershipDiagnostics() {
                 <div className="col-span-4">Status</div>
                 <div className="col-span-2">Links</div>
               </div>
-              {petitionReport.rows.length > 0 ? (
-                petitionReport.rows.map((row) => (
+              {filteredPetitionRows.length > 0 ? (
+                filteredPetitionRows.map((row) => (
                   <PetitionReconciliationRowView key={`${row.submissionId || row.leadActionId}-${row.providerSignatureId}`} row={row} />
                 ))
               ) : (
                 <div className="border-t-[3px] border-black p-4 text-sm font-bold text-black/65">
-                  No Action Network petition signer rows were found.
+                  No Action Network petition signer rows matched this search.
                 </div>
               )}
             </>

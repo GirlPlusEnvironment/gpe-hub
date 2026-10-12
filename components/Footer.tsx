@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-8 px-3 py-10 sm:px-4 md:flex-row md:items-end md:justify-between md:px-8">
         <div className="gpe-card-sm min-w-0 bg-white p-5">
           <img
-            src="/logo.png"
+            src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
             alt="GPE Hub"
             className="h-auto w-full max-w-[180px] object-contain"
           />

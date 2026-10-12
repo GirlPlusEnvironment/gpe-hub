@@ -150,7 +150,7 @@ const Header = () => {
             aria-label="Go to dashboard"
           >
             <img
-              src="/logo.png"
+              src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
               alt="GPE Hub"
               className="h-auto w-full max-w-[120px] object-contain sm:max-w-[140px]"
             />
@@ -175,7 +175,7 @@ const Header = () => {
           <div className="gpe-paper gpe-app-sidebar absolute left-0 top-0 flex w-[min(88vw,320px)] max-w-full flex-col overflow-hidden border-r-[4px] border-black p-3 sm:p-4">
             <div className="mb-6 flex shrink-0 items-center justify-between">
               <img
-                src="/logo.png"
+                src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
                 alt="GPE Hub"
                 className="h-auto w-full max-w-[140px] object-contain"
               />
@@ -250,7 +250,7 @@ const Header = () => {
           data-testid="sidebar-branding"
         >
           <img
-            src="/logo.png"
+            src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
             alt="GPE Hub"
             className="h-auto w-full max-w-[150px] object-contain lg:max-w-[165px]"
           />

@@ -193,7 +193,7 @@ const ResetPassword = () => {
       <div className="mx-auto flex min-h-screen max-w-2xl items-center justify-center px-6 py-12">
         <div className="gpe-card gpe-paper w-full p-8 md:p-10">
           <img
-            src="/gpe-hub-icon.png"
+            src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
             alt="GPE Hub"
             className="gpe-border mb-6 h-24 w-auto rounded-[1.5rem] bg-white object-contain p-2 shadow-gpe-sm"
           />

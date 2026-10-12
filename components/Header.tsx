@@ -148,7 +148,7 @@ const Header = () => {
             aria-label="Go to dashboard"
           >
             <img
-              src="/logo.png"
+              src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
               alt="GPE Hub"
               className="h-auto w-full max-w-[120px] object-contain sm:max-w-[140px]"
             />
@@ -173,7 +173,7 @@ const Header = () => {
           <div className="gpe-paper absolute left-0 top-0 flex h-full w-[min(88vw,320px)] max-w-full flex-col overflow-y-auto overflow-x-hidden border-r-[4px] border-black p-3 sm:p-4">
             <div className="mb-6 flex items-center justify-between">
               <img
-                src="/logo.png"
+                src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
                 alt="GPE Hub"
                 className="h-auto w-full max-w-[140px] object-contain"
               />
@@ -242,7 +242,7 @@ const Header = () => {
           aria-label="Go to dashboard"
         >
           <img
-            src="/logo.png"
+            src="https://static.wixstatic.com/media/cc6d59_0aa834154cba4693aa8cfad38a0cb7e1~mv2.png"
             alt="GPE Hub"
             className="h-auto w-full max-w-[180px] object-contain"
           />

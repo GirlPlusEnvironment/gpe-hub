@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Contact Girl Plus Environment">
+  <title>Contact Us | Girl Plus Environment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Gloria+Hallelujah&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gpe-black: #000;
+      --gpe-white: #fff;
+      --gpe-magenta: #d53f8c;
+      --gpe-cyan: #67e8f9;
+      --gpe-yellow: #fde047;
+      --gpe-pink: #fbd3d3;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { color-scheme: light; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      overflow-x: hidden;
+      color: var(--gpe-black);
+      background-color: var(--gpe-pink);
+      background-image: radial-gradient(#000 0.5px, transparent 0.5px);
+      background-size: 24px 24px;
+      font-family: "Space Mono", monospace;
+    }
+
+    .header-font {
+      font-family: "Archivo Black", sans-serif;
+      text-transform: uppercase;
+    }
+
+    .hand-font { font-family: "Gloria Hallelujah", cursive; }
+
+    .page {
+      width: min(100%, 1280px);
+      margin: 0 auto;
+      padding: clamp(44px, 7vw, 84px) clamp(16px, 4vw, 48px) 84px;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(10px, 3vw, 32px);
+      margin-bottom: clamp(40px, 6vw, 72px);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(3.25rem, 9vw, 6rem);
+      line-height: 0.9;
+      letter-spacing: -0.055em;
+    }
+
+    .flower {
+      width: clamp(48px, 7vw, 72px);
+      flex: 0 0 auto;
+      overflow: visible;
+      animation: float 5s ease-in-out infinite;
+    }
+
+    .flower:last-child { animation-delay: 1s; }
+    .flower-petals { stroke: #000; stroke-width: 4; stroke-linejoin: round; }
+    .flower-center { stroke: #000; stroke-width: 4; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
+      gap: clamp(38px, 6vw, 76px);
+      align-items: start;
+    }
+
+    .visual-column { min-width: 0; }
+
+    .collage {
+      position: relative;
+      width: min(100%, 520px);
+      min-height: 520px;
+    }
+
+    .polaroid {
+      width: min(78%, 390px);
+      margin: 0;
+      padding: 12px 12px 48px;
+      border: 1px solid #ddd;
+      background: #fff;
+      box-shadow: 8px 8px 0 #000;
+    }
+
+    .polaroid img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border: 1px solid #000;
+    }
+
+    .polaroid figcaption {
+      margin-top: 8px;
+      color: #52525b;
+      font-size: 1.2rem;
+    }
+
+    .polaroid.back {
+      position: absolute;
+      top: 72px;
+      left: 120px;
+      z-index: 1;
+      transform: rotate(3deg);
+    }
+
+    .polaroid.front {
+      position: relative;
+      z-index: 2;
+      transform: rotate(-6deg);
+    }
+
+    .note {
+      width: min(100%, 390px);
+      margin: 12px 0 0 32px;
+      padding: 28px 24px 28px 56px;
+      border: 3px solid #000;
+      background-color: #fffef2;
+      background-image:
+        repeating-linear-gradient(transparent, transparent 27px, rgba(103, 232, 249, 0.55) 28px),
+        linear-gradient(90deg, transparent 42px, rgba(213, 63, 140, 0.55) 43px, transparent 44px);
+      box-shadow: 4px 4px 0 #000;
+      transform: rotate(2deg);
+      text-align: center;
+    }
+
+    .note p {
+      margin: 0;
+      color: var(--gpe-magenta);
+      font-size: clamp(1.4rem, 3vw, 1.9rem);
+      line-height: 1.35;
+    }
+
+    .read-every-note {
+      width: min(100%, 390px);
+      margin: 14px 0 0 32px;
+      color: #52525b;
+      font-size: 1.2rem;
+    }
+
+    .form-shell {
+      min-width: 0;
+      border: 4px solid #000;
+      padding: 4px;
+      background: var(--gpe-yellow);
+      box-shadow: 8px 8px 0 #000;
+    }
+
+    .form-heading {
+      margin: 0;
+      padding: 22px 16px;
+      color: #fff;
+      background: var(--gpe-magenta);
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      line-height: 1;
+      text-align: center;
+      letter-spacing: -0.04em;
+    }
+
+    .form-body {
+      position: relative;
+      min-height: 560px;
+      padding: clamp(18px, 4vw, 44px);
+      background: #fff;
+    }
+
+    .form-intro {
+      margin: 0 0 18px;
+      color: #52525b;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    .form-help {
+      margin: 0 0 18px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .neon-embed-region {
+      width: 100%;
+      min-height: 500px;
+    }
+
+    .fallback {
+      margin: 18px 0 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .fallback a {
+      color: #000;
+      font-weight: 700;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(-5deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .visual-column { order: 2; }
+      .form-shell { order: 1; }
+      .collage { margin: 0 auto; }
+      .note, .read-every-note { margin-left: auto; margin-right: auto; }
+    }
+
+    @media (max-width: 560px) {
+      .page { padding-top: 36px; }
+      .title-row { align-items: flex-start; }
+      h1 { overflow-wrap: anywhere; }
+      .flower { width: 42px; }
+      .form-body { padding: 18px 12px 28px; }
+      .collage {
+        display: grid;
+        gap: 16px;
+        min-height: 0;
+      }
+      .polaroid,
+      .polaroid.back,
+      .polaroid.front {
+        position: relative;
+        inset: auto;
+        width: 100%;
+        transform: none;
+      }
+      .note { padding-left: 30px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="title-row">
+      <svg class="flower" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path class="flower-petals" fill="#67e8f9" d="M60 47C45 34 27 36 23 49s9 23 25 19c-9 15-2 31 12 31s21-16 12-31c16 4 29-6 25-19S75 34 60 47Z"/>
+        <circle class="flower-center" fill="#fde047" cx="60" cy="60" r="10"/>
+      </svg>
+      <h1 class="header-font">Contact Us</h1>
+      <svg class="flower" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path class="flower-petals" fill="#d53f8c" d="M60 47C45 34 27 36 23 49s9 23 25 19c-9 15-2 31 12 31s21-16 12-31c16 4 29-6 25-19S75 34 60 47Z"/>
+        <circle class="flower-center" fill="#fff" cx="60" cy="60" r="10"/>
+      </svg>
+    </header>
+
+    <div class="layout">
+      <section class="visual-column" aria-label="Girl Plus Environment community">
+        <div class="collage">
+          <figure class="polaroid back">
+            <img src="https://static.wixstatic.com/media/5bbcfc_7f36928c75044fa5b72a7035bd54a390~mv2.webp/v1/fill/w_658,h_484,al_c,lg_1,q_80,enc_avif,quality_auto/GettyImages-1823979425_b.webp" alt="Girl Plus Environment summit attendees gathered together" loading="lazy">
+            <figcaption class="hand-font">Community Energy</figcaption>
+          </figure>
+          <figure class="polaroid front">
+            <img src="https://static.wixstatic.com/media/5bbcfc_6025e7c3ad92421887497d2dc103d708~mv2.webp/v1/fill/w_792,h_527,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/GettyImages-1823979425_b.webp" alt="Girl Plus Environment community members smiling at a gathering" loading="eager">
+            <figcaption class="hand-font">Summit Vibes</figcaption>
+          </figure>
+        </div>
+        <aside class="note" aria-label="Reasons to contact Girl Plus Environment">
+          <p class="hand-font">Questions, collabs, press, partnerships, or just saying hi?</p>
+        </aside>
+        <p class="read-every-note hand-font">We read every note.</p>
+      </section>
+
+      <section class="form-shell" aria-labelledby="contact-form-heading">
+        <h2 id="contact-form-heading" class="form-heading header-font">Hit Us Up Girl!</h2>
+        <div class="form-body">
+          <p class="form-intro header-font">Drop your name &amp; a message below</p>
+          <p class="form-help" id="contact-form-help">
+            This secure form is provided by Neon CRM. Required fields are marked with an asterisk.
+          </p>
+          <div class="neon-embed-region" aria-describedby="contact-form-help">
+            <script src='https://girlplusenvironment.app.neoncrm.com/forms/share/Rk9STS1FTUJFRFNIQVJJTkctQ09ERTEy'></script>
+          </div>
+          <noscript>
+            <p class="fallback">
+              JavaScript is required for the embedded form.
+              <a href="https://girlplusenvironment.app.neoncrm.com/forms/contact-us" target="_blank" rel="noopener noreferrer">Open the secure Contact Us form</a>.
+            </p>
+          </noscript>
+          <p class="fallback">
+            If the form does not appear,
+            <a href="https://girlplusenvironment.app.neoncrm.com/forms/contact-us" target="_blank" rel="noopener noreferrer">open the secure Contact Us form in a new tab</a>.
+          </p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

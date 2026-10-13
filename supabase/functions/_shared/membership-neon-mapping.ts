@@ -253,11 +253,11 @@ export async function writeMembershipAccountCustomFields(args: {
   }
 
   if (args.dryRun) {
-    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed };
+    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed, fieldResults: [] };
   }
 
   if (proposed.length === 0) {
-    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed };
+    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed, fieldResults: [] };
   }
 
   const existingAccount = await neonFetch(`/accounts/${encodeURIComponent(args.neonAccountId)}`, { method: "GET" }, "membership_account_custom_fields_readback") as Json;
@@ -274,10 +274,18 @@ export async function writeMembershipAccountCustomFields(args: {
   const readbackFields = extractAccountCustomFields(readback);
   const writtenIds = new Set(proposed.map((field) => sanitizeText(field.id, 80)));
   const verified = readbackFields.filter((field) => writtenIds.has(sanitizeText(field.id, 80)) && customFieldHasValue(field));
+  const verifiedIds = new Set(verified.map((field) => sanitizeText(field.id, 80)));
+  const verificationFailures = baseReport
+    .filter((row) => row.neonFieldId && writtenIds.has(row.neonFieldId) && !verifiedIds.has(row.neonFieldId))
+    .map((row) => ({ ...row, status: "mapping_failed" as const, error: "Neon read-back did not retain the submitted field." }));
   return {
     proposedFields: proposed,
     updatedFieldCount: verified.length,
-    failedMappings: failed,
+    failedMappings: [...failed, ...verificationFailures],
+    fieldResults: proposed.map((field) => {
+      const fieldId = sanitizeText(field.id, 80);
+      return { fieldId, status: verifiedIds.has(fieldId) ? "verified" : "verification_failed" };
+    }),
   };
 }
 
@@ -288,7 +296,7 @@ export async function writeMembershipRecordCustomFields(args: {
   dryRun?: boolean;
 }) {
   if (!membershipRecordWritesEnabled()) {
-    return { proposedFields: [], updatedFieldCount: 0, failedMappings: [] as MappingRow[] };
+    return { proposedFields: [], updatedFieldCount: 0, failedMappings: [] as MappingRow[], fieldResults: [] };
   }
   const canonical = canonicalFromRequest(args.request);
   const baseReport = membershipMappingReport(args.request);
@@ -307,11 +315,11 @@ export async function writeMembershipRecordCustomFields(args: {
   }
 
   if (args.dryRun) {
-    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed };
+    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed, fieldResults: [] };
   }
 
   if (proposed.length === 0) {
-    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed };
+    return { proposedFields: proposed, updatedFieldCount: 0, failedMappings: failed, fieldResults: [] };
   }
 
   const existingMembership = await neonFetch(`/memberships/${encodeURIComponent(args.neonMembershipId)}`, { method: "GET" }, "membership_custom_fields_readback") as Json;
@@ -326,10 +334,18 @@ export async function writeMembershipRecordCustomFields(args: {
   const readbackFields = extractMembershipCustomFields(readback);
   const writtenIds = new Set(proposed.map((field) => sanitizeText(field.id, 80)));
   const verified = readbackFields.filter((field) => writtenIds.has(sanitizeText(field.id, 80)) && customFieldHasValue(field));
+  const verifiedIds = new Set(verified.map((field) => sanitizeText(field.id, 80)));
+  const verificationFailures = baseReport
+    .filter((row) => row.neonFieldId && writtenIds.has(row.neonFieldId) && !verifiedIds.has(row.neonFieldId))
+    .map((row) => ({ ...row, status: "mapping_failed" as const, error: "Neon read-back did not retain the submitted field." }));
   return {
     proposedFields: proposed,
     updatedFieldCount: verified.length,
-    failedMappings: failed,
+    failedMappings: [...failed, ...verificationFailures],
+    fieldResults: proposed.map((field) => {
+      const fieldId = sanitizeText(field.id, 80);
+      return { fieldId, status: verifiedIds.has(fieldId) ? "verified" : "verification_failed" };
+    }),
   };
 }
 
@@ -353,6 +369,7 @@ export async function recordMembershipProfileActivity(args: {
     accountStructuredWrite = {
       proposedFields: [],
       updatedFieldCount: 0,
+      fieldResults: [],
       failedMappings: [{ frontendField: "Structured Neon member fields", sourceKey: "accountCustomFields", neonDestination: "Account custom fields", status: "mapping_failed", valuePresent: true, error: safeError(error) }],
     };
   }
@@ -366,6 +383,7 @@ export async function recordMembershipProfileActivity(args: {
     membershipStructuredWrite = {
       proposedFields: [],
       updatedFieldCount: 0,
+      fieldResults: [],
       failedMappings: [{ frontendField: "Structured Neon membership fields", sourceKey: "membershipCustomFields", neonDestination: "Membership custom fields", status: "mapping_failed", valuePresent: true, error: safeError(error) }],
     };
   }

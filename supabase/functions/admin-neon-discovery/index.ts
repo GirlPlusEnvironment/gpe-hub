@@ -84,6 +84,11 @@ function compact(value: unknown): unknown {
     "options",
     "fieldOptions",
     "customFieldOptions",
+    "individualAccount",
+    "accountCustomFields",
+    "membershipCustomFields",
+    "optionValues",
+    "value",
   ]) {
     if (record[key] !== undefined) result[key] = compact(record[key]);
   }
@@ -118,6 +123,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Admin access required." }, 403, origin);
     }
 
+    const body = await req.json().catch(() => ({})) as Json;
+    const requestedAccountIds = (Array.isArray(body.accountIds) ? body.accountIds : [])
+      .map(text)
+      .filter((id) => /^\d+$/.test(id))
+      .slice(0, 20);
+
     const [
       activityStatuses,
       systemTimezones,
@@ -148,6 +159,11 @@ Deno.serve(async (req) => {
       await wait(350);
       customFieldDetails[id] = await customFieldDetail(id);
     }
+    const accountDetails: Json = {};
+    for (const id of requestedAccountIds) {
+      await wait(350);
+      accountDetails[id] = await optionalNeon(`/accounts/${encodeURIComponent(id)}`, `admin_neon_discovery_account_${id}`);
+    }
 
     return jsonResponse({
       checkedAt: new Date().toISOString(),
@@ -158,6 +174,7 @@ Deno.serve(async (req) => {
       individualCustomFields,
       membershipCustomFields,
       customFieldDetails,
+      accountDetails,
     }, 200, origin);
   } catch (error) {
     console.error("admin-neon-discovery", safeError(error));

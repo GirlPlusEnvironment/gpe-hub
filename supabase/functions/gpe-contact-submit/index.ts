@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
     const identityState = sanitizeText(body.identityState || "not_checked", 80);
     const sourcePage = sanitizeText(body.sourcePage || req.headers.get("referer") || "contact.html", 300);
 
+    const honeypot = sanitizeText(body.website, 250);
     const { submission, duplicate } = await createFormSubmission({
       idempotencyKey,
       formKey: FORM_KEY,
@@ -174,15 +175,54 @@ Deno.serve(async (req) => {
         sourcePage
       },
       membershipRequest: null,
-      honeypot: sanitizeText(body.website, 250)
+      honeypot
     });
     submissionId = String(submission.id);
     if (duplicate) {
-      return jsonResponse({ duplicate: true, submissionId, status: "duplicate", ...publicConfig() }, 200, origin);
+      const existingNeonStatus = String(submission.neon_sync_status || "not_attempted");
+      if (existingNeonStatus === "succeeded") {
+        return jsonResponse({
+          ok: true,
+          duplicate: true,
+          submissionId,
+          status: "neon_synced",
+          neonSyncStatus: "succeeded",
+          notificationStatus: String(submission.staff_notification_status || "not_attempted"),
+          message: "Message received.",
+          ...publicConfig()
+        }, 200, origin);
+      }
+      if (existingNeonStatus !== "pending" && existingNeonStatus !== "not_attempted") {
+        return jsonResponse({
+          ok: true,
+          stored: true,
+          duplicate: true,
+          submissionId,
+          status: "identity_review_required",
+          neonSyncStatus: existingNeonStatus,
+          retryable: false,
+          message: "Message received. Team GPE will review the contact match.",
+          ...publicConfig()
+        }, 202, origin);
+      }
+    }
+
+    // Treat the honeypot as a terminal spam signal. Keep the audit record, but
+    // do not create CRM records or send notifications for automated traffic.
+    if (honeypot) {
+      await updateFormSubmission(submissionId, {
+        submission_status: "requires_manual_review",
+        membership_outcome: "not_applicable",
+        neon_sync_status: "skipped"
+      });
+      return jsonResponse({ ok: true, submissionId, status: "received", message: "Message received." }, 200, origin);
     }
 
     let contactStatus = "received";
-    let identityReviewRequired = identityState === "ambiguous_match" || identityState === "lookup_unavailable";
+    // Membership preflight is advisory context only. Contact intake must perform
+    // its own constituent lookup and must never gate delivery on membership or a
+    // browser-supplied identity state.
+    let identityReviewRequired = false;
 
     try {
       const account = await resolveOrCreateAccount({
@@ -190,7 +230,7 @@ Deno.serve(async (req) => {
         firstName: String(fields.firstName),
         lastName: String(fields.lastName),
         phone: String(fields.phone || ""),
-        allowCreate: identityState !== "ambiguous_match"
+        allowCreate: true
       });
 
       if (account.status === "ambiguous" || !account.neonAccountId) {
@@ -204,7 +244,7 @@ Deno.serve(async (req) => {
           errorSummary: "Ambiguous or unavailable Neon account match."
         });
       } else {
-        await createActivity({
+        const neonActivityId = await createActivity({
           neonAccountId: account.neonAccountId,
           subject: "Contact Us Message",
           type: "Contact",
@@ -221,9 +261,16 @@ Deno.serve(async (req) => {
         });
         await updateFormSubmission(submissionId, {
           neon_account_id: account.neonAccountId,
-          neon_sync_status: "succeeded"
+          neon_sync_status: "succeeded",
+          completed_at: new Date().toISOString()
         });
-        await logSync({ submissionId, integration: "neon", operation: "contact_activity", success: true });
+        await logSync({
+          submissionId,
+          integration: "neon",
+          operation: "contact_activity",
+          success: true,
+          responseSummary: `activity_id:${neonActivityId}`
+        });
         contactStatus = "neon_synced";
       }
     } catch (error) {
@@ -239,7 +286,11 @@ Deno.serve(async (req) => {
     }
 
     await updateFormSubmission(submissionId, {
-      submission_status: identityReviewRequired ? "requires_manual_review" : "completed",
+      submission_status: identityReviewRequired
+        ? "requires_manual_review"
+        : contactStatus === "neon_synced"
+        ? "completed"
+        : "partial_failure",
       membership_outcome: "not_applicable",
       neon_sync_status: contactStatus === "neon_synced" ? "succeeded" : contactStatus === "neon_sync_pending" ? "pending" : "skipped"
     });
@@ -280,15 +331,25 @@ Deno.serve(async (req) => {
       errorSummary: notificationResult.errorSummary
     });
 
+    const responseStatus = contactStatus === "neon_synced" ? 200 : 202;
+    const responseMessage = contactStatus === "neon_synced"
+      ? "Message received."
+      : contactStatus === "identity_review_required"
+      ? "Message received. Team GPE will review the contact match."
+      : "Message received. Team GPE will complete the contact sync shortly.";
+
     return jsonResponse({
       ok: true,
+      stored: true,
       submissionId,
       status: contactStatus,
+      neonSyncStatus,
       notificationStatus: notificationResult.status,
       identityReviewRequired,
-      message: "Message received.",
+      retryable: contactStatus === "neon_sync_pending",
+      message: responseMessage,
       ...publicConfig()
-    }, 200, origin);
+    }, responseStatus, origin);
   } catch (error) {
     if (error instanceof Response) return error;
     if (submissionId) await updateFormSubmission(submissionId, { submission_status: "partial_failure" }).catch(() => undefined);

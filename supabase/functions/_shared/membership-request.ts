@@ -244,6 +244,7 @@ export async function createAndFinalizeMembership(args: {
     membershipCreationStatus: membershipResult.membershipCreationStatus,
     membershipProfileActivityId: null as string | null,
     membershipProfileMapped: false,
+    membershipProfileSync: null as Json | null,
     missingMembershipMappings: [] as Json[],
     membershipEmailQueued: false,
     membershipEmailStatus: "not_attempted",
@@ -260,6 +261,10 @@ export async function createAndFinalizeMembership(args: {
     });
     finalization.membershipProfileActivityId = profileResult.activityId || null;
     finalization.membershipProfileMapped = profileResult.missingMappings.length === 0;
+    finalization.membershipProfileSync = {
+      mappingReport: profileResult.mappingReport,
+      structuredWrite: profileResult.structuredWrite,
+    } as Json;
     finalization.missingMembershipMappings = profileResult.missingMappings as Json[];
   } catch (error) {
     finalization.membershipProfileMapped = false;
